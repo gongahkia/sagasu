@@ -33,11 +33,11 @@ def read_credentials(credentials_filepath):
     except json.JSONDecodeError:
         print("Error decoding JSON. Please check the file format.")
 
-def login_smu_fbs(base_url, credentials_filepath):
+def scraping_smu_fbs(base_url, credentials_filepath):
 
     """
     handle automated login to SMU FBS based on
-    personal credentials.json
+    personal credentials.json and scrapes the desired pages
     """
 
     # FUA these values below are to be recieved as parameters to the function with optional parameters as well
@@ -54,12 +54,13 @@ def login_smu_fbs(base_url, credentials_filepath):
 
     errors = []
     local_credentials = read_credentials(credentials_filepath)
-    print(local_credentials)
+    # print(local_credentials["username"])
+    # print(local_credentials["password"])
 
     try:
 
         p = sync_playwright().start() 
-        browser = p.chromium.launch(headless=False) # for easier debugging
+        browser = p.chromium.launch(headless=False, slow_mo=1000) # for easier debugging
         # browser = p.chromium.launch(headless=True) 
         page = browser.new_page()
 
@@ -75,70 +76,59 @@ def login_smu_fbs(base_url, credentials_filepath):
 
             print(f"navigating to {base_url}")
 
-            page.wait_for_timeout(5000)
+            username_input = page.query_selector("input#userNameInput") # for debugging
+            password_input = page.query_selector("input#passwordInput") # for debugging
+            signin_button = page.query_selector("span#submitButton")
 
-            username_input = page.queryselector("input#userNameInput")
-            password_input = page.queryselector("input#passwordInput")
-            signin_button = page.queryselector("span#submitButton")
+            page.fill("input#userNameInput", local_credentials["username"])
+            page.fill("input#passwordInput", local_credentials["password"])
+            signin_button.click()
 
-            print(username_input, password_input, signin_button)
-
-            page.fill(username_input, local_credentials["username"])
-            page.fill(password_input, local_credentials["password"])
-            page.click(signin_button)
-            
-            filled_username = page.input_value(username_input)
-            filled_password = page.input_value(password_input)
-
-            assert filled_username == local_credentials["username"], "Username not filled correctly"
-            assert filled_password == local_credentials["password"], "Password not filled correctly"
-
-            page.wait_for_timeout(5000)
-            
-            print("balls")
-
-            page.wait_for_selector("div.announcementGreyBar span.white-font-span")
-            print("announcement bar loaded in...")
+            page.wait_for_timeout(6000)
 
             # ----- NAVIGATE TO GIVEN DATE -----
 
-            current_date_input = page.queryselector("input#DateBookingFrom_c1_textDate").get_attribute("value") # might need to get the value attribute from here
+            page.screenshot(path=f"{SCREENSHOT_FILEPATH}0.png")
+
+            current_date_input = page.query_selector("span#DateBookingFrom_c1") # might need to get the value attribute from here
+            # current_date_input = page.query_selector("input#DateBookingFrom_c1_textDate") # might need to get the value attribute from here
+            print(current_date_input)
             while current_date_input != DATE:
-                current_date_input = page.queryselector("input#DateBookingFrom_c1_textDate").get_attribute("value") 
+                current_date_input = page.query_selector("input#DateBookingFrom_c1_textDate").get_attribute("value") 
                 print(f"current day is {current_date_input}, going to next day...")
-                next_day_button_input = page.queryselector("a#BtnDpcNext.btn") # click the button until desired date, which by default is the next day
+                next_day_button_input = page.query_selector("a#BtnDpcNext.btn") # click the button until desired date, which by default is the next day
                 next_day_button_input.click()
                 page.wait_for_timeout(3000)
 
             # ----- EXTRACT PAGE DATA -----
 
-            start_time = page.queryselector("span#TimeFrom_c1").inner_text()
-            end_time = page.queryselector("span#TimeTo_c1").inner_text()
+            start_time = page.query_selector("span#TimeFrom_c1").inner_text()
+            end_time = page.query_selector("span#TimeTo_c1").inner_text()
             print(f"current start time: {start_time}")
             print(f"current end time: {end_time}")
 
-            select_start_time_input = page.queryselector("select#TimeFrom_c1_ctl04 option") # options tags can then be selected by value, values range from 00:00 to 23:30
+            select_start_time_input = page.query_selector("select#TimeFrom_c1_ctl04 option") # options tags can then be selected by value, values range from 00:00 to 23:30
             for start_time in select_start_time_input:
                 if start_time.get_attribute("value") == START_TIME:
                     start_time.click()
 
-            select_end_time_input = page.queryselector("select#TimeTo_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
+            select_end_time_input = page.query_selector("select#TimeTo_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
             for end_time in select_end_time_input:
                 if end_time.get_attribute("value") == END_TIME:
                     end_time.click()
 
-            start_time = page.queryselector("span#TimeFrom_c1").inner_text()
-            end_time = page.queryselector("span#TimeTo_c1").inner_text()
+            start_time = page.query_selector("span#TimeFrom_c1").inner_text()
+            end_time = page.query_selector("span#TimeTo_c1").inner_text()
             print(f"new start time: {start_time}")
             print(f"new end time: {end_time}")
 
             if BUILDING_ARRAY:
 
-                select_building_input = page.queryselector("input#DropMultiBuildingList_c1_textItem") # FUA is this necessary then since the bototm line of code already does the same thing
-                select_building_option_array = page.queryselectorall("div#DropMultiBuildingList_c1::ddl:: label") # then read the inner_text fo the span and if the text 
+                select_building_input = page.query_selector("input#DropMultiBuildingList_c1_textItem") # FUA is this necessary then since the bototm line of code already does the same thing
+                select_building_option_array = page.query_selector_all("div#DropMultiBuildingList_c1::ddl:: label") # then read the inner_text fo the span and if the text 
                 for building in select_building_option_array:
                     if building.inner_text in BUILDING_ARRAY: 
-                        building.queryselector("input").click() # click the checkbox
+                        building.query_selector("input").click() # click the checkbox
                 page.click('div#DropMultiBuildingList_c1_panelTreeView input[type="button"][value="OK"]') # click the OK button
                 print(f"{len(BUILDING_ARRAY)} buildings selected")
 
@@ -168,7 +158,7 @@ def login_smu_fbs(base_url, credentials_filepath):
 
             if ROOM_CAPACITY != 0:
 
-                select_capacity_input = page.queryselector("select#DropCapacity_c1 option") # options tags can then be selected by value, values range from LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
+                select_capacity_input = page.query_selector("select#DropCapacity_c1 option") # options tags can then be selected by value, values range from LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
                 for capacity in select_capacity_input:
                     if capacity.get_attribute("value") == ROOM_CAPACITY:
                         capacity.click()
@@ -200,7 +190,7 @@ def login_smu_fbs(base_url, credentials_filepath):
             for el in tem:
                 print(f"-{el}")
 
-            page.queryselector("a#CheckAvailability").click()
+            page.query_selector("a#CheckAvailability").click()
             print("submitting search availability request...")
 
             page.wait_for_load_state("networkidle")
