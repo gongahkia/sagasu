@@ -13,7 +13,17 @@ import os
 import re
 from playwright.sync_api import sync_playwright
 
-def login_smu_fbs(base_url):
+def read_credentials(credentials_filepath):
+    try:
+        with open(credentials_filepath, 'r') as file:
+            data = json.load(file)
+        return data
+    except FileNotFoundError:
+        print("File not found. Please check the file path.")
+    except json.JSONDecodeError:
+        print("Error decoding JSON. Please check the file format.")
+
+def login_smu_fbs(base_url, credentials_filepath):
 
     """
     handle automated login to SMU FBS based on
@@ -21,6 +31,7 @@ def login_smu_fbs(base_url):
     """
 
     errors = []
+    local_credentials = read_credentials(credentials_filepath)
 
     try:
 
@@ -40,9 +51,9 @@ def login_smu_fbs(base_url):
             password_input = page.queryselector("input#passwordInput")
             signin_button = page.queryselector("span#submitButton")
 
-            # page.fill(username_input, "")
-            # page.fill(password_input, "")
-            # page.click(signin_button)
+            page.fill(username_input, local_credentials["username"])
+            page.fill(password_input, local_credentials["password"])
+            page.click(signin_button) 
 
             # page.wait_for_timeout(6000)
 
