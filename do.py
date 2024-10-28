@@ -1,8 +1,9 @@
 """
 FUA
 
-debug main event loop, there seems to be some 
-issues with logging in right now
+debug main event loop from line 113 onwards
+
+reference new.py as required
 
 work on helper functions specified with FUA at the 
 top of the function
@@ -33,7 +34,7 @@ def read_credentials(credentials_filepath):
     except json.JSONDecodeError:
         print("Error decoding JSON. Please check the file format.")
 
-def scraping_smu_fbs(base_url, credentials_filepath):
+def scrape_smu_fbs(base_url, credentials_filepath):
 
     """
     handle automated login to SMU FBS based on
@@ -41,7 +42,7 @@ def scraping_smu_fbs(base_url, credentials_filepath):
     """
 
     # FUA these values below are to be recieved as parameters to the function with optional parameters as well
-    DATE = "09-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
+    DATE = "02-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
     DURATION_HRS = "2"
     START_TIME = "11:00"
     END_TIME = "13:00" # FUA to add a function that calculates this based on the duration_hrs fed in
@@ -85,42 +86,54 @@ def scraping_smu_fbs(base_url, credentials_filepath):
             signin_button.click()
 
             page.wait_for_timeout(6000)
+            page.wait_for_load_state('networkidle')
 
             # ----- NAVIGATE TO GIVEN DATE -----
 
             page.screenshot(path=f"{SCREENSHOT_FILEPATH}0.png")
 
-            current_date_input = page.query_selector("span#DateBookingFrom_c1") # might need to get the value attribute from here
-            # current_date_input = page.query_selector("input#DateBookingFrom_c1_textDate") # might need to get the value attribute from here
-            print(current_date_input)
-            while current_date_input != DATE:
-                current_date_input = page.query_selector("input#DateBookingFrom_c1_textDate").get_attribute("value") 
-                print(f"current day is {current_date_input}, going to next day...")
-                next_day_button_input = page.query_selector("a#BtnDpcNext.btn") # click the button until desired date, which by default is the next day
-                next_day_button_input.click()
-                page.wait_for_timeout(3000)
+            frame = page.frame(name="frameBottom") 
+            if not frame:
+                errors.append("Framebottom could not be found.")
+            else:
+                frame = page.frame(name="frameContent")
+                current_date_input = frame.query_selector("input#DateBookingFrom_c1_textDate") # might need to get the value attribute from here
+                while current_date_input != DATE:
+                    current_date_input = frame.query_selector("input#DateBookingFrom_c1_textDate").get_attribute("value") 
+                    print(f"current day is {current_date_input}, going to next day...")
+                    next_day_button_input = frame.query_selector("a#BtnDpcNext.btn") # click the button until desired date, which by default is the next day
+                    next_day_button_input.click()
+                    frame.wait_for_timeout(3000)
 
             # ----- EXTRACT PAGE DATA -----
 
-            start_time = page.query_selector("span#TimeFrom_c1").inner_text()
-            end_time = page.query_selector("span#TimeTo_c1").inner_text()
-            print(f"current start time: {start_time}")
-            print(f"current end time: {end_time}")
+                # start_time = frame.query_selector("span#TimeFrom_c1").inner_text()
+                # end_time = frame.query_selector("span#TimeTo_c1").inner_text()
+                # print(f"current start time: {start_time}")
+                # print(f"current end time: {end_time}")
 
-            select_start_time_input = page.query_selector("select#TimeFrom_c1_ctl04 option") # options tags can then be selected by value, values range from 00:00 to 23:30
-            for start_time in select_start_time_input:
-                if start_time.get_attribute("value") == START_TIME:
-                    start_time.click()
+                select_start_time_input = frame.query_selector("select#TimeFrom_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
+                print(select_start_time_input)
+                if select_start_time_input:
+                    page.select('select#TimeFrom_c1_ctl04', START_TIME)
+                    selected_value = select_start_time_input.get_attribute("value")
+                    print(f"Selected start time to be {selected_value}")
+                else:
+                    print("Select element for start time not found")
 
-            select_end_time_input = page.query_selector("select#TimeTo_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
-            for end_time in select_end_time_input:
-                if end_time.get_attribute("value") == END_TIME:
-                    end_time.click()
+                select_end_time_input = frame.query_selector("select#TimeTo_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
+                print(select_end_time_input)
+                if select_end_time_input:
+                    page.select('select#TimeTo_c1_ctl04', END_TIME)  
+                    selected_value = select_end_time_input.get_attribute("value")
+                    print(f"Selected end time to be {selected_value}")
+                else:
+                    print("Select element for end time not found")
 
-            start_time = page.query_selector("span#TimeFrom_c1").inner_text()
-            end_time = page.query_selector("span#TimeTo_c1").inner_text()
-            print(f"new start time: {start_time}")
-            print(f"new end time: {end_time}")
+                start_time = frame.query_selector("span#TimeFrom_c1").inner_text()
+                end_time = frame.query_selector("span#TimeTo_c1").inner_text()
+                print(f"new start time: {start_time}")
+                print(f"new end time: {end_time}")
 
             if BUILDING_ARRAY:
 
@@ -221,4 +234,4 @@ def scraping_smu_fbs(base_url, credentials_filepath):
 if __name__ == "__main__":
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
     CREDENTIALS_FILEPATH = "credentials.json"
-    login_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)
+    scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)
