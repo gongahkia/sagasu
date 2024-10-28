@@ -1,6 +1,9 @@
 """
 FUA
 
+debug main event loop, there seems to be some 
+issues with logging in right now
+
 work on helper functions specified with FUA at the 
 top of the function
 
@@ -51,6 +54,7 @@ def login_smu_fbs(base_url, credentials_filepath):
 
     errors = []
     local_credentials = read_credentials(credentials_filepath)
+    print(local_credentials)
 
     try:
 
@@ -64,20 +68,34 @@ def login_smu_fbs(base_url, credentials_filepath):
             # ----- LOGIN CREDENTIALS -----
 
             page.goto(base_url)
+
             page.wait_for_selector('input#userNameInput')
             page.wait_for_selector('input#passwordInput')
             page.wait_for_selector('span#submitButton')
+
             print(f"navigating to {base_url}")
+
+            page.wait_for_timeout(5000)
 
             username_input = page.queryselector("input#userNameInput")
             password_input = page.queryselector("input#passwordInput")
             signin_button = page.queryselector("span#submitButton")
 
+            print(username_input, password_input, signin_button)
+
             page.fill(username_input, local_credentials["username"])
             page.fill(password_input, local_credentials["password"])
-            page.click(signin_button) 
+            page.click(signin_button)
+            
+            filled_username = page.input_value(username_input)
+            filled_password = page.input_value(password_input)
 
-            # page.wait_for_timeout(6000)
+            assert filled_username == local_credentials["username"], "Username not filled correctly"
+            assert filled_password == local_credentials["password"], "Password not filled correctly"
+
+            page.wait_for_timeout(5000)
+            
+            print("balls")
 
             page.wait_for_selector("div.announcementGreyBar span.white-font-span")
             print("announcement bar loaded in...")
@@ -202,6 +220,7 @@ def login_smu_fbs(base_url, credentials_filepath):
             errors.append(f"Error processing {base_url}: {e}")
 
         finally:
+            print("closing browser...")
             browser.close() 
 
     except Exception as e:
