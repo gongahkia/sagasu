@@ -34,6 +34,26 @@ def read_credentials(credentials_filepath):
     except json.JSONDecodeError:
         print("Error decoding JSON. Please check the file format.")
 
+def convert_room_capacity(room_capacity_raw):
+    """
+    convert integer room capacity
+    to the fbs string required value
+    """
+    if room_capacity_raw < 5:
+        return "LessThan5Pax"
+    elif 5 <= room_capacity_raw <= 10:
+        return "From6To10Pax"
+    elif 11 <= room_capacity_raw <= 15:
+        return "From11To15Pax"
+    elif 16 <= room_capacity_raw <= 20:
+        return "From16To20Pax"
+    elif 21 <= room_capacity_raw <= 50:
+        return "From21To50Pax"
+    elif 51 <= room_capacity_raw <= 100:
+        return "From51To100Pax"
+    else:
+        return "MoreThan100Pax"
+
 def scrape_smu_fbs(base_url, credentials_filepath):
 
     """
@@ -42,15 +62,24 @@ def scrape_smu_fbs(base_url, credentials_filepath):
     """
 
     # FUA these values below are to be recieved as parameters to the function with optional parameters as well
+    """
+    FUA
+    
+    add documentation for each of the following options 
+    for all possible options for each selection when booking 
+    a room initially in FBS
+    """
     DATE = "01-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
     DURATION_HRS = "2"
     START_TIME = "11:00"
     END_TIME = "13:00" # FUA to add a function that calculates this based on the duration_hrs fed in
-    ROOM_CAPACITY = 0 # FUA to add a function that converts the int room_capacity to one of the accepted selector values
+    ROOM_CAPACITY_RAW = 0 
+    ROOM_CAPACITY_FORMATTED = convert_room_capacity(ROOM_CAPACITY_RAW)
+    # options tags can then be selected by value, values range from LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
     BUILDING_ARRAY = ["School of Accountancy", "School of Computing & Information Systems 1"]
-    FLOOR_ARRAY = []
-    FACILITY_TYPE_ARRAY = []
-    EQUIPMENT_ARRAY = []
+    FLOOR_ARRAY = ["Basement 1", "Level 1", "Level 2", "Level 4"]
+    FACILITY_TYPE_ARRAY = ["Meeting Pod", "Group Study Room", "Classroom"]
+    EQUIPMENT_ARRAY = ["Projector", "TV Panel"]
     SCREENSHOT_FILEPATH = "./screenshot_log/"
 
     errors = []
@@ -67,7 +96,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
         try:
 
-            # ----- LOGIN CREDENTIALS -----
+            # ---------- LOGIN CREDENTIALS ----------
 
             page.goto(base_url)
 
@@ -88,9 +117,9 @@ def scrape_smu_fbs(base_url, credentials_filepath):
             page.wait_for_timeout(6000)
             page.wait_for_load_state('networkidle')
 
-            # ----- NAVIGATE TO GIVEN DATE -----
+            # ---------- NAVIGATE TO GIVEN DATE ----------
 
-            page.screenshot(path=f"{SCREENSHOT_FILEPATH}0.png")
+            # page.screenshot(path=f"{SCREENSHOT_FILEPATH}0.png")
 
             frame = page.frame(name="frameBottom") 
             if not frame:
@@ -105,7 +134,9 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     next_day_button_input.click()
                     frame.wait_for_timeout(1000)
 
-            # ----- EXTRACT PAGE DATA -----
+            # ---------- EXTRACT PAGE DATA ----------
+
+                # ----- SELECT START TIME -----
 
                 select_start_time_input = frame.query_selector("select#TimeFrom_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
                 if select_start_time_input:
@@ -114,6 +145,8 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                 else:
                     print("Select element for start time not found")
 
+                # ----- SELECT END TIME -----
+
                 select_end_time_input = frame.query_selector_all("select#TimeTo_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
                 if select_end_time_input:
                     frame.evaluate(f'document.querySelector("select#TimeTo_c1_ctl04").value = "{END_TIME}"')
@@ -121,93 +154,141 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                 else:
                     print("Select element for end time not found")
 
-                page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
+                # page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
                 frame.wait_for_timeout(3000)
-                
 
-            if BUILDING_ARRAY:
+                # ----- SELECT BUILDINGS -----
 
-                select_building_input = page.query_selector("input#DropMultiBuildingList_c1_textItem") # FUA is this necessary then since the bototm line of code already does the same thing
-                select_building_option_array = page.query_selector_all("div#DropMultiBuildingList_c1::ddl:: label") # then read the inner_text fo the span and if the text 
-                for building in select_building_option_array:
-                    if building.inner_text in BUILDING_ARRAY: 
-                        building.query_selector("input").click() # click the checkbox
-                page.click('div#DropMultiBuildingList_c1_panelTreeView input[type="button"][value="OK"]') # click the OK button
-                print(f"{len(BUILDING_ARRAY)} buildings selected")
+                if BUILDING_ARRAY:
 
-            if FLOOR_ARRAY:
+                    # select_building_option_array = page.query_selector_all("div#DropMultiBuildingList_c1\:\:ddl\:\: label") # then read the inner_text fo the span and if the text 
+                    # for building in select_building_option_array:
+                    #     if building.inner_text in BUILDING_ARRAY: 
+                    #         building.query_selector("input").click() # click the checkbox
+                    # page.click('div#DropMultiBuildingList_c1_panelTreeView input[type="button"][value="OK"]') # click the OK button
+                    # print(f"{len(BUILDING_ARRAY)} buildings selected")
 
-                # FUA is this necessary since the bottom line of code already achieves the same thing 
-                    # input#DropMultiFloorList_c1_textItem
+                    if frame.is_visible('#DropMultiBuildingList_c1_textItem'):
+                        frame.click('#DropMultiBuildingList_c1_textItem') # opens the dropdown list
+                        for building_name in BUILDING_ARRAY:
+                            frame.click(f'text="{building_name}"')
+                            print(f"selecting {building_name}...")
+                        frame.evaluate("popup.hide()") # closes the dropdown list
+                        page.wait_for_load_state('networkidle')
+                        # page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
+                        frame.wait_for_timeout(3000)
 
-                select_floor_option_array = page.query_selector_all("div#DropMultiFloorList_c1::ddl:: label")
-                for floor in select_floor_option_array:
-                    if floor.inner_text() in FLOOR_ARRAY:
-                        floor.query_selector("input").click()  # click the checkbox
-                page.click('div#DropMultiFloorList_c1_panelTreeView input[type="button"][value="OK"]')  # click the OK button
-                print(f"{len(FLOOR_ARRAY)} floors selected")
+                # ----- SELECT FLOORS -----
 
-            if FACILITY_TYPE_ARRAY:
-                
-                # FUA is this necessary since the bottom line of code already achieves the same thing 
-                    # input#DropMultiFacilityTypeList_c1_textItem                
+                if FLOOR_ARRAY:
 
-                select_facility_option_array = page.query_selector_all("div#DropMultiFacilityTypeList_c1::ddl:: label")
-                for facility in select_facility_option_array:
-                    if facility.inner_text() in FACILITY_TYPE_ARRAY:
-                        facility.query_selector("input").click()  # click the checkbox
-                page.click('div#DropMultiFacilityTypeList_c1_panelTreeView input[type="button"][value="OK"]')  # click the OK button
-                print(f"{len(FACILITY_TYPE_ARRAY)} facilities selected")
+                    # select_floor_option_array = page.query_selector_all("div#DropMultiFloorList_c1::ddl:: label")
+                    # for floor in select_floor_option_array:
+                    #     if floor.inner_text() in FLOOR_ARRAY:
+                    #         floor.query_selector("input").click()  # click the checkbox
+                    # page.click('div#DropMultiFloorList_c1_panelTreeView input[type="button"][value="OK"]')  # click the OK button
+                    # print(f"{len(FLOOR_ARRAY)} floors selected")
 
-            if ROOM_CAPACITY != 0:
+                    if frame.is_visible('#DropMultiFloorList_c1_textItem'):
+                        frame.click('#DropMultiFloorList_c1_textItem') # opens the dropdown list
+                        for floor_name in FLOOR_ARRAY:
+                            frame.click(f'text="{floor_name}"')
+                            print(f"selecting {floor_name}...")
+                        frame.evaluate("popup.hide()") # closes the dropdown list
+                        page.wait_for_load_state('networkidle')
+                        # page.screenshot(path=f"{SCREENSHOT_FILEPATH}3.png")
+                        frame.wait_for_timeout(3000)
 
-                select_capacity_input = page.query_selector("select#DropCapacity_c1 option") # options tags can then be selected by value, values range from LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
-                for capacity in select_capacity_input:
-                    if capacity.get_attribute("value") == ROOM_CAPACITY:
-                        capacity.click()
-                
-            if EQUIPMENT_ARRAY:
+                # ----- SELECT FACILITY TYPE -----
 
-                # FUA is this necessary since the bottom line of code already achieves the same thing 
-                    # input#DropMultiEquipmentList_c1_textItem 
+                if FACILITY_TYPE_ARRAY:
 
-                select_equipment_option_array = page.query_selector_all("div#DropMultiEquipmentList_c1::ddl:: label")
-                for equipment in select_equipment_option_array:
-                    if equipment.inner_text() in EQUIPMENT_ARRAY:
-                        equipment.query_selector("input").click()  # click the checkbox
-                page.click('div#DropMultiEquipmentList_c1_panelTreeView input[type="button"][value="OK"]')  # click the OK button
-                print(f"{len(EQUIPMENT_ARRAY)} equipment selected")
+                    # select_facility_option_array = page.query_selector_all("div#DropMultiFacilityTypeList_c1::ddl:: label")
+                    # for facility in select_facility_option_array:
+                    #     if facility.inner_text() in FACILITY_TYPE_ARRAY:
+                    #         facility.query_selector("input").click()  # click the checkbox
+                    # page.click('div#DropMultiFacilityTypeList_c1_panelTreeView input[type="button"][value="OK"]')  # click the OK button
+                    # print(f"{len(FACILITY_TYPE_ARRAY)} facilities selected")
 
-            page.wait_for_timeout(6000)
-            page.wait_for_selector("table#GridResults_gv")
-            print("rooms loaded in...")
+                    if frame.is_visible('#DropMultiFacilityTypeList_c1_textItem'):
+                        frame.click('#DropMultiFacilityTypeList_c1_textItem') # opens the dropdown list
+                        for facility_type_name in FACILITY_TYPE_ARRAY:
+                            frame.click(f'text="{facility_type_name}"')
+                            print(f"selecting {facility_type_name}...")
+                        frame.evaluate("popup.hide()") # closes the dropdown list
+                        page.wait_for_load_state('networkidle')
+                        # page.screenshot(path=f"{SCREENSHOT_FILEPATH}4.png")
+                        frame.wait_for_timeout(3000)
 
-            rows = page.query_selector_all("table#GridResults_gv tbody tr")
-            tem = []
-            for row in rows:
-                tds = row.query_selector_all("td")
-                if len(tds) > 1: 
-                    tem.append(tds[1].inner_text().strip())  
+                # ----- SELECT ROOM CAPACITY -----
 
-            print("Rooms fitting description are...")
-            for el in tem:
-                print(f"-{el}")
+                select_capacity_input = frame.query_selector("select#DropCapacity_c1") # options tags can then be selected by value, values range from LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
+                if select_capacity_input:
+                    frame.evaluate(f'document.querySelector("select#DropCapacity_c1").value = "{ROOM_CAPACITY_FORMATTED}"')
+                    print(f"Selected room capacity to be {ROOM_CAPACITY_FORMATTED}")
+                else:
+                    print("Select element for room capacity not found")
+                # page.screenshot(path=f"{SCREENSHOT_FILEPATH}5.png")
+                frame.wait_for_timeout(3000)
 
-            page.query_selector("a#CheckAvailability").click()
-            print("submitting search availability request...")
+                if EQUIPMENT_ARRAY:
 
-            page.wait_for_load_state("networkidle")
+                    # select_equipment_option_array = page.query_selector_all("div#DropMultiEquipmentList_c1::ddl:: label")
+                    # for equipment in select_equipment_option_array:
+                    #     if equipment.inner_text() in EQUIPMENT_ARRAY:
+                    #         equipment.query_selector("input").click()  # click the checkbox
+                    # page.click('div#DropMultiEquipmentList_c1_panelTreeView input[type="button"][value="OK"]')  # click the OK button
+                    # print(f"{len(EQUIPMENT_ARRAY)} equipment selected")
 
-            page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
-            print(f"saving screenshot of rooms to filepath {SCREENSHOT_FILEPATH}")
+                    if frame.is_visible('#DropMultiEquipmentList_c1_textItem'):
+                        frame.click('#DropMultiEquipmentList_c1_textItem') # opens the dropdown list
+                        for equipment_name in EQUIPMENT_ARRAY:
+                            frame.click(f'text="{equipment_name}"')
+                            print(f"selecting {equipment_name}...")
+                        frame.evaluate("popup.hide()") # closes the dropdown list
+                        page.wait_for_load_state('networkidle')
+                        # page.screenshot(path=f"{SCREENSHOT_FILEPATH}6.png")
+                        frame.wait_for_timeout(3000)
 
-            """
-            FUA 
-            
-            continue adding scraping code here once the available timeslots 
-            have been loaded in or make a screenshot or curl the HTML and use 
-            a OCR library to extract that data instead, that works as well
-            """
+                    page.screenshot(path=f"{SCREENSHOT_FILEPATH}0.png")
+
+                    """
+                    FUA 
+                    
+                    continue editing code from below
+                    """
+
+                    page.wait_for_timeout(6000)
+                    page.wait_for_selector("table#GridResults_gv")
+                    print("rooms loaded in...")
+
+                    rows = page.query_selector_all("table#GridResults_gv tbody tr")
+                    tem = []
+                    for row in rows:
+                        tds = row.query_selector_all("td")
+                        if len(tds) > 1: 
+                            tem.append(tds[1].inner_text().strip())  
+
+                    print("Rooms fitting description are...")
+                    for el in tem:
+                        print(f"-{el}")
+
+                    page.query_selector("a#CheckAvailability").click()
+                    print("submitting search availability request...")
+
+                    page.wait_for_load_state("networkidle")
+
+                    print(f"saving screenshot of rooms to filepath {SCREENSHOT_FILEPATH}")
+
+                    """
+                    FUA 
+                    
+                    continue adding scraping code here once the available timeslots 
+                    have been loaded in or make a screenshot or curl the HTML and use 
+                    a OCR library to extract that data instead, that works as well
+                    
+                    or integrate bharath's code from there later
+                    """
 
         except Exception as e:
             errors.append(f"Error processing {base_url}: {e}")
