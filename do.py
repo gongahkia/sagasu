@@ -85,6 +85,10 @@ def scrape_smu_fbs(base_url, credentials_filepath):
         # Classroom PC, Classroom Prompter, Clip-on Mic, Doc Camera, DVD Player, Gooseneck Mic, Handheld Mic, Hybrid (USB connection), In-room VC System, Projector, Rostrum Mic, Teams Room, Teams Room NEAT Board, TV Panel, USB Connection VC room, Video Recording, Wired Mic, Wireless Projection
     SCREENSHOT_FILEPATH = "./screenshot_log/"
 
+    CO_BOOKER_EMAIL_ARRAY = [
+        
+    ]
+
     errors = []
     local_credentials = read_credentials(credentials_filepath)
     # print(local_credentials["username"])
@@ -281,7 +285,6 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     # ---------- CHOOSE TIMESLOT ----------
 
                     page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
-                    print(f"saving screenshot of rooms to filepath {SCREENSHOT_FILEPATH}")
 
                     """
                     FUA 
@@ -291,6 +294,42 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     a OCR library to extract that data instead, that works as well
                     
                     or integrate bharath's code from there later
+                    """
+
+                    # ----- SELECT TIMESLOTS -----
+
+                    frame = page.frame(name="frameBottom")
+                    frame = page.frame(name="frameContent")
+
+                    elements = frame.query_selector_all('div.scheduler_bluewhite_cell') 
+                    for index, element in enumerate(elements):
+                        bounding_box = element.bounding_box()
+                        print(f"Element {index}: Bounding box: {bounding_box}")
+
+                    start_element  = elements[73]
+                    end_element = elements[75]
+                    print(start_element)
+                    print(end_element)
+                    print(start_element.bounding_box())
+                    print(end_element.bounding_box())
+
+                    start_box = start_element.bounding_box()
+                    end_box = end_element.bounding_box()
+
+                    # ----- DRAG TO SELECT TIME BOX -----
+
+                    # fua is this hardcoded? edit this to not be hardcoded if yes
+
+                    page.mouse.move(start_box['x'] + start_box['width'] / 2, start_box['y'] + start_box['height'] / 2)
+                    page.mouse.down()
+                    page.mouse.move(end_box['x'] + end_box['width'] / 2, end_box['y'] + end_box['height'] / 2, steps=5)
+                    page.mouse.up()
+
+                    page.wait_for_timeout(6000)
+                    page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
+
+                    """
+                    FUA continue adding code here from line 201 of new.py
                     """
 
         except Exception as e:
