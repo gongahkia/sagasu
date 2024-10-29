@@ -103,39 +103,27 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     print(f"current day is {current_date_input}, going to next day...")
                     next_day_button_input = frame.query_selector("a#BtnDpcNext.btn") # click the button until desired date, which by default is the next day
                     next_day_button_input.click()
-                    frame.wait_for_timeout(3000)
+                    frame.wait_for_timeout(1000)
 
             # ----- EXTRACT PAGE DATA -----
 
-                select_start_time_input = frame.query_selector_all("select#TimeFrom_c1_ctl04 option") # options tags can then be selected by value, values range from 00:00 to 23:30
-
-                # print(select_start_time_input)
+                select_start_time_input = frame.query_selector("select#TimeFrom_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
                 if select_start_time_input:
-                    frame.select('select#TimeFrom_c1_ctl04', START_TIME)
-                    selected_value = select_start_time_input.get_attribute("value")
-                    print(f"Selected start time to be {selected_value}")
+                    frame.evaluate(f'document.querySelector("select#TimeFrom_c1_ctl04").value = "{START_TIME}"')
+                    print(f"Selected start time to be {START_TIME}")
                 else:
                     print("Select element for start time not found")
 
-                select_end_time_input = frame.query_selector_all("select#TimeTo_c1_ctl04 option") # options tags can then be selected by value, values range from 00:00 to 23:30
-
-                # print(select_end_time_input)
+                select_end_time_input = frame.query_selector_all("select#TimeTo_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
                 if select_end_time_input:
-                    frame.select('select#TimeTo_c1_ctl04', END_TIME)  
-                    selected_value = select_end_time_input.get_attribute("value")
-                    print(f"Selected end time to be {selected_value}")
+                    frame.evaluate(f'document.querySelector("select#TimeTo_c1_ctl04").value = "{END_TIME}"')
+                    print(f"Selected end time to be {END_TIME}")
                 else:
                     print("Select element for end time not found")
 
-                for el in select_start_time_input:
-                    if el.get_attribute("selected") == "selected":
-                        current_start_time = el.inner_text()
-                print(f"new selected start time is {current_start_time}")
-
-                for el in select_end_time_input:
-                    if el.get_attribute("selected") == "selected":
-                        current_end_time = el.inner_text()
-                print(f"new selected end time is {current_end_time}")
+                page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
+                frame.wait_for_timeout(3000)
+                
 
             if BUILDING_ARRAY:
 
@@ -210,7 +198,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
             page.wait_for_load_state("networkidle")
 
-            page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
+            page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
             print(f"saving screenshot of rooms to filepath {SCREENSHOT_FILEPATH}")
 
             """
