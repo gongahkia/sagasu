@@ -42,7 +42,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
     """
 
     # FUA these values below are to be recieved as parameters to the function with optional parameters as well
-    DATE = "02-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
+    DATE = "01-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
     DURATION_HRS = "2"
     START_TIME = "11:00"
     END_TIME = "13:00" # FUA to add a function that calculates this based on the duration_hrs fed in
@@ -107,33 +107,35 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
             # ----- EXTRACT PAGE DATA -----
 
-                # start_time = frame.query_selector("span#TimeFrom_c1").inner_text()
-                # end_time = frame.query_selector("span#TimeTo_c1").inner_text()
-                # print(f"current start time: {start_time}")
-                # print(f"current end time: {end_time}")
+                select_start_time_input = frame.query_selector_all("select#TimeFrom_c1_ctl04 option") # options tags can then be selected by value, values range from 00:00 to 23:30
 
-                select_start_time_input = frame.query_selector("select#TimeFrom_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
-                print(select_start_time_input)
+                # print(select_start_time_input)
                 if select_start_time_input:
-                    page.select('select#TimeFrom_c1_ctl04', START_TIME)
+                    frame.select('select#TimeFrom_c1_ctl04', START_TIME)
                     selected_value = select_start_time_input.get_attribute("value")
                     print(f"Selected start time to be {selected_value}")
                 else:
                     print("Select element for start time not found")
 
-                select_end_time_input = frame.query_selector("select#TimeTo_c1_ctl04") # options tags can then be selected by value, values range from 00:00 to 23:30
-                print(select_end_time_input)
+                select_end_time_input = frame.query_selector_all("select#TimeTo_c1_ctl04 option") # options tags can then be selected by value, values range from 00:00 to 23:30
+
+                # print(select_end_time_input)
                 if select_end_time_input:
-                    page.select('select#TimeTo_c1_ctl04', END_TIME)  
+                    frame.select('select#TimeTo_c1_ctl04', END_TIME)  
                     selected_value = select_end_time_input.get_attribute("value")
                     print(f"Selected end time to be {selected_value}")
                 else:
                     print("Select element for end time not found")
 
-                start_time = frame.query_selector("span#TimeFrom_c1").inner_text()
-                end_time = frame.query_selector("span#TimeTo_c1").inner_text()
-                print(f"new start time: {start_time}")
-                print(f"new end time: {end_time}")
+                for el in select_start_time_input:
+                    if el.get_attribute("selected") == "selected":
+                        current_start_time = el.inner_text()
+                print(f"new selected start time is {current_start_time}")
+
+                for el in select_end_time_input:
+                    if el.get_attribute("selected") == "selected":
+                        current_end_time = el.inner_text()
+                print(f"new selected end time is {current_end_time}")
 
             if BUILDING_ARRAY:
 
