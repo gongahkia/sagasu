@@ -1,7 +1,7 @@
 """
 FUA
 
-debug main event loop from line 113 onwards
+debug main event loop from line 250 onwards
 
 reference new.py as required
 
@@ -16,6 +16,8 @@ allow users to specify configs via json
 specify all possible values for each select option tag 
 at the top of the function underneath its corresponding
 array
+
+include details for a possible config.json and specify the format for that api as well
 """
 
 import os
