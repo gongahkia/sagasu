@@ -63,31 +63,110 @@ def scrape_smu_fbs(base_url, credentials_filepath):
     personal credentials.json and scrapes the desired pages
     """
 
-    # FUA these values below are to be recieved as parameters to the function with optional parameters as well
     # FUA to add documentation of each of the possible below values to the README.md as required
+    VALID_TIME = [
+        "00:00", "00:30", "01:00", "01:30", "02:00", "02:30", "03:00", "03:30",
+        "04:00", "04:30", "05:00", "05:30", "06:00", "06:30", "07:00", "07:30",
+        "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+        "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
+        "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30",
+        "20:00", "20:30", "21:00", "21:30", "22:00", "22:30", "23:00", "23:30"
+    ]
+    VALID_ROOM_CAPACITY_FORMATTED = [
+        "LessThan5Pax", 
+        "From6To10Pax", 
+        "From11To15Pax", 
+        "From16To20Pax", 
+        "From21To50Pax", 
+        "From51To100Pax", 
+        "MoreThan100Pax"
+    ] 
+    VALID_BUILDING = [
+        "Administration Building", 
+        "Campus Open Spaces - Events/Activities", 
+        "Concourse - Room/Lab", 
+        "Lee Kong Chian School of Business", 
+        "Li Ka Shing Library", 
+        "Prinsep Street Residences", 
+        "School of Accountancy", 
+        "School of Computing & Information Systems 1", 
+        "School of Economics/School of Computing & Information Systems 2", 
+        "School of Social Sciences/College of Integrative Studies", 
+        "SMU Connexion", 
+        "Yong Pung How School of Law/Kwa Geok Choo Law Library"
+    ]
+    VALID_FLOOR = [
+        "Basement 0", 
+        "Basement 2", 
+        "Level 1", 
+        "Level 2", 
+        "Level 3", 
+        "Level 4", 
+        "Level 5", 
+        "Level 6", 
+        "Level 7", 
+        "Level 8", 
+        "Level 9", 
+        "Level 10", 
+        "Level 11", 
+        "Level 12", 
+        "Level 13", 
+        "Level 14"
+    ]
+    VALID_FACILITY_TYPE = [
+        "Chatterbox", 
+        "Classroom", 
+        "Group Study Room", 
+        "Hostel Facilities", 
+        "Meeting Pod", 
+        "MPH / Sports Hall", 
+        "Phone Booth", 
+        "Project Room", 
+        "Project Room (Level 5)", 
+        "Seminar Room", 
+        "SMUC Facilities", 
+        "Student Activities Area", 
+        "Study Booth"
+    ]
+    VALID_EQUIPMENT = [
+        "Classroom PC", 
+        "Classroom Prompter", 
+        "Clip-on Mic", 
+        "Doc Camera", 
+        "DVD Player", 
+        "Gooseneck Mic", 
+        "Handheld Mic", 
+        "Hybrid (USB connection)", 
+        "In-room VC System", 
+        "Projector", 
+        "Rostrum Mic", 
+        "Teams Room", 
+        "Teams Room NEAT Board", 
+        "TV Panel", 
+        "USB Connection VC room", 
+        "Video Recording", 
+        "Wired Mic", 
+        "Wireless Projection"
+    ]
+
+    # FUA to exit the execution loop when there are no rooms available for a given set of parameters
+    # FUA these values below are to be recieved as parameters to the function with optional parameters as well
     DATE = "01-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
         # Must adhere to this specified format
-    DURATION_HRS = "2" 
+    DURATION_HRS = "2" # FUA figure out a function that handles this float and determines the end time
+        # User-specified integer that can either 
     START_TIME = "11:00"
         # Any number from "00:00" to "23:30"
     END_TIME = "13:00" # FUA to add a function that calculates this based on the duration_hrs fed in
         # Any number from "00:00" to "23:30"
-    ROOM_CAPACITY_RAW = 0 
+    ROOM_CAPACITY_RAW = 7
     ROOM_CAPACITY_FORMATTED = convert_room_capacity(ROOM_CAPACITY_RAW)
-        # LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
     BUILDING_ARRAY = ["School of Accountancy", "School of Computing & Information Systems 1"]
-        # Administration Building, Campus Open Spaces - Events/Activities, Concourse - Room/Lab, Lee Kong Chian School of Business, Li Ka Shing Library, Prinsep Street Residences, School of Accountancy, School of Computing & Information Systems 1, School of Economics/School of Computing & Information Systems 2, School of Social Sciences/College of Integrative Studies, SMU Connexion, Yong Pung How School of Law/Kwa Geok Choo Law Library
     FLOOR_ARRAY = ["Basement 1", "Level 1", "Level 2", "Level 4"]
-        # Basement 1, Basement 2, Level 1, Level 2, Level 3, Level 4, Level 5, Level 6, Level 7, Level 8, Level 9, Level 10, Level 11, Level 12, Level 13, Level 14
-    FACILITY_TYPE_ARRAY = ["Meeting Pod", "Group Study Room", "Classroom"]
-        # Chatterbox, Classroom, Group Study Room, Hostel Facilities, Meeting Pod, MPH / Sports Hall, Phone Booth, Project Room, Project Room (Level 5), Seminar Room, SMUC Facilities, Student Activities Area, Study Booth
-    EQUIPMENT_ARRAY = ["Projector", "TV Panel"]
-        # Classroom PC, Classroom Prompter, Clip-on Mic, Doc Camera, DVD Player, Gooseneck Mic, Handheld Mic, Hybrid (USB connection), In-room VC System, Projector, Rostrum Mic, Teams Room, Teams Room NEAT Board, TV Panel, USB Connection VC room, Video Recording, Wired Mic, Wireless Projection
+    FACILITY_TYPE_ARRAY = ["Meeting Pod", "Group Study Room"]
+    EQUIPMENT_ARRAY = []
     SCREENSHOT_FILEPATH = "./screenshot_log/"
-
-    CO_BOOKER_EMAIL_ARRAY = [
-        
-    ]
+    CO_BOOKER_EMAIL_ARRAY = [] # FUA add values here and how this code will handle it
 
     errors = []
     local_credentials = read_credentials(credentials_filepath)
@@ -294,43 +373,23 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     a OCR library to extract that data instead, that works as well
                     
                     or integrate bharath's code from there later
-                    """
 
-                    # ----- SELECT TIMESLOTS -----
+                    continue adding code here from line 141 of new.py
+
+                    ~ internal reference ~
+
+                    div.scheduler_bluewhite_rowheader_inner --> inner_text() gives you the room name
+                    div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0 --> get_attribute("title"), then parse the result and see the corresponding booking time
+                    """
 
                     frame = page.frame(name="frameBottom")
                     frame = page.frame(name="frameContent")
-
-                    elements = frame.query_selector_all('div.scheduler_bluewhite_cell') 
-                    for index, element in enumerate(elements):
-                        bounding_box = element.bounding_box()
-                        print(f"Element {index}: Bounding box: {bounding_box}")
-
-                    start_element  = elements[73]
-                    end_element = elements[75]
-                    print(start_element)
-                    print(end_element)
-                    print(start_element.bounding_box())
-                    print(end_element.bounding_box())
-
-                    start_box = start_element.bounding_box()
-                    end_box = end_element.bounding_box()
-
-                    # ----- DRAG TO SELECT TIME BOX -----
-
-                    # fua is this hardcoded? edit this to not be hardcoded if yes
-
-                    page.mouse.move(start_box['x'] + start_box['width'] / 2, start_box['y'] + start_box['height'] / 2)
-                    page.mouse.down()
-                    page.mouse.move(end_box['x'] + end_box['width'] / 2, end_box['y'] + end_box['height'] / 2, steps=5)
-                    page.mouse.up()
-
-                    page.wait_for_timeout(6000)
-                    page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
-
-                    """
-                    FUA continue adding code here from line 201 of new.py
-                    """
+                    room_names_array = [room.inner_text() for room in frame.query_selector_all("div.scheduler_bluewhite_rowheader_inner")]
+                    active_bookings_array = [active_bookings.get_attribute("title") for active_bookings in frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]
+                    print(room_names_array)
+                    print(active_bookings_array) 
+                    
+                    # FUA continue editing the above values and see if there's parsing that can be done for extracting values and linking active bookings to their rooms
 
         except Exception as e:
             errors.append(f"Error processing {base_url}: {e}")
