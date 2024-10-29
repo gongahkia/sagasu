@@ -64,24 +64,25 @@ def scrape_smu_fbs(base_url, credentials_filepath):
     """
 
     # FUA these values below are to be recieved as parameters to the function with optional parameters as well
-    """
-    FUA
-    
-    add documentation for each of the following options 
-    for all possible options for each selection when booking 
-    a room initially in FBS
-    """
+    # FUA to add documentation of each of the possible below values to the README.md as required
     DATE = "01-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
-    DURATION_HRS = "2"
+        # Must adhere to this specified format
+    DURATION_HRS = "2" 
     START_TIME = "11:00"
+        # Any number from "00:00" to "23:30"
     END_TIME = "13:00" # FUA to add a function that calculates this based on the duration_hrs fed in
+        # Any number from "00:00" to "23:30"
     ROOM_CAPACITY_RAW = 0 
     ROOM_CAPACITY_FORMATTED = convert_room_capacity(ROOM_CAPACITY_RAW)
-    # options tags can then be selected by value, values range from LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
+        # LessThan5Pax, From6To10Pax, From11To15Pax, From16To20Pax, From21To50Pax, From51To100Pax, MoreThan100Pax
     BUILDING_ARRAY = ["School of Accountancy", "School of Computing & Information Systems 1"]
+        # Administration Building, Campus Open Spaces - Events/Activities, Concourse - Room/Lab, Lee Kong Chian School of Business, Li Ka Shing Library, Prinsep Street Residences, School of Accountancy, School of Computing & Information Systems 1, School of Economics/School of Computing & Information Systems 2, School of Social Sciences/College of Integrative Studies, SMU Connexion, Yong Pung How School of Law/Kwa Geok Choo Law Library
     FLOOR_ARRAY = ["Basement 1", "Level 1", "Level 2", "Level 4"]
+        # Basement 1, Basement 2, Level 1, Level 2, Level 3, Level 4, Level 5, Level 6, Level 7, Level 8, Level 9, Level 10, Level 11, Level 12, Level 13, Level 14
     FACILITY_TYPE_ARRAY = ["Meeting Pod", "Group Study Room", "Classroom"]
+        # Chatterbox, Classroom, Group Study Room, Hostel Facilities, Meeting Pod, MPH / Sports Hall, Phone Booth, Project Room, Project Room (Level 5), Seminar Room, SMUC Facilities, Student Activities Area, Study Booth
     EQUIPMENT_ARRAY = ["Projector", "TV Panel"]
+        # Classroom PC, Classroom Prompter, Clip-on Mic, Doc Camera, DVD Player, Gooseneck Mic, Handheld Mic, Hybrid (USB connection), In-room VC System, Projector, Rostrum Mic, Teams Room, Teams Room NEAT Board, TV Panel, USB Connection VC room, Video Recording, Wired Mic, Wireless Projection
     SCREENSHOT_FILEPATH = "./screenshot_log/"
 
     errors = []
