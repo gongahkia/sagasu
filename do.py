@@ -1,7 +1,7 @@
 """
 FUA
 
-debug main event loop from line 250 onwards
+continue adding events from line 280
 
 reference new.py as required
 
@@ -252,34 +252,34 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                         # page.screenshot(path=f"{SCREENSHOT_FILEPATH}6.png")
                         frame.wait_for_timeout(3000)
 
-                    page.screenshot(path=f"{SCREENSHOT_FILEPATH}0.png")
+                page.screenshot(path=f"{SCREENSHOT_FILEPATH}0.png")
 
-                    """
-                    FUA 
-                    
-                    continue editing code from below
-                    """
+                # ----- ROOM EXTRACTION -----
 
-                    page.wait_for_timeout(6000)
-                    page.wait_for_selector("table#GridResults_gv")
-                    print("rooms loaded in...")
+                frame.wait_for_selector("table#GridResults_gv")
+                matching_rooms = []
+                rows = frame.query_selector_all("table#GridResults_gv tbody tr")
+                for row in rows:
+                    tds = row.query_selector_all("td")
+                    if len(tds) > 1: 
+                        matching_rooms.append(tds[1].inner_text().strip())  
+                if not matching_rooms:
+                    print("No rooms fitting description found.")
+                else:
+                    print(f"{len(matching_rooms)} rooms fitting description found.")
+                    for room in matching_rooms:
+                        print(f"-{room}")
 
-                    rows = page.query_selector_all("table#GridResults_gv tbody tr")
-                    tem = []
-                    for row in rows:
-                        tds = row.query_selector_all("td")
-                        if len(tds) > 1: 
-                            tem.append(tds[1].inner_text().strip())  
+                    # ----- SEARCH AVAILABILITY -----
 
-                    print("Rooms fitting description are...")
-                    for el in tem:
-                        print(f"-{el}")
-
-                    page.query_selector("a#CheckAvailability").click()
-                    print("submitting search availability request...")
-
+                    frame.query_selector("a#CheckAvailability").click()
+                    print("Submitting search availability request...")
                     page.wait_for_load_state("networkidle")
+                    page.wait_for_timeout(6000)
 
+                    # ---------- CHOOSE TIMESLOT ----------
+
+                    page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
                     print(f"saving screenshot of rooms to filepath {SCREENSHOT_FILEPATH}")
 
                     """
