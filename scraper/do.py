@@ -1,13 +1,3 @@
-"""
-FUA
-
-debug how the date is handled and note that currently date being scraped is 2 nov even though i specify i want 1 nov
-
-include details for a possible config.json that users can use to specify configs and specify the format for that api as well
-
-FUA document the output of this json and make it available as an API possibly
-"""
-
 import os
 import re
 import json
@@ -147,10 +137,10 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
     """
     handle automated login to SMU FBS based on
-    personal credentials.json and scrapes the desired pages
+    personal credentials.json and scrapes all booked
+    timeslots for the filtered rooms
     """
 
-    # FUA to add documentation of each of the possible below values to the README.md as required
     VALID_TIME = [
         "00:00", 
         "00:30", 
@@ -336,13 +326,16 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                 errors.append("Framebottom could not be found.")
             else:
                 frame = page.frame(name="frameContent")
-                current_date_input = frame.query_selector("input#DateBookingFrom_c1_textDate") # might need to get the value attribute from here
-                while current_date_input != DATE_FORMATTED:
-                    current_date_input = frame.query_selector("input#DateBookingFrom_c1_textDate").get_attribute("value") 
-                    print(f"current day is {current_date_input}, going to next day...")
-                    next_day_button_input = frame.query_selector("a#BtnDpcNext.btn") # click the button until desired date, which by default is the next day
-                    next_day_button_input.click()
-                    frame.wait_for_timeout(1000)
+                while True:
+                    current_date_value = frame.query_selector("input#DateBookingFrom_c1_textDate").get_attribute("value")
+                    if current_date_value == DATE_FORMATTED:
+                        print(f"final day is {current_date_value}")
+                        break
+                    else:
+                        print(f"current day is {current_date_value}")
+                        print("navigating to the next day...")
+                        frame.query_selector("a#BtnDpcNext.btn").click() # click the button until desired date, which by default is the next day
+                        frame.wait_for_timeout(1500)
 
             # ---------- EXTRACT PAGE DATA ----------
 
