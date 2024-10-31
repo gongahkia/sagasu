@@ -478,70 +478,73 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     frame = page.frame(name="frameBottom")
                     frame = page.frame(name="frameContent")
                     room_names_array_raw = [room.inner_text() for room in frame.query_selector_all("div.scheduler_bluewhite_rowheader_inner")]
-                    room_names_array = [el for el in room_names_array_raw if el not in VALID_BUILDING]
+                    room_names_array_sanitised = [el for el in room_names_array_raw if el not in VALID_BUILDING]
                     bookings_array_raw = [active_bookings.get_attribute("title") for active_bookings in frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]
-                    bookings_array = split_bookings_by_day(bookings_array_raw)
+                    bookings_array_sanitised = split_bookings_by_day(bookings_array_raw)
                     
-                    print(room_names_array)
-                    print(bookings_array) 
+                    room_timeslot_map = {}
 
-                    na_count = 0
-                    room_name_index = 0
-
-                    room_timeslot_map = {
-                        room_names_array[room_name_index]: []
-                    }
+                    # print(room_names_array)
+                    # print(bookings_array) 
 
                     # FUA write a function that parses the active bookings and ties it to a room
                     # FUA write a function that can then determine free time slots based on the booked time slots, basically the definition of the intervals question
                     # FUA document the output of this json and make it available as an API possibly
 
-                    for booking in bookings_array:
+                    for index, booking_array in enumerate(bookings_array_sanitised):
+                        print("----------------------")
+                        print(room_names_array_sanitised[index])
+                        print(booking_details)
+                        """
+                        FUA 
+                        
+                        to debug this entire chunk here beacuse clearely soemthig is wrong
+                        """
 
-                        if booking.startswith("Booking Time:"): # existing booking
-                            room_details = {}
-                            for el in booking.split("\n"):
-                                if el.startswith("Booking Time:"):
-                                    local_timeslot = el.lstrip("Booking Time: ")
-                                room_details[el.split(": ")[0]] = el.split(": ")[1]
-                            active_booking_details = {
-                                "timeslot": local_timeslot,
-                                "available": False,
-                                "status": "Booked",
-                                "details": room_details
-                            }
-                            # pretty_print_json(active_booking_details)
+                        booking_details = []
 
-                            room_timeslot_map[room_names_array[room_name_index]].append(active_booking_details)
+                        for booking in booking_array:
 
-                        elif booking.endswith("(not available)"): # not available booking
+                            if booking.startswith("Booking Time:"): # existing booking
+                                room_details = {}
+                                for el in booking.split("\n"):
+                                    if el.startswith("Booking Time:"):
+                                        local_timeslot = el.lstrip("Booking Time: ")
+                                    room_details[el.split(": ")[0]] = el.split(": ")[1]
+                                active_booking_details = {
+                                    "timeslot": local_timeslot,
+                                    "available": False,
+                                    "status": "Booked",
+                                    "details": room_details
+                                }
+                                # pretty_print_json(active_booking_details)
 
-                            na_count += 1
+                                booking_details.append(active_booking_details)
 
-                            time = booking.split(") (")[0]
-                            na_booking_details = {
-                                "timeslot": time.lstrip("("),
-                                "available": False,
-                                "status": "Not available",
-                                "details": None
-                            }
-                            # pretty_print_json(na_booking_details)
+                            elif booking.endswith("(not available)"): # not available booking
 
-                            if na_count == 1:
-                                room_timeslot_map[room_names_array[room_name_index]].append(na_booking_details)
-                            if na_count == 2:
-                                room_timeslot_map[room_names_array[room_name_index]].append(na_booking_details)
-                                na_count = 0
-                                room_name_index += 1
-                                room_timeslot_map[room_names_array[room_name_index]] = []
+                                na_count += 1
 
-                            # room_timeslots["bookings"].append(na_booking_details)
+                                time = booking.split(") (")[0]
+                                na_booking_details = {
+                                    "timeslot": time.lstrip("("),
+                                    "available": False,
+                                    "status": "Not available",
+                                    "details": None
+                                }
+                                # pretty_print_json(na_booking_details)
 
-                        else: 
-                            # edge case checking
-                            print(f"Unrecognised timeslot format, logged here: {booking}")
+                                booking_details.append(na_booking_details)
 
-                    pretty_print_json(room_timeslot_map)
+                                # room_timeslots["bookings"].append(na_booking_details)
+
+                            else: 
+                                # edge case checking
+                                print(f"Unrecognised timeslot format, logged here: {booking}")
+
+                        # room_timeslot_map[room_names_array[index]] = booking_details
+
+                    # pretty_print_json(room_timeslot_map)
 
                         # ----- BOT TIMESLOTS -----
 
