@@ -434,7 +434,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                     await frame.click("a#CheckAvailability")
                     print("Submitting search availability request...")
                     await page.wait_for_load_state("networkidle")
-                    await page.wait_for_timeout(6000)
+                    await page.wait_for_timeout(1000)
 
                     # ---------- VIEW TIMESLOTS ----------
                     await page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
