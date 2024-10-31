@@ -43,8 +43,6 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         scraped_configuration = result_final_booking_log["scraped"]["config"]
         scraped_results = result_final_booking_log["scraped"]["result"]
 
-        response_text = ""
-
         # ----- REPLY THE USER -----
 
         await callback_query.message.reply_text(f'Scraping carried out on at <b>{metrics["scraping_date"]}</b>', parse_mode = ParseMode.HTML)
@@ -66,26 +64,28 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         print("Scraping completed successfully.")
         
         if len(result_errors) > 0:
-            response_text = "\n- ".join(result_errors)
+            response_text = ""
+            response_text = "\n".join(result_errors)
             max_length = 4096 
             for i in range(0, len(response_text), max_length):
                 await callback_query.message.reply_text(response_text[i:i + max_length])
         else:
-            # for room, bookings in scraped_results.items():
-            #     response_text += f"`***{room}***`\n"
-            #     for booking in bookings:
-            #         await callback_query.message.reply_text(json.dumps(booking, indent=2))
-                # FUA to debug the below!!!
-                #     status = "Booked" if not booking['available'] else "Available"
-                #     response_text += f"\tTimeslot: {booking['timeslot']}\n\tStatus: {status}\n"
-                #     if booking['details']:
-                #         details = booking['details']
-                #         response_text += (f"\tPurpose: {details['Purpose of Booking']}\n\tBooking Reference: {details['Booking Reference Number']}\n\tBooked for: {details['Booked for User Name']} ({details['Booked for User Email Address']})")
-                # response_text += "\n"
-                # max_length = 4096 
-                # for i in range(0, len(result), max_length):
-                #     await callback_query.message.reply_text(result_final_booking_log[i:i + max_length])
-            await callback_query.message.reply_text("**All results have been displayed! 🥳**")
+            for room, bookings in scraped_results.items():
+                response_text = ""
+                response_text += f"<code>Room no. {room}</code>\n"
+                for booking in bookings:
+                    status = "Booked" if not booking['available'] else "Available"
+                    if booking["details"]:
+                        response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
+                        response_text += f"<i>Status:</i> {status}\n"
+                        response_text += f"<i>Purpose:</i> {booking['details']['Purpose of Booking']}\n"
+                        response_text += f"<i>Booker:</i> {booking['details']['Booked for User Name']} ({booking['details']['Booked for User Email Address']})\n"
+                        response_text += f"<i>Booking ref no:</i> {booking['details']['Booking Reference Number']}\n\n"
+                    else:
+                        response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
+                        response_text += f"<i>Status:</i> {status}\n\n"
+                await callback_query.message.reply_text(response_text, parse_mode=ParseMode.HTML)
+            await callback_query.message.reply_text("<b><i>All results have been displayed! 🥳</i></b>", parse_mode=ParseMode.HTML)
 
     except Exception as e:
         print(f"Error during scraping: {e}")
