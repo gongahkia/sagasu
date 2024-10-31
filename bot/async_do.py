@@ -304,15 +304,15 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                 await page.fill("input#passwordInput", local_credentials["password"])
                 await page.click("span#submitButton")
 
-                await page.wait_for_timeout(6000)
+                await page.wait_for_timeout(1000)
                 await page.wait_for_load_state('networkidle')
 
                 # ---------- NAVIGATE TO GIVEN DATE ----------
-                frame = await page.frame(name="frameBottom")
+                frame = page.frame(name="frameBottom")
                 if not frame:
                     errors.append("Frame bottom could not be found.")
                 else:
-                    frame = await page.frame(name="frameContent")
+                    frame = page.frame(name="frameContent")
                     while True:
                         current_date_value = await frame.query_selector("input#DateBookingFrom_c1_textDate")
                         current_date_value = await current_date_value.get_attribute("value")
@@ -323,7 +323,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                             print(f"current day is {current_date_value}")
                             print("navigating to the next day...")
                             await frame.click("a#BtnDpcNext.btn")
-                            await page.wait_for_timeout(1500)
+                            await page.wait_for_timeout(1000)
 
                 # ---------- EXTRACT PAGE DATA ----------
                 select_start_time_input = await frame.query_selector("select#TimeFrom_c1_ctl04")
@@ -340,7 +340,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                 else:
                     print("Select element for end time not found")
 
-                await page.wait_for_timeout(3000)
+                await page.wait_for_timeout(1000)
 
                 # ----- SELECT BUILDINGS -----
                 if BUILDING_ARRAY:
@@ -351,7 +351,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                             print(f"selecting {building_name}...")
                         await frame.evaluate("popup.hide()")  # closes the dropdown list
                         await page.wait_for_load_state('networkidle')
-                        await page.wait_for_timeout(3000)
+                        await page.wait_for_timeout(1000)
 
                 # ----- SELECT FLOORS -----
                 if FLOOR_ARRAY:
@@ -362,7 +362,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                             print(f"selecting {floor_name}...")
                         await frame.evaluate("popup.hide()")  # closes the dropdown list
                         await page.wait_for_load_state('networkidle')
-                        await page.wait_for_timeout(3000)
+                        await page.wait_for_timeout(1000)
 
                 # ----- SELECT FACILITY TYPE -----
                 if FACILITY_TYPE_ARRAY:
@@ -373,7 +373,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                             print(f"selecting {facility_type_name}...")
                         await frame.evaluate("popup.hide()")  # closes the dropdown list
                         await page.wait_for_load_state('networkidle')
-                        await page.wait_for_timeout(3000)
+                        await page.wait_for_timeout(1000)
 
                 # ----- SELECT ROOM CAPACITY -----
                 select_capacity_input = await frame.query_selector("select#DropCapacity_c1")
@@ -382,7 +382,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                     print(f"Selected room capacity to be {ROOM_CAPACITY_FORMATTED}")
                 else:
                     print("Select element for room capacity not found")
-                await page.wait_for_timeout(3000)
+                await page.wait_for_timeout(1000)
 
                 # ----- ROOM EXTRACTION -----
                 await frame.wait_for_selector("table#GridResults_gv")
@@ -439,8 +439,8 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                     # ---------- VIEW TIMESLOTS ----------
                     await page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
 
-                    frame = await page.frame(name="frameBottom")
-                    frame = await page.frame(name="frameContent")
+                    frame = page.frame(name="frameBottom")
+                    frame = page.frame(name="frameContent")
                     room_names_array_raw = [await room.inner_text() for room in await frame.query_selector_all("div.scheduler_bluewhite_rowheader_inner")]
                     room_names_array_sanitised = [el for el in room_names_array_raw if el not in VALID_BUILDING]
                     bookings_array_raw = [await active_bookings.get_attribute("title") for active_bookings in await frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]

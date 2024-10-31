@@ -1,7 +1,7 @@
 import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
-from scraper import syncdo
+from .async_do import scrape_smu_fbs 
 
 def read_token(token_filepath):
     try:
@@ -27,7 +27,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
     CREDENTIALS_FILEPATH = "credentials.json"
     try:
-        result = syncdo.scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)
+        result = await scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)
         print("Scraping completed successfully.")
         await callback_query.callback_query.answer()  # Acknowledge the button press
         await callback_query.callback_query.message.reply_text(result)
