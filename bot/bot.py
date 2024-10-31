@@ -1,4 +1,5 @@
 import json
+from telegram.constants import ParseMode
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
 from .async_do import scrape_smu_fbs 
@@ -20,7 +21,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Run Scraping Script 🤯", callback_data='run_script')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Welcome! Click the button to run the script:', reply_markup=reply_markup)
+    await update.message.reply_text('Ello! Click the button to run the script', reply_markup=reply_markup)
 
 async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE):
     await callback_query.answer()  
@@ -41,9 +42,26 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         metrics = result_final_booking_log["metrics"]
         scraped_configuration = result_final_booking_log["scraped"]["config"]
         scraped_results = result_final_booking_log["scraped"]["result"]
+
         response_text = ""
-        await callback_query.message.reply_text(metrics)
-        await callback_query.message.reply_text(json.dumps(scraped_configuration, indent=2))
+
+        # ----- REPLY THE USER -----
+
+        await callback_query.message.reply_text(f'Scraping carried out on at <b>{metrics["scraping_date"]}</b>', parse_mode = ParseMode.HTML)
+
+        await callback_query.message.reply_text(
+            f"<b>Your scraping configuration:</b>\n"
+            f"<i>Target date:</i> {scraped_configuration['date']}\n"
+            f"<i>Target start time:</i> {scraped_configuration['start_time']}\n"
+            f"<i>Target end time:</i> {scraped_configuration['end_time']}\n"
+            f"<i>Target duration:</i> {scraped_configuration['duration']}\n"
+            f"<i>Target buildings:</i> {', '.join(scraped_configuration['building_names'])}\n"
+            f"<i>Target floors:</i> {', '.join(scraped_configuration['floors'])}\n"
+            f"<i>Target facility types:</i> {', '.join(scraped_configuration['facility_types'])}\n"
+            f"<i>Target room capacity:</i> {scraped_configuration['room_capacity']}\n"
+            f"<i>Target equipment:</i> {', '.join(scraped_configuration['equipment'])}",
+            parse_mode=ParseMode.HTML
+        )
 
         print("Scraping completed successfully.")
         
@@ -53,10 +71,10 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
             for i in range(0, len(response_text), max_length):
                 await callback_query.message.reply_text(response_text[i:i + max_length])
         else:
-            for room, bookings in scraped_results.items():
-                response_text += f"`***{room}***`\n"
-                for booking in bookings:
-                    await callback_query.message.reply_text(json.dumps(booking, indent=2))
+            # for room, bookings in scraped_results.items():
+            #     response_text += f"`***{room}***`\n"
+            #     for booking in bookings:
+            #         await callback_query.message.reply_text(json.dumps(booking, indent=2))
                 # FUA to debug the below!!!
                 #     status = "Booked" if not booking['available'] else "Available"
                 #     response_text += f"\tTimeslot: {booking['timeslot']}\n\tStatus: {status}\n"
@@ -67,6 +85,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                 # max_length = 4096 
                 # for i in range(0, len(result), max_length):
                 #     await callback_query.message.reply_text(result_final_booking_log[i:i + max_length])
+            await callback_query.message.reply_text("**All results have been displayed! 🥳**")
 
     except Exception as e:
         print(f"Error during scraping: {e}")
