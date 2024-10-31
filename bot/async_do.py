@@ -1,3 +1,10 @@
+"""
+FUA 
+
+* add buttons for user to specify their configurations (school, floor etc.) after the username and password has been specified under settings, consider splitting settings into 2 buttons, configuration and authentication then save config locally to be referenced later
+* consider including a returned screenshot of the generated timetable to be sent to the user as an additional feature if they request it? maybe an additional button
+"""
+
 import os
 import re
 import json
