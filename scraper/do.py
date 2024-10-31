@@ -24,9 +24,14 @@ import os
 import re
 import json
 import time
+from dateutil.parser import parse
 from playwright.sync_api import sync_playwright
 
 def read_credentials(credentials_filepath):
+    """
+    read locally stored
+    credentials json file
+    """
     try:
         with open(credentials_filepath, 'r') as file:
             data = json.load(file)
@@ -56,6 +61,38 @@ def convert_room_capacity(room_capacity_raw):
     else:
         return "MoreThan100Pax"
 
+def calculate_end_time(start_time, duration_hrs):
+    """
+    calculate end time based on 
+    a provided start and 
+    duration time
+    """
+    start_hours, start_minutes = map(int, start_time.split(":"))
+    total_minutes = (start_hours * 60 + start_minutes) + int(duration_hrs * 60)
+    end_hours = (total_minutes // 60) % 24
+    end_minutes = total_minutes % 60
+    return f"{end_hours:02}:{end_minutes:02}"
+
+def format_date(date_input):
+    """
+    receives a date string of the below formats
+    
+    YYYY-MM-DD
+    DD-MM-YYYY
+    MM/DD/YYYY
+    DD Month YYYY
+    Month DD, YYYY
+
+    and converts it to the DD-MMM-YYYY format 
+    accepted by SMU FBS
+    """
+    try:
+        date_obj = parse(date_input)
+        return date_obj.strftime("%d-%b-%Y")
+    except ValueError:
+        return "Invalid date format"
+
+
 def scrape_smu_fbs(base_url, credentials_filepath):
 
     """
@@ -65,12 +102,54 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
     # FUA to add documentation of each of the possible below values to the README.md as required
     VALID_TIME = [
-        "00:00", "00:30", "01:00", "01:30", "02:00", "02:30", "03:00", "03:30",
-        "04:00", "04:30", "05:00", "05:30", "06:00", "06:30", "07:00", "07:30",
-        "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-        "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-        "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30",
-        "20:00", "20:30", "21:00", "21:30", "22:00", "22:30", "23:00", "23:30"
+        "00:00", 
+        "00:30", 
+        "01:00", 
+        "01:30", 
+        "02:00", 
+        "02:30", 
+        "03:00", 
+        "03:30",
+        "04:00", 
+        "04:30", 
+        "05:00", 
+        "05:30", 
+        "06:00", 
+        "06:30", 
+        "07:00", 
+        "07:30",
+        "08:00", 
+        "08:30", 
+        "09:00", 
+        "09:30", 
+        "10:00", 
+        "10:30", 
+        "11:00", 
+        "11:30",
+        "12:00", 
+        "12:30", 
+        "13:00", 
+        "13:30", 
+        "14:00", 
+        "14:30", 
+        "15:00", 
+        "15:30",
+        "16:00", 
+        "16:30", 
+        "17:00", 
+        "17:30", 
+        "18:00", 
+        "18:30", 
+        "19:00", 
+        "19:30",
+        "20:00", 
+        "20:30", 
+        "21:00", 
+        "21:30", 
+        "22:00", 
+        "22:30", 
+        "23:00", 
+        "23:30"
     ]
     VALID_ROOM_CAPACITY_FORMATTED = [
         "LessThan5Pax", 
@@ -151,14 +230,11 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
     # FUA to exit the execution loop when there are no rooms available for a given set of parameters
     # FUA these values below are to be recieved as parameters to the function with optional parameters as well
-    DATE = "01-Nov-2024" # FUA to add a function that converts this date input so users can specify date input to the function in any number of formats
-        # Must adhere to this specified format
-    DURATION_HRS = "2" # FUA figure out a function that handles this float and determines the end time
-        # User-specified integer that can either 
+    DATE_RAW = "1 november 2024"
+    DATE_FORMATTED = format_date(DATE_RAW) 
+    DURATION_HRS = "2" 
     START_TIME = "11:00"
-        # Any number from "00:00" to "23:30"
-    END_TIME = "13:00" # FUA to add a function that calculates this based on the duration_hrs fed in
-        # Any number from "00:00" to "23:30"
+    END_TIME = calculate_end_time(START_TIME, DURATION_HRS)
     ROOM_CAPACITY_RAW = 7
     ROOM_CAPACITY_FORMATTED = convert_room_capacity(ROOM_CAPACITY_RAW)
     BUILDING_ARRAY = ["School of Accountancy", "School of Computing & Information Systems 1"]
@@ -213,7 +289,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
             else:
                 frame = page.frame(name="frameContent")
                 current_date_input = frame.query_selector("input#DateBookingFrom_c1_textDate") # might need to get the value attribute from here
-                while current_date_input != DATE:
+                while current_date_input != DATE_FORMATTED:
                     current_date_input = frame.query_selector("input#DateBookingFrom_c1_textDate").get_attribute("value") 
                     print(f"current day is {current_date_input}, going to next day...")
                     next_day_button_input = frame.query_selector("a#BtnDpcNext.btn") # click the button until desired date, which by default is the next day
@@ -361,9 +437,22 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     page.wait_for_load_state("networkidle")
                     page.wait_for_timeout(6000)
 
-                    # ---------- CHOOSE TIMESLOT ----------
+                    # ---------- VIEW TIMESLOTS ----------
+
+                        # ----- CAPTURE SCREENSHOT OF TIMESLOTS -----
 
                     page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
+
+                        # ----- SCRAPE TIMESLOTS -----
+
+                    frame = page.frame(name="frameBottom")
+                    frame = page.frame(name="frameContent")
+                    room_names_array = [room.inner_text() for room in frame.query_selector_all("div.scheduler_bluewhite_rowheader_inner")]
+                    active_bookings_array = [active_bookings.get_attribute("title") for active_bookings in frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]
+                    print(room_names_array)
+                    print(active_bookings_array) 
+                    
+                    # FUA continue editing the above values and see if there's parsing that can be done for extracting values and linking active bookings to their rooms
 
                     """
                     FUA 
@@ -375,21 +464,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     or integrate bharath's code from there later
 
                     continue adding code here from line 141 of new.py
-
-                    ~ internal reference ~
-
-                    div.scheduler_bluewhite_rowheader_inner --> inner_text() gives you the room name
-                    div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0 --> get_attribute("title"), then parse the result and see the corresponding booking time
                     """
-
-                    frame = page.frame(name="frameBottom")
-                    frame = page.frame(name="frameContent")
-                    room_names_array = [room.inner_text() for room in frame.query_selector_all("div.scheduler_bluewhite_rowheader_inner")]
-                    active_bookings_array = [active_bookings.get_attribute("title") for active_bookings in frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]
-                    print(room_names_array)
-                    print(active_bookings_array) 
-                    
-                    # FUA continue editing the above values and see if there's parsing that can be done for extracting values and linking active bookings to their rooms
 
         except Exception as e:
             errors.append(f"Error processing {base_url}: {e}")
