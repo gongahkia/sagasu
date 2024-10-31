@@ -16,6 +16,10 @@ at the top of the function underneath its corresponding
 array
 
 include details for a possible config.json and specify the format for that api as well
+
+FUA write a function that can then determine free time slots based on the booked time slots, basically the definition of the intervals question
+FUA document the output of this json and make it available as an API possibly
+
 """
 
 import os
@@ -23,6 +27,7 @@ import re
 import json
 import time
 from dateutil.parser import parse
+from datetime import datetime
 from playwright.sync_api import sync_playwright
 
 def pretty_print_json(json_object):
@@ -39,6 +44,7 @@ def write_json(json_object, filename):
     """
     with open(filename, 'w') as json_file:
         json.dump(json_object, json_file, indent=4) 
+        print(f"json file written to filepath: {filename}")
 
 def read_credentials(credentials_filepath):
     """
@@ -286,6 +292,8 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
     try:
 
+        start_time = time.time()
+
         p = sync_playwright().start() 
         browser = p.chromium.launch(headless=False, slow_mo=1000) # for easier debugging
         # browser = p.chromium.launch(headless=True) 
@@ -492,20 +500,10 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     # print(room_names_array)
                     # print(bookings_array) 
 
-                    # FUA write a function that parses the active bookings and ties it to a room
-                    # FUA write a function that can then determine free time slots based on the booked time slots, basically the definition of the intervals question
-                    # FUA document the output of this json and make it available as an API possibly
-
                     for index, booking_array in enumerate(bookings_array_sanitised):
 
                         # print(index)
                         # print(room_names_array_sanitised[index])
-
-                        """
-                        FUA 
-                        
-                        to debug this entire chunk here beacuse clearely soemthig is wrong
-                        """
 
                         booking_details = []
 
@@ -552,12 +550,17 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
                         room_timeslot_map[room_names_array_sanitised[index]] = booking_details
 
-                    pretty_print_json(room_timeslot_map)
+                    # pretty_print_json(room_timeslot_map)
                     
+                    current_datetime = datetime.now()
+                    formatted_datetime = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                    end_time = time.time()
+                    elapsed_time = end_time - start_time
+
                     final_booking_log = {
                         "metrics": {
-                            "scraping_date": "",
-                            "scraping_time_taken": ""
+                            "scraping_date": formatted_datetime,
+                            "scraping_elapsed_time": elapsed_time
                         },
                         "scraped": {
                             "config": {
@@ -575,6 +578,8 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                         }
                     }
                     
+                    pretty_print_json(final_booking_log)
+
                     write_json(final_booking_log, BOOKING_LOG_FILEPATH)
 
         except Exception as e:
