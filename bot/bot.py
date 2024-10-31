@@ -72,6 +72,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                     if booking["available"]:
                         response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
                         response_text += f"<i>Status:</i> Available to book ✅\n"
+                        response_text += f"<u><a href='https://fbs.intranet.smu.edu.sg/home'>Book now</a></u>\n\n"
                     else:
                         if booking["details"]:
                             response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
