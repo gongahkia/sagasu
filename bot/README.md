@@ -1,0 +1,5 @@
+# Bot
+
+```console
+$ make
+```

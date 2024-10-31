@@ -1,33 +1,39 @@
 import json
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from scraper import do
 
 def read_token(token_filepath):
     try:
         with open(token_filepath, 'r') as file:
             data = json.load(file)
-        return data
+        return data["token"]
     except FileNotFoundError:
         print("File not found. Please check the file path.")
+        return None
     except json.JSONDecodeError:
         print("Error decoding JSON. Please check the file format.")
+        return None
 
-def run_script(update: Update, context: CallbackContext):
-
+async def run_script(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print("running the scraping script...")
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
     CREDENTIALS_FILEPATH = "credentials.json"
-
     result = do.scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)
-
-    update.message.reply_text(result)
+    await update.message.reply_text(result)
 
 def main():
-    updater = Updater(read_token("YOUR_BOT_API_TOKEN")["token"])
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("run_script", run_script))
-    updater.start_polling()
-    updater.idle()
+    token = read_token("token.json")
+    if token is None:
+        print("Failed to retrieve token. Exiting...")
+        return
+    app = ApplicationBuilder().token(token).build()
+    app.add_handler(CommandHandler("run_script", run_script))
+    print("polling...")
+    app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    # main()
+    TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
+    CREDENTIALS_FILEPATH = "credentials.json"
+    print(do.scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH))

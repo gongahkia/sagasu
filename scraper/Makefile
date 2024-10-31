@@ -1,5 +1,5 @@
 all:start
 
 start:
-	@echo "executing main program..."
+	@echo "executing scraper script..."
 	python3 do.py
