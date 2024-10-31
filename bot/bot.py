@@ -45,9 +45,8 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
 
         # ----- REPLY THE USER -----
 
-        await callback_query.message.reply_text(f'Scraping carried out on at <b>{metrics["scraping_date"]}</b>', parse_mode = ParseMode.HTML)
-
         await callback_query.message.reply_text(
+            f"Scraping carried out on at <b>{metrics['scraping_date']}</b>\n\n"
             f"<b>Your scraping configuration:</b>\n"
             f"<i>Target date:</i> {scraped_configuration['date']}\n"
             f"<i>Target start time:</i> {scraped_configuration['start_time']}\n"
@@ -72,18 +71,17 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         else:
             for room, bookings in scraped_results.items():
                 response_text = ""
-                response_text += f"<code>Room no. {room}</code>\n"
+                response_text += f"<code>{room}</code>\n\n"
                 for booking in bookings:
-                    status = "Booked" if not booking['available'] else "Available"
                     if booking["details"]:
                         response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                        response_text += f"<i>Status:</i> {status}\n"
+                        response_text += f"<i>Status:</i> Booked\n"
                         response_text += f"<i>Purpose:</i> {booking['details']['Purpose of Booking']}\n"
                         response_text += f"<i>Booker:</i> {booking['details']['Booked for User Name']} ({booking['details']['Booked for User Email Address']})\n"
                         response_text += f"<i>Booking ref no:</i> {booking['details']['Booking Reference Number']}\n\n"
                     else:
                         response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                        response_text += f"<i>Status:</i> {status}\n\n"
+                        response_text += f"<i>Status:</i> Outside hours and cannot be booked\n\n"
                 await callback_query.message.reply_text(response_text, parse_mode=ParseMode.HTML)
             await callback_query.message.reply_text("<b><i>All results have been displayed! 🥳</i></b>", parse_mode=ParseMode.HTML)
 
