@@ -6,9 +6,6 @@ top of the function
 
 debug how the date is handled and note that currently date being scraped is 2 nov even though i specify i want 1 nov
 
-continue working on the below logic from 
-the base of the function
-
 allow users to specify configs via json
 
 specify all possible values for each select option tag 
@@ -27,7 +24,7 @@ import re
 import json
 import time
 from dateutil.parser import parse
-from datetime import datetime
+from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
 
 def pretty_print_json(json_object):
@@ -132,6 +129,31 @@ def split_bookings_by_day(bookings):
             if current_day:
                 current_day.append(booking)
     return days
+
+def add_missing_timeslots(booking_details):
+    """
+    finds all available timeslots and
+    accounts for all these periods 
+    with a 30 minute interval
+    """
+    start_time = "00:00"
+    end_time = "23:30"
+    time_format = "%H:%M"
+    start_dt = datetime.strptime(start_time, time_format)
+    end_dt = datetime.strptime(end_time, time_format)
+    existing_timeslots = [(datetime.strptime(slot["timeslot"].split('-')[0], time_format), datetime.strptime(slot["timeslot"].split('-')[1], time_format)) for slot in booking_details]
+    complete_booking_details = []
+    current_time = start_dt
+    while current_time <= end_dt:
+        for start, end in existing_timeslots:
+            if start <= current_time < end:
+                complete_booking_details.append({"timeslot": f"{current_time.strftime(time_format)}-{end.strftime(time_format)}", "available": False, "status": "Not available", "details": None})
+                break
+        else:
+            next_time = current_time + timedelta(minutes=30)
+            complete_booking_details.append({"timeslot": f"{current_time.strftime(time_format)}-{next_time.strftime(time_format)}", "available": True, "status": "Unbooked", "details": None})
+        current_time += timedelta(minutes=30)
+    return complete_booking_details
 
 def scrape_smu_fbs(base_url, credentials_filepath):
 
@@ -269,7 +291,6 @@ def scrape_smu_fbs(base_url, credentials_filepath):
     ]
 
     # FUA to exit the execution loop when there are no rooms available for a given set of parameters
-    # FUA these values below are to be recieved as parameters to the function with optional parameters as well
     DATE_RAW = "1 november 2024"
     DATE_FORMATTED = format_date(DATE_RAW) 
     DURATION_HRS = "2" 
@@ -283,7 +304,6 @@ def scrape_smu_fbs(base_url, credentials_filepath):
     EQUIPMENT_ARRAY = []
     SCREENSHOT_FILEPATH = "./screenshot_log/"
     BOOKING_LOG_FILEPATH = "./booking_log/"
-    CO_BOOKER_EMAIL_ARRAY = [] # FUA add values here and how this code will handle it
 
     errors = []
     local_credentials = read_credentials(credentials_filepath)
