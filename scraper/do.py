@@ -3,13 +3,7 @@ FUA
 
 debug how the date is handled and note that currently date being scraped is 2 nov even though i specify i want 1 nov
 
-allow users to specify configs via json
-
-specify all possible values for each select option tag 
-at the top of the function underneath its corresponding
-array
-
-include details for a possible config.json and specify the format for that api as well
+include details for a possible config.json that users can use to specify configs and specify the format for that api as well
 
 FUA document the output of this json and make it available as an API possibly
 """
@@ -77,9 +71,6 @@ def calculate_end_time(valid_time_array, start_time, duration_hrs):
     calculate end time based on 
     a provided start and 
     duration time
-    
-    FUA debug this function, currently its just returning
-    the incorrect time
     """
     start_hours, start_minutes = map(int, start_time.split(":"))
     total_minutes = (start_hours * 60 + start_minutes) + int(duration_hrs * 60)
