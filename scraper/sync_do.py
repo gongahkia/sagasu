@@ -2,9 +2,70 @@ import os
 import re
 import json
 import time
+import itertools
 from dateutil.parser import parse
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
+
+def generate_30_min_intervals():
+    """
+    generate all possible 30 minute
+    intervals from 00:00 to 23:59
+    """
+    intervals = []
+    start = datetime.strptime("00:00", "%H:%M")
+    end = datetime.strptime("23:59", "%H:%M")
+    while start <= end:
+        interval_end = (start + timedelta(minutes=30)).strftime("%H:%M")
+        intervals.append(f"{start.strftime('%H:%M')}-{interval_end}")
+        start += timedelta(minutes=30)
+    return intervals
+
+def remove_duplicates_preserve_order(lst):
+    """
+    removes all duplicates while preserving 
+    order of list elements
+    """
+    seen = set()
+    result = []
+    for item in lst:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+def fill_missing_timeslots(room_schedule):
+    """
+    uses the benefits of a sorted 
+    queue data structure to handle
+    missing intervals in a range of timings
+
+    FUA continue debugging this function to check if it is working!!!
+    to find available intevrals!!!
+    """
+    print(f"EXISTING INTERVALS: {[el['timeslot'] for el in room_schedule]}")
+    target_timeslot_array = []
+    new_schedule = []
+    timeline_overview = remove_duplicates_preserve_order(list(itertools.chain.from_iterable([slot["timeslot"].split("-") for slot in room_schedule])))
+    for i in range(len(timeline_overview)-1):
+        start = timeline_overview[i]
+        end = timeline_overview[i+1]
+        target_timeslot = f"{start}-{end}"
+        target_timeslot_array.append(target_timeslot)
+    print(f"GENERATED INTERVAL ARRAY: {target_timeslot_array}")
+    for slot in room_schedule:
+        if slot["timeslot"] == target_timeslot_array[0]: # already exists
+            new_schedule.append(slot)
+            del target_timeslot_array[0]
+        else: # does not yet exist
+            new_timeslot = target_timeslot_array.pop(0)
+            new_schedule.append({
+                "timeslot": new_timeslot,
+                "available": True,
+                "status": "Available for booking",
+                "details": None
+            })
+    return new_schedule
 
 def pretty_print_json(json_object):
     """
@@ -576,7 +637,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                                 # edge case checking
                                 print(f"Unrecognised timeslot format, logged here: {booking}")
 
-                            # print(booking_details)
+                        print(fill_missing_timeslots(booking_details))
 
                         room_timeslot_map[room_names_array_sanitised[index]] = booking_details
 
@@ -605,7 +666,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                         }
                     }
                     
-                    pretty_print_json(final_booking_log)
+                    # pretty_print_json(final_booking_log)
 
                     write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}scraped_log.json")
 
