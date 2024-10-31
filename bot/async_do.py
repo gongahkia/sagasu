@@ -180,7 +180,7 @@ def fill_missing_timeslots(room_schedule):
             del target_timeslot_array[0] 
     return new_schedule
 
-async def scrape_smu_fbs(base_url, credentials_filepath):
+async def scrape_smu_fbs(base_url, user_email, user_password):
     """
     Handle automated login to SMU FBS based on
     personal credentials.json and scrapes all booked
@@ -329,7 +329,6 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
     BOOKING_LOG_FILEPATH = "./booking_log/"
 
     errors = []
-    local_credentials = read_credentials(credentials_filepath)
 
     try:
         async with async_playwright() as p:
@@ -345,8 +344,8 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
 
                 print(f"navigating to {base_url}")
 
-                await page.fill("input#userNameInput", local_credentials["username"])
-                await page.fill("input#passwordInput", local_credentials["password"])
+                await page.fill("input#userNameInput", user_email)
+                await page.fill("input#passwordInput", user_password)
                 await page.click("span#submitButton")
 
                 await page.wait_for_timeout(1000)

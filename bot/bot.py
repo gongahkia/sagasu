@@ -1,5 +1,6 @@
 import json
 from telegram.constants import ParseMode
+from telegram.ext import MessageHandler, filters
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
 from .async_do import scrape_smu_fbs 
@@ -19,18 +20,34 @@ def read_token(token_filepath):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("Run Scraping Script 🤯", callback_data='run_script')]
+        [InlineKeyboardButton("Poke to start scraping 🤯", callback_data='run_script')],
+        [InlineKeyboardButton("Pinch to alert help desk 📖", callback_data='view_help')],
+        [InlineKeyboardButton("Tickle to open settings ⚙️", callback_data='settings')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Ello! Click the button to run the script 👋', reply_markup=reply_markup)
+    await update.message.reply_text('Welcome to <a href="https://github.com/gongahkia/sagasu">Sagasu</a>!', parse_mode=ParseMode.HTML)
+    await update.message.reply_text('Ello! Click one option below 👋', reply_markup=reply_markup)
 
 async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE):
     await callback_query.answer()  
     print("Running the scraping script...")
-    TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
-    CREDENTIALS_FILEPATH = "credentials.json"
+    TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"    
+    USER_EMAIL = context.user_data.get('email')
+    USER_PASSWORD = context.user_data.get('password')
+    print(USER_EMAIL, USER_PASSWORD)
+    
+    # CREDENTIALS_FILEPATH = "credentials.json"
+
+    if not USER_EMAIL:
+        await callback_query.message.reply_text("Email not provided lah! Go set it in settings. 💀")
+        return
+    elif not USER_PASSWORD:
+        await callback_query.message.reply_text("Password is missing leh! Go set it in settings. 🤡")
+        return
+
     try:
-        result = await scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)  
+
+        result = await scrape_smu_fbs(TARGET_URL, USER_EMAIL, USER_PASSWORD)  
 
         result_errors = result[0]
         result_final_booking_log = result[1]
@@ -108,11 +125,46 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text("An error occurred during the scraping process.")
             except Exception as edit_error:
                 print(f"Failed to edit message: {edit_error}")
+    elif query.data == 'view_help':
+        await query.edit_message_text(
+            "This bot scrapes SMU FBS data. Use 'Run Script' to start scraping, or 'Settings' to adjust configurations."
+        )
+    elif query.data == 'settings':
+        await query.message.reply_text("Please enter your SMU email address 📧")
+        context.user_data['settings_state'] = 'awaiting_email'
+
+async def handle_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get('settings_state') == 'awaiting_email':
+        context.user_data['email'] = update.message.text
+        await update.message.reply_text("SMU email saved!\nPlease enter your password 🔑")
+        context.user_data['settings_state'] = 'awaiting_password' 
+        print("Email received:", context.user_data['email'])
+    else:
+        await update.message.reply_text("Please use the /settings command to enter your email.")
+
+async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get('settings_state') == 'awaiting_password':
+        context.user_data['password'] = update.message.text
+        await update.message.reply_text("Password saved!\nSettings updated ☑️")
+        context.user_data['settings_state'] = None 
+        print("Password received:", context.user_data['password'])
+    else:
+        await update.message.reply_text("Please use the /settings command to enter your password.")
+
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = context.user_data.get('settings_state')
+    if state == 'awaiting_email':
+        await handle_email(update, context)
+    elif state == 'awaiting_password':
+        await handle_password(update, context)
+    else:
+        await update.message.reply_text("Quit yapping bruh, I'm not expecting any input right now.\nType /settings to configure. 🦜")
 
 def main():
     app = ApplicationBuilder().token(read_token("token.json")).build()
-    app.add_handler(CommandHandler("start", start)) 
-    app.add_handler(CallbackQueryHandler(button_callback)) 
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button_callback))
+    app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
     print("Bot is polling...")
     app.run_polling()
 
