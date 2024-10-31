@@ -1,9 +1,6 @@
 """
 FUA
 
-work on helper functions specified with FUA at the 
-top of the function
-
 debug how the date is handled and note that currently date being scraped is 2 nov even though i specify i want 1 nov
 
 allow users to specify configs via json
@@ -14,9 +11,7 @@ array
 
 include details for a possible config.json and specify the format for that api as well
 
-FUA write a function that can then determine free time slots based on the booked time slots, basically the definition of the intervals question
 FUA document the output of this json and make it available as an API possibly
-
 """
 
 import os
@@ -290,7 +285,6 @@ def scrape_smu_fbs(base_url, credentials_filepath):
         "Wireless Projection"
     ]
 
-    # FUA to exit the execution loop when there are no rooms available for a given set of parameters
     DATE_RAW = "1 november 2024"
     DATE_FORMATTED = format_date(DATE_RAW) 
     DURATION_HRS = "2" 
@@ -486,6 +480,35 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                         matching_rooms.append(tds[1].inner_text().strip())  
                 if not matching_rooms:
                     print("No rooms fitting description found.")
+                    print("closing browser...")
+                    browser.close() 
+
+                    final_booking_log = {
+                        "metrics": {
+                            "scraping_date": formatted_datetime,
+                        },
+                        "scraped": {
+                            "config": {
+                                "date": DATE_FORMATTED,
+                                "start_time": START_TIME,
+                                "end_time": END_TIME,
+                                "duration": DURATION_HRS,
+                                "building_names": BUILDING_ARRAY,
+                                "floors": FLOOR_ARRAY,
+                                "facility_types": FACILITY_TYPE_ARRAY,
+                                "room_capacity": ROOM_CAPACITY_FORMATTED,
+                                "equipment": EQUIPMENT_ARRAY
+                            },
+                            "result": {}
+                        }
+                    }
+                    
+                    pretty_print_json(final_booking_log)
+
+                    write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}scraped_log.json")
+
+                    return errors
+
                 else:
                     print(f"{len(matching_rooms)} rooms fitting description found.")
                     for room in matching_rooms:
