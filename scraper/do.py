@@ -72,7 +72,7 @@ def convert_room_capacity(room_capacity_raw):
     else:
         return "MoreThan100Pax"
 
-def calculate_end_time(start_time, duration_hrs):
+def calculate_end_time(valid_time_array, start_time, duration_hrs):
     """
     calculate end time based on 
     a provided start and 
@@ -85,7 +85,9 @@ def calculate_end_time(start_time, duration_hrs):
     total_minutes = (start_hours * 60 + start_minutes) + int(duration_hrs * 60)
     end_hours = (total_minutes // 60) % 24
     end_minutes = total_minutes % 60
-    return f"{end_hours:02}:{end_minutes:02}"
+    end_time = f"{end_hours:02}:{end_minutes:02}"
+    closest_time = min(valid_time_array, key=lambda t: abs((int(t.split(":")[0]) * 60 + int(t.split(":")[1])) - (end_hours * 60 + end_minutes)))
+    return [closest_time, end_time]
 
 def format_date(date_input):
     """
@@ -287,9 +289,9 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
     DATE_RAW = "1 november 2024"
     DATE_FORMATTED = format_date(DATE_RAW) 
-    DURATION_HRS = "2" 
+    DURATION_HRS = 2.5
     START_TIME = "11:00"
-    END_TIME = calculate_end_time(START_TIME, DURATION_HRS)
+    END_TIME = calculate_end_time(VALID_TIME, START_TIME, DURATION_HRS)[0]
     ROOM_CAPACITY_RAW = 7
     ROOM_CAPACITY_FORMATTED = convert_room_capacity(ROOM_CAPACITY_RAW)
     BUILDING_ARRAY = ["School of Accountancy", "School of Computing & Information Systems 1"]

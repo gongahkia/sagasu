@@ -1,13 +1,13 @@
 {
     "metrics": {
-        "scraping_date": "2024-10-31 13:17:16"
+        "scraping_date": "2024-10-31 13:28:38"
     },
     "scraped": {
         "config": {
             "date": "01-Nov-2024",
             "start_time": "11:00",
-            "end_time": "18:42",
-            "duration": "2",
+            "end_time": "13:30",
+            "duration": 2.5,
             "building_names": [
                 "School of Accountancy",
                 "School of Computing & Information Systems 1"
