@@ -39,11 +39,8 @@ def fill_missing_timeslots(room_schedule):
     uses the benefits of a sorted 
     queue data structure to handle
     missing intervals in a range of timings
-
-    FUA continue debugging this function to check if it is working!!!
-    to find available intevrals!!!
     """
-    print(f"EXISTING INTERVALS: {[el['timeslot'] for el in room_schedule]}")
+    # print(f"EXISTING INTERVALS: {[el['timeslot'] for el in room_schedule]}")
     target_timeslot_array = []
     new_schedule = []
     timeline_overview = remove_duplicates_preserve_order(list(itertools.chain.from_iterable([slot["timeslot"].split("-") for slot in room_schedule])))
@@ -52,8 +49,9 @@ def fill_missing_timeslots(room_schedule):
         end = timeline_overview[i+1]
         target_timeslot = f"{start}-{end}"
         target_timeslot_array.append(target_timeslot)
-    print(f"GENERATED INTERVAL ARRAY: {target_timeslot_array}")
+    # print(f"GENERATED INTERVAL ARRAY: {target_timeslot_array}")
     for slot in room_schedule:
+        # print(slot)
         if slot["timeslot"] == target_timeslot_array[0]: # already exists
             new_schedule.append(slot)
             del target_timeslot_array[0]
@@ -65,6 +63,8 @@ def fill_missing_timeslots(room_schedule):
                 "status": "Available for booking",
                 "details": None
             })
+            new_schedule.append(slot) # can afford to be coded this way due to the nature of sorted arrays
+            del target_timeslot_array[0] # can afford to be coded this way due to the nature of sorted arrays
     return new_schedule
 
 def pretty_print_json(json_object):
@@ -637,9 +637,10 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                                 # edge case checking
                                 print(f"Unrecognised timeslot format, logged here: {booking}")
 
-                        print(fill_missing_timeslots(booking_details))
+                        # print(f"original: {booking_details}")
+                        # print(f"filled: {fill_missing_timeslots(booking_details)}")
 
-                        room_timeslot_map[room_names_array_sanitised[index]] = booking_details
+                        room_timeslot_map[room_names_array_sanitised[index]] = fill_missing_timeslots(booking_details)
 
                     # pretty_print_json(room_timeslot_map)
                     
