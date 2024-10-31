@@ -8,6 +8,8 @@ reference new.py as required
 work on helper functions specified with FUA at the 
 top of the function
 
+debug how the date is handled and note that currently date being scraped is 2 nov even though i specify i want 1 nov
+
 continue working on the below logic from 
 the base of the function
 
@@ -26,6 +28,13 @@ import json
 import time
 from dateutil.parser import parse
 from playwright.sync_api import sync_playwright
+
+def pretty_print_json(json_object):
+    """
+    pretty prints json data to 
+    the cli for easy viewing
+    """
+    print(json.dumps(json_object, indent=4)) 
 
 def read_credentials(credentials_filepath):
     """
@@ -66,6 +75,9 @@ def calculate_end_time(start_time, duration_hrs):
     calculate end time based on 
     a provided start and 
     duration time
+    
+    FUA debug this function, currently its just returning
+    the incorrect time
     """
     start_hours, start_minutes = map(int, start_time.split(":"))
     total_minutes = (start_hours * 60 + start_minutes) + int(duration_hrs * 60)
@@ -92,6 +104,24 @@ def format_date(date_input):
     except ValueError:
         return "Invalid date format"
 
+def split_bookings_by_day(bookings):
+    """
+    splits scraped bookings by day
+    """
+    days = []
+    current_day = []
+    for booking in bookings:
+        if '(not available)' in booking:
+            if not current_day:
+                current_day.append(booking)
+            else:
+                current_day.append(booking)
+                days.append(current_day)
+                current_day = [] 
+        else:
+            if current_day:
+                current_day.append(booking)
+    return days
 
 def scrape_smu_fbs(base_url, credentials_filepath):
 
@@ -447,12 +477,73 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
                     frame = page.frame(name="frameBottom")
                     frame = page.frame(name="frameContent")
-                    room_names_array = [room.inner_text() for room in frame.query_selector_all("div.scheduler_bluewhite_rowheader_inner")]
-                    active_bookings_array = [active_bookings.get_attribute("title") for active_bookings in frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]
-                    print(room_names_array)
-                    print(active_bookings_array) 
+                    room_names_array_raw = [room.inner_text() for room in frame.query_selector_all("div.scheduler_bluewhite_rowheader_inner")]
+                    room_names_array = [el for el in room_names_array_raw if el not in VALID_BUILDING]
+                    bookings_array_raw = [active_bookings.get_attribute("title") for active_bookings in frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]
+                    bookings_array = split_bookings_by_day(bookings_array_raw)
                     
-                    # FUA continue editing the above values and see if there's parsing that can be done for extracting values and linking active bookings to their rooms
+                    print(room_names_array)
+                    print(bookings_array) 
+
+                    na_count = 0
+                    room_name_index = 0
+
+                    room_timeslot_map = {
+                        room_names_array[room_name_index]: []
+                    }
+
+                    # FUA write a function that parses the active bookings and ties it to a room
+                    # FUA write a function that can then determine free time slots based on the booked time slots, basically the definition of the intervals question
+                    # FUA document the output of this json and make it available as an API possibly
+
+                    for booking in bookings_array:
+
+                        if booking.startswith("Booking Time:"): # existing booking
+                            room_details = {}
+                            for el in booking.split("\n"):
+                                if el.startswith("Booking Time:"):
+                                    local_timeslot = el.lstrip("Booking Time: ")
+                                room_details[el.split(": ")[0]] = el.split(": ")[1]
+                            active_booking_details = {
+                                "timeslot": local_timeslot,
+                                "available": False,
+                                "status": "Booked",
+                                "details": room_details
+                            }
+                            # pretty_print_json(active_booking_details)
+
+                            room_timeslot_map[room_names_array[room_name_index]].append(active_booking_details)
+
+                        elif booking.endswith("(not available)"): # not available booking
+
+                            na_count += 1
+
+                            time = booking.split(") (")[0]
+                            na_booking_details = {
+                                "timeslot": time.lstrip("("),
+                                "available": False,
+                                "status": "Not available",
+                                "details": None
+                            }
+                            # pretty_print_json(na_booking_details)
+
+                            if na_count == 1:
+                                room_timeslot_map[room_names_array[room_name_index]].append(na_booking_details)
+                            if na_count == 2:
+                                room_timeslot_map[room_names_array[room_name_index]].append(na_booking_details)
+                                na_count = 0
+                                room_name_index += 1
+                                room_timeslot_map[room_names_array[room_name_index]] = []
+
+                            # room_timeslots["bookings"].append(na_booking_details)
+
+                        else: 
+                            # edge case checking
+                            print(f"Unrecognised timeslot format, logged here: {booking}")
+
+                    pretty_print_json(room_timeslot_map)
+
+                        # ----- BOT TIMESLOTS -----
 
                     """
                     FUA 
