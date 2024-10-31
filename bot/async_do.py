@@ -437,7 +437,7 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                     await page.wait_for_timeout(1000)
 
                     # ---------- VIEW TIMESLOTS ----------
-                    await page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
+                    # await page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
 
                     frame = page.frame(name="frameBottom")
                     frame = page.frame(name="frameContent")
@@ -445,6 +445,9 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                     room_names_array_sanitised = [el for el in room_names_array_raw if el not in VALID_BUILDING]
                     bookings_array_raw = [await active_bookings.get_attribute("title") for active_bookings in await frame.query_selector_all("div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0")]
                     bookings_array_sanitised = split_bookings_by_day(bookings_array_raw)
+
+                    # print(room_names_array_sanitised)
+                    # print(bookings_array_sanitised)
 
                     room_timeslot_map = {}
 
@@ -482,6 +485,11 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
 
                         room_timeslot_map[room_names_array_sanitised[index]] = booking_details
 
+                    # print(room_timeslot_map)
+
+                    current_datetime = datetime.now()
+                    formatted_datetime = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
+
                     final_booking_log = {
                         "metrics": {
                             "scraping_date": formatted_datetime,
@@ -502,11 +510,11 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
                         }
                     }
 
-                    pretty_print_json(final_booking_log)
+                    # print(final_booking_log)
+                    print("finished scraping")
 
-                    write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}booking_log.json")
-
-                    await page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
+                    # write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}booking_log.json")
+                    # await page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
 
             except Exception as e:
                 errors.append(f"Error occurred during scraping process: {e}")
@@ -518,4 +526,4 @@ async def scrape_smu_fbs(base_url, credentials_filepath):
     except Exception as e:
         errors.append(f"Failed to launch browser: {e}")
 
-    return errors
+    return [errors, final_booking_log]
