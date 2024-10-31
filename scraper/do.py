@@ -1,10 +1,6 @@
 """
 FUA
 
-continue adding events from line 280
-
-reference new.py as required
-
 work on helper functions specified with FUA at the 
 top of the function
 
@@ -35,6 +31,14 @@ def pretty_print_json(json_object):
     the cli for easy viewing
     """
     print(json.dumps(json_object, indent=4)) 
+
+def write_json(json_object, filename):
+    """
+    write a python dictionary to a 
+    local JSON file
+    """
+    with open(filename, 'w') as json_file:
+        json.dump(json_object, json_file, indent=4) 
 
 def read_credentials(credentials_filepath):
     """
@@ -272,6 +276,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
     FACILITY_TYPE_ARRAY = ["Meeting Pod", "Group Study Room"]
     EQUIPMENT_ARRAY = []
     SCREENSHOT_FILEPATH = "./screenshot_log/"
+    BOOKING_LOG_FILEPATH = "./booking_log/"
     CO_BOOKER_EMAIL_ARRAY = [] # FUA add values here and how this code will handle it
 
     errors = []
@@ -492,9 +497,10 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     # FUA document the output of this json and make it available as an API possibly
 
                     for index, booking_array in enumerate(bookings_array_sanitised):
-                        print("----------------------")
-                        print(room_names_array_sanitised[index])
-                        print(booking_details)
+
+                        # print(index)
+                        # print(room_names_array_sanitised[index])
+
                         """
                         FUA 
                         
@@ -504,6 +510,8 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                         booking_details = []
 
                         for booking in booking_array:
+
+                            # print(booking)
 
                             if booking.startswith("Booking Time:"): # existing booking
                                 room_details = {}
@@ -523,8 +531,6 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
                             elif booking.endswith("(not available)"): # not available booking
 
-                                na_count += 1
-
                                 time = booking.split(") (")[0]
                                 na_booking_details = {
                                     "timeslot": time.lstrip("("),
@@ -542,23 +548,34 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                                 # edge case checking
                                 print(f"Unrecognised timeslot format, logged here: {booking}")
 
-                        # room_timeslot_map[room_names_array[index]] = booking_details
+                            # print(booking_details)
 
-                    # pretty_print_json(room_timeslot_map)
+                        room_timeslot_map[room_names_array_sanitised[index]] = booking_details
 
-                        # ----- BOT TIMESLOTS -----
-
-                    """
-                    FUA 
+                    pretty_print_json(room_timeslot_map)
                     
-                    continue adding scraping code here once the available timeslots 
-                    have been loaded in or make a screenshot or curl the HTML and use 
-                    a OCR library to extract that data instead, that works as well
+                    final_booking_log = {
+                        "metrics": {
+                            "scraping_date": "",
+                            "scraping_time_taken": ""
+                        },
+                        "scraped": {
+                            "config": {
+                                "date": DATE_FORMATTED,
+                                "start_time": START_TIME,
+                                "end_time": END_TIME,
+                                "duration": DURATION_HRS,
+                                "building_names": BUILDING_ARRAY,
+                                "floors": FLOOR_ARRAY,
+                                "facility_types": FACILITY_TYPE_ARRAY,
+                                "room_capacity": ROOM_CAPACITY_FORMATTED,
+                                "equipment": EQUIPMENT_ARRAY
+                            },
+                            "result": room_timeslot_map
+                        }
+                    }
                     
-                    or integrate bharath's code from there later
-
-                    continue adding code here from line 141 of new.py
-                    """
+                    write_json(final_booking_log, BOOKING_LOG_FILEPATH)
 
         except Exception as e:
             errors.append(f"Error processing {base_url}: {e}")
@@ -571,6 +588,8 @@ def scrape_smu_fbs(base_url, credentials_filepath):
         errors.append(f"Failed to initialize Playwright: {e}")
 
     return errors
+
+# ----- SAMPLE EXECUTION CODE -----
 
 if __name__ == "__main__":
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
