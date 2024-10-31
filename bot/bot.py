@@ -126,9 +126,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as edit_error:
                 print(f"Failed to edit message: {edit_error}")
     elif query.data == 'view_help':
-        await query.edit_message_text(
-            "This bot scrapes SMU FBS data. Use 'Run Script' to start scraping, or 'Settings' to adjust configurations."
-        )
+        await query.edit_message_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /scrape to start scraping\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
     elif query.data == 'settings':
         await query.message.reply_text("Please enter your SMU email address 📧")
         context.user_data['settings_state'] = 'awaiting_email'
@@ -138,18 +136,18 @@ async def handle_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['email'] = update.message.text
         await update.message.reply_text("SMU email saved!\nPlease enter your password 🔑")
         context.user_data['settings_state'] = 'awaiting_password' 
-        print("Email received:", context.user_data['email'])
+        # print("Email received:", context.user_data['email'])
     else:
-        await update.message.reply_text("Please use the /settings command to enter your email.")
+        await update.message.reply_text("Don't cut queue lah you.\nType /settings to enter your email 🐻‍❄️.")
 
 async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get('settings_state') == 'awaiting_password':
         context.user_data['password'] = update.message.text
         await update.message.reply_text("Password saved!\nSettings updated ☑️")
         context.user_data['settings_state'] = None 
-        print("Password received:", context.user_data['password'])
+        # print("Password received:", context.user_data['password'])
     else:
-        await update.message.reply_text("Please use the /settings command to enter your password.")
+        await update.message.reply_text("Don't cut queue lah you.\nType /settings to enter your password 🐻.")
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get('settings_state')
@@ -160,9 +158,34 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Quit yapping bruh, I'm not expecting any input right now.\nType /settings to configure. 🦜")
 
+async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['settings_state'] = 'awaiting_email'
+    await update.message.reply_text("Please enter your SMU email address 📧")
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /scrape to start scraping\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
+
+async def scrape_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer() 
+    if query.data == 'run_script':
+        new_keyboard = [[InlineKeyboardButton("Oke the script is running 🏃...", callback_data='disabled')]]
+        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(new_keyboard))
+        try:
+            await run_script(query, context) 
+        except Exception as e:
+            print(f"Error during scraping: {e}")
+            try:
+                await query.edit_message_text("An error occurred during the scraping process.")
+            except Exception as edit_error:
+                print(f"Failed to edit message: {edit_error}")
+
 def main():
     app = ApplicationBuilder().token(read_token("token.json")).build()
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command)) 
+    app.add_handler(CommandHandler("scrape", scrape_command)) 
+    app.add_handler(CommandHandler("settings", settings_command)) 
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
     print("Bot is polling...")
