@@ -464,10 +464,10 @@ async def scrape_smu_fbs(base_url, user_email, user_password):
                         }
                     }
 
-                    pretty_print_json(final_booking_log)
-                    write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}scraped_log.json")
+                    # pretty_print_json(final_booking_log)
+                    # write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}scraped_log.json")
 
-                    return errors
+                    return [errors, final_booking_log]
 
                 else:
                     print(f"{len(matching_rooms)} rooms fitting description found.")

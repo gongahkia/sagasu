@@ -141,7 +141,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception as edit_error:
                 print(f"Failed to edit message: {edit_error}")
     elif query.data == 'view_help':
-        await query.edit_message_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /scrape to start scraping\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
+        await query.edit_message_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
     elif query.data == 'settings':
         await query.message.reply_text("Please enter your SMU email address 📧")
         context.user_data['settings_state'] = 'awaiting_email'
@@ -178,42 +178,12 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Please enter your SMU email address 📧")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /scrape to start scraping\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
-
-async def scrape_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.message
-
-    USER_EMAIL = context.user_data.get('email')
-    USER_PASSWORD = context.user_data.get('password')
-
-    # print(USER_EMAIL, USER_PASSWORD)
-
-    if not USER_EMAIL:
-        await message.reply_text("Email not provided lah! Go set it in settings. 💀")
-        return
-    elif not USER_PASSWORD:
-        await message.reply_text("Password is missing leh! Go set it in settings. 🤡")
-        return
-    else:
-        await message.reply_text("Email and Password found! Initiating scraping... 👌")
-
-    new_keyboard = [[InlineKeyboardButton("Oke the script is running 🏃...", callback_data='disabled')]]
-    await message.reply_text(reply_markup=InlineKeyboardMarkup(new_keyboard))
-    
-    try:
-        await run_script(update, context) 
-    except Exception as e:
-        print(f"Error during scraping: {e}")
-        try:
-            await message.reply_text("An error occurred during the scraping process. 🌋")
-        except Exception as edit_error:
-            print(f"Failed to edit message: {edit_error}")
+    await update.message.reply_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
 
 def main():
     app = ApplicationBuilder().token(read_token("token.json")).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command)) 
-    app.add_handler(CommandHandler("scrape", scrape_command)) 
     app.add_handler(CommandHandler("settings", settings_command)) 
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
