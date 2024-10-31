@@ -1,0 +1,5 @@
+# Scraper
+
+```console
+$ make
+```

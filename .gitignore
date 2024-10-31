@@ -1,3 +1,4 @@
 credentials.json
 screenshot_log/*.png
 scraped_log.json
+token.json
