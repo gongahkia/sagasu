@@ -32,18 +32,18 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     await callback_query.answer()  
     print("Running the scraping script...")
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"    
-    USER_EMAIL = context.user_data.get('email')
-    USER_PASSWORD = context.user_data.get('password')
-    print(USER_EMAIL, USER_PASSWORD)
-    
     # CREDENTIALS_FILEPATH = "credentials.json"
 
-    if not USER_EMAIL:
-        await callback_query.message.reply_text("Email not provided lah! Go set it in settings. 💀")
-        return
-    elif not USER_PASSWORD:
-        await callback_query.message.reply_text("Password is missing leh! Go set it in settings. 🤡")
-        return
+    USER_EMAIL = context.user_data.get('email')
+    USER_PASSWORD = context.user_data.get('password')
+
+    # print(USER_EMAIL, USER_PASSWORD)
+    # if not USER_EMAIL:
+    #     await callback_query.message.reply_text("Email not provided lah! Go set it in settings. 💀")
+    #     return
+    # elif not USER_PASSWORD:
+    #     await callback_query.message.reply_text("Password is missing leh! Go set it in settings. 🤡")
+    #     return
 
     try:
 
@@ -115,6 +115,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer() 
     if query.data == 'run_script':
+
+        USER_EMAIL = context.user_data.get('email')
+        USER_PASSWORD = context.user_data.get('password')
+
+        # print(USER_EMAIL, USER_PASSWORD)
+    
+        if not USER_EMAIL:
+            await query.message.reply_text("Email not provided lah! Go set it in settings. 💀")
+            return
+        elif not USER_PASSWORD:
+            await query.message.reply_text("Password is missing leh! Go set it in settings. 🤡")
+            return
+        else:
+            await query.message.reply_text("Email and Password found! Initiating scraping... 👌")
+
         new_keyboard = [[InlineKeyboardButton("Oke the script is running 🏃...", callback_data='disabled')]]
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(new_keyboard))
         try:
@@ -122,7 +137,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Error during scraping: {e}")
             try:
-                await query.edit_message_text("An error occurred during the scraping process.")
+                await query.edit_message_text("An error occurred during the scraping process. 🌋")
             except Exception as edit_error:
                 print(f"Failed to edit message: {edit_error}")
     elif query.data == 'view_help':
@@ -166,19 +181,33 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /scrape to start scraping\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
 
 async def scrape_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer() 
-    if query.data == 'run_script':
-        new_keyboard = [[InlineKeyboardButton("Oke the script is running 🏃...", callback_data='disabled')]]
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(new_keyboard))
+    message = update.message
+
+    USER_EMAIL = context.user_data.get('email')
+    USER_PASSWORD = context.user_data.get('password')
+
+    # print(USER_EMAIL, USER_PASSWORD)
+
+    if not USER_EMAIL:
+        await message.reply_text("Email not provided lah! Go set it in settings. 💀")
+        return
+    elif not USER_PASSWORD:
+        await message.reply_text("Password is missing leh! Go set it in settings. 🤡")
+        return
+    else:
+        await message.reply_text("Email and Password found! Initiating scraping... 👌")
+
+    new_keyboard = [[InlineKeyboardButton("Oke the script is running 🏃...", callback_data='disabled')]]
+    await message.reply_text(reply_markup=InlineKeyboardMarkup(new_keyboard))
+    
+    try:
+        await run_script(update, context) 
+    except Exception as e:
+        print(f"Error during scraping: {e}")
         try:
-            await run_script(query, context) 
-        except Exception as e:
-            print(f"Error during scraping: {e}")
-            try:
-                await query.edit_message_text("An error occurred during the scraping process.")
-            except Exception as edit_error:
-                print(f"Failed to edit message: {edit_error}")
+            await message.reply_text("An error occurred during the scraping process. 🌋")
+        except Exception as edit_error:
+            print(f"Failed to edit message: {edit_error}")
 
 def main():
     app = ApplicationBuilder().token(read_token("token.json")).build()
