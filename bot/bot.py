@@ -3,6 +3,7 @@ from telegram.constants import ParseMode
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler
 from .async_do import scrape_smu_fbs 
+from .async_do import fill_missing_timeslots
 
 def read_token(token_filepath):
     try:
@@ -64,18 +65,23 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                 await callback_query.message.reply_text(response_text[i:i + max_length])
         else:
             for room, bookings in scraped_results.items():
+                complete_bookings = fill_missing_timeslots(bookings)
                 response_text = ""
                 response_text += f"<code>{room}</code> 🏠\n\n"
-                for booking in bookings:
-                    if booking["details"]:
+                for booking in complete_bookings:
+                    if booking["available"]:
                         response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                        response_text += f"<i>Status:</i> Booked ❌\n"
-                        response_text += f"<i>Purpose:</i> {booking['details']['Purpose of Booking']}\n"
-                        response_text += f"<i>Booker:</i> {booking['details']['Booked for User Name']} ({booking['details']['Booked for User Email Address']})\n"
-                        response_text += f"<i>Booking ref no:</i> {booking['details']['Booking Reference Number']}\n\n"
+                        response_text += f"<i>Status:</i> Available to book ✅\n"
                     else:
-                        response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                        response_text += f"<i>Status:</i> Outside hours and cannot be booked 🔒\n\n"
+                        if booking["details"]:
+                            response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
+                            response_text += f"<i>Status:</i> Booked ❌\n"
+                            response_text += f"<i>Purpose:</i> {booking['details']['Purpose of Booking']}\n"
+                            response_text += f"<i>Booker:</i> {booking['details']['Booked for User Name']} ({booking['details']['Booked for User Email Address']})\n"
+                            response_text += f"<i>Booking ref no:</i> {booking['details']['Booking Reference Number']}\n\n"
+                        else:
+                            response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
+                            response_text += f"<i>Status:</i> Outside hours and cannot be booked 🔒\n\n"
                 await callback_query.message.reply_text(response_text, parse_mode=ParseMode.HTML)
             await callback_query.message.reply_text("<b><i>All results have been displayed! 🥳</i></b>", parse_mode=ParseMode.HTML)
 

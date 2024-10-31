@@ -3,6 +3,7 @@ import re
 import json
 import time
 import asyncio
+import itertools
 from dateutil.parser import parse
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
@@ -134,6 +135,50 @@ def add_missing_timeslots(booking_details):
             complete_booking_details.append({"timeslot": f"{current_time.strftime(time_format)}-{next_time.strftime(time_format)}", "available": True, "status": "Unbooked", "details": None})
         current_time += timedelta(minutes=30)
     return complete_booking_details
+
+def remove_duplicates_preserve_order(lst):
+    """
+    removes all duplicates while preserving 
+    order of list elements
+    """
+    seen = set()
+    result = []
+    for item in lst:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+def fill_missing_timeslots(room_schedule):
+    """
+    uses the benefits of a sorted 
+    queue data structure to handle
+    missing intervals in a range of timings
+    """
+    target_timeslot_array = []
+    new_schedule = []
+    timeline_overview = remove_duplicates_preserve_order(list(itertools.chain.from_iterable([slot["timeslot"].split("-") for slot in room_schedule])))
+    for i in range(len(timeline_overview)-1):
+        start = timeline_overview[i]
+        end = timeline_overview[i+1]
+        target_timeslot = f"{start}-{end}"
+        target_timeslot_array.append(target_timeslot)
+    for slot in room_schedule:
+        # print(slot)
+        if slot["timeslot"] == target_timeslot_array[0]: # already exists
+            new_schedule.append(slot)
+            del target_timeslot_array[0]
+        else: # does not yet exist
+            new_timeslot = target_timeslot_array.pop(0)
+            new_schedule.append({
+                "timeslot": new_timeslot,
+                "available": True,
+                "status": "Available for booking",
+                "details": None
+            })
+            new_schedule.append(slot) 
+            del target_timeslot_array[0] 
+    return new_schedule
 
 async def scrape_smu_fbs(base_url, credentials_filepath):
     """
