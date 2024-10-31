@@ -71,8 +71,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                 for booking in complete_bookings:
                     if booking["available"]:
                         response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                        response_text += f"<i>Status:</i> Available to book ✅\n"
-                        response_text += f"<u><a href='https://fbs.intranet.smu.edu.sg/home'>Book now</a></u>\n\n"
+                        response_text += f"<i>Status:</i> <u><a href='https://fbs.intranet.smu.edu.sg/home'>Available to book</a></u> ✅\n\n"
                     else:
                         if booking["details"]:
                             response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
