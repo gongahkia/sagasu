@@ -292,8 +292,6 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
     try:
 
-        start_time = time.time()
-
         p = sync_playwright().start() 
         browser = p.chromium.launch(headless=False, slow_mo=1000) # for easier debugging
         # browser = p.chromium.launch(headless=True) 
@@ -554,13 +552,10 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     
                     current_datetime = datetime.now()
                     formatted_datetime = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                    end_time = time.time()
-                    elapsed_time = end_time - start_time
 
                     final_booking_log = {
                         "metrics": {
                             "scraping_date": formatted_datetime,
-                            "scraping_elapsed_time": elapsed_time
                         },
                         "scraped": {
                             "config": {
@@ -580,7 +575,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
                     
                     pretty_print_json(final_booking_log)
 
-                    write_json(final_booking_log, BOOKING_LOG_FILEPATH)
+                    write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}scraped_log.json")
 
         except Exception as e:
             errors.append(f"Error processing {base_url}: {e}")
@@ -599,4 +594,4 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 if __name__ == "__main__":
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
     CREDENTIALS_FILEPATH = "credentials.json"
-    scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)
+    print(f"errors: {scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)}")
