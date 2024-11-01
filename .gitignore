@@ -4,3 +4,4 @@ scraped_log.json
 token.json
 __pycache__
 booking_log/*.json
+.env
