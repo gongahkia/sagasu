@@ -2,6 +2,23 @@
 FUA 
 
 * add buttons for user to specify their configurations (school, floor etc.) after the username and password has been specified under settings, consider splitting settings into 2 buttons, configuration and authentication then save config locally to be referenced later
+* include user-specified preferences through easy to understand and select click-through buttons
+    * When (to book)?
+        * Now
+        * Select time
+    * How long (is the booking)?
+        * 30 minutes
+        * 1hr
+        * 2hr
+        * Set length
+* include an option when data has been scraped to 
+    * limit display of scraped rooms to just top 5 in a single message 
+        * perhaps with this format
+            * 1. Here are the available rooms! [displays 5 rooms]
+                * a. /next to show next 5
+                * b. /endbot or /start to exit event loop 
+    * rationale is that end-users are easily overwhelmed
+* include scraping defaults so the Now option searches for the available rooms now per the user-specified configuration
 * consider including a returned screenshot of the generated timetable to be sent to the user as an additional feature if they request it? maybe an additional button
 """
 
