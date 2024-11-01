@@ -41,9 +41,8 @@ class ScrapeRequest(BaseModel):
 async def scrape_endpoint(request: ScrapeRequest):
     try:
         # Pass both user inputs and server-side constants to the scraping function
-        errors = await scrape_smu_fbs(request, constants)
-        if errors:
-            raise HTTPException(status_code=500, detail=errors)
-        return {"status": "success", "errors": errors}
+        data = await scrape_smu_fbs(request, constants)
+        if data:
+            return {"status": "success", "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -115,6 +115,7 @@ def add_missing_timeslots(booking_details, target_timeslot_array):
 async def scrape_smu_fbs(request, constants):
     """
     Asynchronously handle automated login to SMU FBS and scrape booked timeslots.
+    Returns the final booking log.
     """
     VALID_TIME = constants['valid_time']
     VALID_ROOM_CAPACITY_FORMATTED = constants['valid_room_capacity']
@@ -133,17 +134,17 @@ async def scrape_smu_fbs(request, constants):
     # Define room capacity mapping
     capacity_mapping = {
         lambda x: x < 5: "LessThan5Pax",
-        lambda x: 5 <= x <= 10: "From6To10Pax",
-        lambda x: 11 <= x <= 15: "From11To15Pax",
-        lambda x: 16 <= x <= 20: "From16To20Pax",
-        lambda x: 21 <= x <= 50: "From21To50Pax",
-        lambda x: 51 <= x <= 100: "From51To100Pax",
+        lambda x: x <= 10: "From6To10Pax",
+        lambda x: x <= 15: "From11To15Pax",
+        lambda x: x <= 20: "From16To20Pax",
+        lambda x: x <= 50: "From21To50Pax",
+        lambda x: x <= 100: "From51To100Pax",
     }
     ROOM_CAPACITY_FORMATTED = await convert_room_capacity(ROOM_CAPACITY_RAW, capacity_mapping)
-    BUILDING_ARRAY = request.building_names  # Optional
-    FLOOR_ARRAY = request.floors           # Optional
-    FACILITY_TYPE_ARRAY = request.facility_types  # Optional
-    EQUIPMENT_ARRAY = request.equipment    # Optional
+    BUILDING_ARRAY = request.building_names
+    FLOOR_ARRAY = request.floors
+    FACILITY_TYPE_ARRAY = request.facility_types
+    EQUIPMENT_ARRAY = request.equipment
     SCREENSHOT_FILEPATH = constants['screenshot_filepath']
     BOOKING_LOG_FILEPATH = constants['booking_log_filepath']
     
@@ -151,36 +152,35 @@ async def scrape_smu_fbs(request, constants):
     os.makedirs(SCREENSHOT_FILEPATH, exist_ok=True)
     os.makedirs(BOOKING_LOG_FILEPATH, exist_ok=True)
     
-    errors = []
-    local_credentials = request.credentials  # Directly use credentials from request
+    local_credentials = request.credentials
     
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False, slow_mo=1000)  # for easier debugging
+            browser = await p.chromium.launch(headless=False, slow_mo=1000)
             # browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-    
+
             try:
                 # ---------- LOGIN CREDENTIALS ----------
                 await page.goto(constants['target_url'])
-    
+
                 await page.wait_for_selector('input#userNameInput')
                 await page.wait_for_selector('input#passwordInput')
                 await page.wait_for_selector('span#submitButton')
-    
+
                 print(f"Navigating to {constants['target_url']}")
-    
+
                 await page.fill("input#userNameInput", local_credentials.username)
                 await page.fill("input#passwordInput", local_credentials.password)
                 await page.click("span#submitButton")
-    
+
                 await page.wait_for_timeout(6000)
                 await page.wait_for_load_state('networkidle')
-    
+
                 # ---------- NAVIGATE TO GIVEN DATE ----------
                 frame = page.frame(name="frameBottom") 
                 if not frame:
-                    errors.append("Frame 'frameBottom' could not be found.")
+                    raise Exception("Frame 'frameBottom' could not be found.")
                 else:
                     frame = page.frame(name="frameContent")
                     while True:
@@ -194,9 +194,9 @@ async def scrape_smu_fbs(request, constants):
                             print("Navigating to the next day...")
                             await frame.click("a#BtnDpcNext.btn")
                             await frame.wait_for_timeout(1500)
-    
+
                     # ---------- EXTRACT PAGE DATA ----------
-    
+
                     # ----- SELECT START TIME -----
                     select_start_time_input = await frame.query_selector("select#TimeFrom_c1_ctl04")
                     if select_start_time_input:
@@ -204,7 +204,7 @@ async def scrape_smu_fbs(request, constants):
                         print(f"Selected start time to be {START_TIME}")
                     else:
                         print("Select element for start time not found")
-    
+
                     # ----- SELECT END TIME -----
                     select_end_time_input = await frame.query_selector_all("select#TimeTo_c1_ctl04")
                     if select_end_time_input:
@@ -212,9 +212,9 @@ async def scrape_smu_fbs(request, constants):
                         print(f"Selected end time to be {END_TIME}")
                     else:
                         print("Select element for end time not found")
-    
+
                     await frame.wait_for_timeout(3000)
-    
+
                     # ----- APPLY FILTERS -----
                     
                     # ----- SELECT BUILDINGS -----
@@ -227,7 +227,7 @@ async def scrape_smu_fbs(request, constants):
                             await frame.evaluate("popup.hide()")  # Closes the dropdown list
                             await page.wait_for_load_state('networkidle')
                             await frame.wait_for_timeout(3000)
-    
+
                     # ----- SELECT FLOORS -----
                     if FLOOR_ARRAY:
                         if await frame.is_visible('#DropMultiFloorList_c1_textItem'):
@@ -238,7 +238,7 @@ async def scrape_smu_fbs(request, constants):
                             await frame.evaluate("popup.hide()")  # Closes the dropdown list
                             await page.wait_for_load_state('networkidle')
                             await frame.wait_for_timeout(3000)
-    
+
                     # ----- SELECT FACILITY TYPE -----
                     if FACILITY_TYPE_ARRAY:
                         if await frame.is_visible('#DropMultiFacilityTypeList_c1_textItem'):
@@ -249,7 +249,7 @@ async def scrape_smu_fbs(request, constants):
                             await frame.evaluate("popup.hide()")  # Closes the dropdown list
                             await page.wait_for_load_state('networkidle')
                             await frame.wait_for_timeout(3000)
-    
+
                     # ----- SELECT ROOM CAPACITY -----
                     select_capacity_input = await frame.query_selector("select#DropCapacity_c1")
                     if select_capacity_input:
@@ -257,9 +257,9 @@ async def scrape_smu_fbs(request, constants):
                         print(f"Selected room capacity to be {ROOM_CAPACITY_FORMATTED}")
                     else:
                         print("Select element for room capacity not found")
-    
+
                     await frame.wait_for_timeout(3000)
-    
+
                     # ----- SELECT EQUIPMENT -----
                     if EQUIPMENT_ARRAY:
                         if await frame.is_visible('#DropMultiEquipmentList_c1_textItem'):
@@ -270,9 +270,9 @@ async def scrape_smu_fbs(request, constants):
                             await frame.evaluate("popup.hide()")  # Closes the dropdown list
                             await page.wait_for_load_state('networkidle')
                             await frame.wait_for_timeout(3000)
-    
+
                     await page.screenshot(path=os.path.join(SCREENSHOT_FILEPATH, "0.png"))
-    
+
                     # ----- ROOM EXTRACTION -----
                     await frame.wait_for_selector("table#GridResults_gv")
                     matching_rooms = []
@@ -286,10 +286,10 @@ async def scrape_smu_fbs(request, constants):
                         print("No rooms fitting description found.")
                         print("Closing browser...")
                         await browser.close() 
-    
+
                         current_datetime = datetime.now()
                         formatted_datetime = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
-    
+
                         final_booking_log = {
                             "metrics": {
                                 "scraping_date": formatted_datetime,
@@ -310,28 +310,26 @@ async def scrape_smu_fbs(request, constants):
                             }
                         }
                         
-                        pretty_print_json(final_booking_log)
-    
                         await write_json(final_booking_log, os.path.join(BOOKING_LOG_FILEPATH, "scraped_log.json"))
-    
-                        return errors
-    
+
+                        return final_booking_log
+
                     else:
                         print(f"{len(matching_rooms)} rooms fitting description found:")
                         for room in matching_rooms:
                             print(f"- {room}")
-    
+
                         # ----- SEARCH AVAILABILITY -----
                         await frame.click("a#CheckAvailability")
                         print("Submitting search availability request...")
                         await page.wait_for_load_state("networkidle")
                         await page.wait_for_timeout(6000)
-    
+
                         # ---------- VIEW TIMESLOTS ----------
-    
+
                             # ----- CAPTURE SCREENSHOT OF TIMESLOTS -----
                         await page.screenshot(path=os.path.join(SCREENSHOT_FILEPATH, "1.png"))
-    
+
                             # ----- SCRAPE TIMESLOTS -----
                         frame = page.frame(name="frameBottom")
                         frame = page.frame(name="frameContent")
@@ -342,10 +340,10 @@ async def scrape_smu_fbs(request, constants):
                         bookings_array_sanitised = split_bookings_by_day(bookings_array_raw)
                         
                         room_timeslot_map = {}
-    
+
                         for index, booking_array in enumerate(bookings_array_sanitised):
                             booking_details = []
-    
+
                             for booking in booking_array:
                                 if booking.startswith("Booking Time:"):  # Existing booking
                                     room_details = {}
@@ -362,7 +360,7 @@ async def scrape_smu_fbs(request, constants):
                                         "details": room_details
                                     }
                                     booking_details.append(active_booking_details)
-    
+
                                 elif booking.endswith("(not available)"):  # Not available booking
                                     time = booking.split(") (")[0]
                                     na_booking_details = {
@@ -372,16 +370,16 @@ async def scrape_smu_fbs(request, constants):
                                         "details": None
                                     }
                                     booking_details.append(na_booking_details)
-    
+
                                 else: 
                                     # Edge case checking
                                     print(f"Unrecognised timeslot format, logged here: {booking}")
-    
+
                             room_timeslot_map[room_names_array_sanitised[index]] = fill_missing_timeslots(booking_details, generate_30_min_intervals())
-    
+
                         current_datetime = datetime.now()
                         formatted_datetime = current_datetime.strftime('%Y-%m-%d %H:%M:%S')
-    
+
                         final_booking_log = {
                             "metrics": {
                                 "scraping_date": formatted_datetime,
@@ -403,15 +401,16 @@ async def scrape_smu_fbs(request, constants):
                         }
                         
                         await write_json(final_booking_log, os.path.join(BOOKING_LOG_FILEPATH, "scraped_log.json"))
-    
+                        return final_booking_log
+
             except Exception as e:
-                errors.append(f"Error processing {constants['target_url']}: {e}")
-    
+                print(f"Error processing {constants['target_url']}: {e}")
+                raise e  # Propagate exception to be handled by FastAPI
+
             finally:
                 print("Closing browser...")
                 await browser.close() 
-    
+
     except Exception as e:
-        errors.append(f"Failed to initialize Playwright: {e}")
-    
-    return errors
+        print(f"Failed to initialize Playwright: {e}")
+        raise e  # Propagate exception to be handled by FastAPI
