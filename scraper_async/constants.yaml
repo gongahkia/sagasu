@@ -1,32 +1,9 @@
-# config.yaml
+# constants.yaml
 
 # URLs and File Paths
 target_url: "https://fbs.intranet.smu.edu.sg/home"
 screenshot_filepath: "./screenshot_log/"
 booking_log_filepath: "./booking_log/"
-
-# Scraping Parameters
-date_raw: "1 November 2024"
-duration_hours: 2.5
-start_time: "11:00"
-
-# Filters
-building_names:
-  - "School of Accountancy"
-  - "School of Computing & Information Systems 1"
-
-floors:
-  - "Basement 1"
-  - "Level 1"
-  - "Level 2"
-  - "Level 4"
-
-facility_types:
-  - "Meeting Pod"
-  - "Group Study Room"
-
-equipment:
-  - # List equipment if any, e.g., "Projector"
 
 # Valid Constants
 valid_time:
