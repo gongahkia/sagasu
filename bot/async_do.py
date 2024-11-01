@@ -20,8 +20,23 @@
     * rationale is that end-users are easily overwhelmed
 * include scraping defaults so the Now option searches for the available rooms now per the user-specified configuration
 * consider including a returned screenshot of the generated timetable to be sent to the user as an additional feature if they request it? maybe an additional button
-* deployment options
-    * 
+* deployment options to look into, but also check with Zane whether he can handle deployment
+    * heroku
+    * railway
+    * render
+    * google cloud platform (gcp)
+    * aws (amazon web services)
+    * azure (microsoft azure)
+    * vercel
+    * pythonanywhere
+    * digitalocean app platform
+    * caprover
+    * dokku
+    * coolify
+    * fly.io
+    * kubernetes (k3s)
+    * yunohost
+    * openshift (okd)
 """
 
 import os
