@@ -1,5 +1,5 @@
 """
-FUA 
+~ FUA ~
 
 * add buttons for user to specify their configurations (school, floor etc.) after the username and password has been specified under settings, consider splitting settings into 2 buttons, configuration and authentication then save config locally to be referenced later
 * include user-specified preferences through easy to understand and select click-through buttons
@@ -20,6 +20,8 @@ FUA
     * rationale is that end-users are easily overwhelmed
 * include scraping defaults so the Now option searches for the available rooms now per the user-specified configuration
 * consider including a returned screenshot of the generated timetable to be sent to the user as an additional feature if they request it? maybe an additional button
+* deployment options
+    * 
 """
 
 import os
@@ -28,6 +30,7 @@ import json
 import time
 import asyncio
 import itertools
+from dotenv import load_dotenv
 from dateutil.parser import parse
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
@@ -49,10 +52,29 @@ def write_json(json_object, filename):
         json.dump(json_object, json_file, indent=4) 
         print(f"json file written to filepath: {filename}")
 
+def read_credentials():
+    """
+    read credentials from a .env file
+    """
+    load_dotenv()  
+    username = os.getenv("USERNAME")
+    password = os.getenv("PASSWORD")
+    if username and password:
+        return {
+            "username": username,
+            "password": password
+        }
+    else:
+        print("One or more credentials are missing in the .env file")
+
 def read_credentials(credentials_filepath):
     """
-    read locally stored
-    credentials json file
+    !NOTE
+    this function is now deprecated as client 
+    specifies credentials that are then saved to 
+    local telegram context 
+    
+    read locally stored credentials json file
     """
     try:
         with open(credentials_filepath, 'r') as file:

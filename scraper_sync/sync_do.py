@@ -3,6 +3,7 @@ import re
 import json
 import time
 import itertools
+from dotenv import load_dotenv
 from dateutil.parser import parse
 from datetime import datetime, timedelta
 from playwright.sync_api import sync_playwright
@@ -96,6 +97,21 @@ def read_credentials(credentials_filepath):
         print("File not found. Please check the file path.")
     except json.JSONDecodeError:
         print("Error decoding JSON. Please check the file format.")
+
+def read_credentials():
+    """
+    read credentials from a .env file
+    """
+    load_dotenv()  
+    username = os.getenv("USERNAME")
+    password = os.getenv("PASSWORD")
+    if username and password:
+        return {
+            "username": username,
+            "password": password
+        }
+    else:
+        print("One or more credentials are missing in the .env file")
 
 def convert_room_capacity(room_capacity_raw):
     """

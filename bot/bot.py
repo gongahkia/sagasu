@@ -1,4 +1,6 @@
 import json
+import os
+from dotenv import load_dotenv
 from telegram.constants import ParseMode
 from telegram.ext import MessageHandler, filters
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -6,7 +8,27 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, Callb
 from .async_do import scrape_smu_fbs 
 from .async_do import fill_missing_timeslots
 
-def read_token(token_filepath):
+def read_token_env():
+    """
+    read bot token from a .env file
+    """
+    load_dotenv()  
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        print("One or more credentials are missing in the .env file")
+        return None
+    else:
+        return bot_token
+
+def read_token_json(token_filepath):
+    """
+    !NOTE
+    this function is now deprecated as bot token
+    is saved as a .env file instead 
+    
+    read locally stored bot api token stored as a 
+    json file
+    """
     try:
         with open(token_filepath, 'r') as file:
             data = json.load(file)
@@ -181,7 +203,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your configurations", parse_mode=ParseMode.HTML)
 
 def main():
-    app = ApplicationBuilder().token(read_token("token.json")).build()
+    app = ApplicationBuilder().token(read_token_env()).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command)) 
     app.add_handler(CommandHandler("settings", settings_command)) 
