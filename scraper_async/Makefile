@@ -1,5 +1,6 @@
 all:start
 
 start:
-	@echo "executing scraper async script..."
-	python3 scraper.py
+	@echo "executing FastAPI & scraper async script..."
+	source ../venv/bin/activate && python -m uvicorn api:app --reload
+    
