@@ -173,6 +173,13 @@ Pass your encrypted details into the credentials of the scraper
 <table>
 	<tbody>
         <tr>
+	    <td align="center">
+                <a href="https://github.com/gongahkia">
+                    <img src="https://avatars.githubusercontent.com/u/117062305?v=4" width="100;" alt="gongahkia"/>
+                    <br/>
+                    <sub><b>gongahkia</b></sub>
+                </a>
+            </td>
             <td align="center">
                 <a href="https://github.com/SpringOrca69">
                     <img src="https://avatars.githubusercontent.com/u/159885540?v=4" width="100;" alt="SpringOrca69"/>
@@ -185,6 +192,13 @@ Pass your encrypted details into the credentials of the scraper
                     <img src="https://avatars.githubusercontent.com/u/44902825?v=4" width="100;" alt="injaneity"/>
                     <br/>
                     <sub><b>injaneity</b></sub>
+                </a>
+            </td>
+	    <td align="center">
+                <a href="https://github.com/weisintai">
+                    <img src="https://avatars.githubusercontent.com/u/59339889?v=4" width="100;" alt="weisintai"/>
+                    <br/>
+                    <sub><b>weisintai</b></sub>
                 </a>
             </td>
         </tr>
