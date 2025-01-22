@@ -1,10 +1,13 @@
-![](https://img.shields.io/badge/sagasu_1.0-build-orange)
+![](https://img.shields.io/badge/sagasu_1.0-deprecated-red)
 
->[!IMPORTANT]  
-> Features are being added per recent user feedback.  
-> `sagasu` will be deployed again afterward.
+>[!WARNING]  
+> This project repository is no longer maintained.
 >  
-> *\~ Gabriel*
+> Please refer to [this fork](https://github.com/injaneity/sagasu) for continued support.
+>  
+> Also see [`local_sagasu`](https://github.com/gongahkia/the-sandbox/tree/main/python/local_sagasu). Thanks!
+>  
+> ~ Gabriel
 
 # `sagasu`
 
