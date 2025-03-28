@@ -414,18 +414,20 @@ def scrape_smu_fbs(base_url):
 
             page.goto(base_url)
 
-            page.wait_for_selector("input#userNameInput")
-            page.wait_for_selector("input#passwordInput")
+            page.wait_for_selector("input[type='email']")
+            page.wait_for_selector("input[type='password']")
+
             page.wait_for_selector("span#submitButton")
 
             print(f"navigating to {base_url}")
 
-            username_input = page.query_selector("input#userNameInput")  # for debugging
-            password_input = page.query_selector("input#passwordInput")  # for debugging
+            username_input = page.query_selector("input[type='email']")  # for debugging
+            password_input = page.query_selector("input[type='password']")  # for debugging
+
             signin_button = page.query_selector("span#submitButton")
 
-            page.fill("input#userNameInput", local_credentials["username"])
-            page.fill("input#passwordInput", local_credentials["password"])
+            page.fill(username_input, local_credentials["username"])
+            page.fill(password_input, local_credentials["password"])
             signin_button.click()
 
             page.wait_for_timeout(6000)

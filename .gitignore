@@ -5,6 +5,6 @@ token.json
 __pycache__
 booking_log/*.json
 .env
-venv/
+mvenv/
 /scraper_async/.env
 /scraper_async/*.pem

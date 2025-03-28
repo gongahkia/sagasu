@@ -10,8 +10,8 @@ from telegram.ext import (
     ContextTypes,
     CallbackQueryHandler,
 )
-from .async_do import scrape_smu_fbs
-from .async_do import fill_missing_timeslots
+from async_do import scrape_smu_fbs
+from async_do import fill_missing_timeslots
 
 def read_token_env():
     """
