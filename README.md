@@ -31,10 +31,11 @@ If anything, the sluggish impression it gives off results from the overly conval
 
 ## Local testing
 
-...
+Specify your SMU Account username and password within a `.env` file.
 
 ```env
-...
+USERNAME=XXX
+PASSWORD=XXX
 ```
 
 ...

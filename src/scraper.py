@@ -108,11 +108,15 @@ def read_credentials():
     load_dotenv()
     username = os.getenv("USERNAME")
     password = os.getenv("PASSWORD")
+    if not username:
+        print("Username credential is missing in the .env file")
+    if not password:
+        print("Password credential is missing in the .env file")
+    if not username or not password:
+        return None
     if username and password:
+        print("Credentials read successfully")
         return {"username": username, "password": password}
-    else:
-        print("One or more credentials are missing in the .env file")
-
 
 def convert_room_capacity(room_capacity_raw):
     """
@@ -242,7 +246,7 @@ def add_missing_timeslots(booking_details):
     return complete_booking_details
 
 
-def scrape_smu_fbs(base_url, credentials_filepath):
+def scrape_smu_fbs(base_url):
     """
     handle automated login to SMU FBS based on
     personal credentials.json and scrapes all booked
@@ -401,8 +405,7 @@ def scrape_smu_fbs(base_url, credentials_filepath):
         p = sync_playwright().start()
         browser = p.chromium.launch(
             headless=False, slow_mo=1000
-        )  # for easier debugging
-        # browser = p.chromium.launch(headless=True)
+        )  
         page = browser.new_page()
 
         try:
@@ -784,5 +787,4 @@ def scrape_smu_fbs(base_url, credentials_filepath):
 
 if __name__ == "__main__":
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
-    CREDENTIALS_FILEPATH = "credentials.json"
-    print(f"errors: {scrape_smu_fbs(TARGET_URL, CREDENTIALS_FILEPATH)}")
+    print(f"errors: {scrape_smu_fbs(TARGET_URL)}")
