@@ -1,15 +1,15 @@
-![](https://img.shields.io/badge/sagasu_1.0-deprecated-red)
+![](https://img.shields.io/badge/sagasu_1.0.0-deprecated-red) 
+![](https://img.shields.io/badge/sagasu_2.0.0-orange-build) 
 
->[!WARNING]  
-> This project repository is no longer maintained.
+>[!IMPORTANT]  
 >  
-> Please refer to [this fork](https://github.com/injaneity/sagasu) for continued support.
+> [`Sagasu`](https://github.com/gongahkia/sagasu) 2.0.0 is actively being worked on now.
 >  
 > Also see [`local_sagasu`](https://github.com/gongahkia/the-sandbox/tree/main/python/local_sagasu). Thanks!
 >  
 > ~ Gabriel
 
-# `sagasu`
+# `Sagasu`
 
 <p align="center">
 <img src="./asset/logo/icon_with_words.png" width=50% height=50%>
