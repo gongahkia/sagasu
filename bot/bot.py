@@ -13,7 +13,6 @@ from telegram.ext import (
 from .async_do import scrape_smu_fbs
 from .async_do import fill_missing_timeslots
 
-
 def read_token_env():
     """
     read bot token from a .env file
@@ -25,28 +24,6 @@ def read_token_env():
         return None
     else:
         return bot_token
-
-
-def read_token_json(token_filepath):
-    """
-    !NOTE
-    this function is now deprecated as bot token
-    is saved as a .env file instead
-
-    read locally stored bot api token stored as a
-    json file
-    """
-    try:
-        with open(token_filepath, "r") as file:
-            data = json.load(file)
-        return data["bot_token"]
-    except FileNotFoundError:
-        print("File not found. Please check the file path.")
-        return None
-    except json.JSONDecodeError:
-        print("Error decoding JSON. Please check the file format.")
-        return None
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [

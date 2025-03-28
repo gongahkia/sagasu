@@ -1,5 +1,0 @@
-# Scraper
-
-```console
-$ make
-```
