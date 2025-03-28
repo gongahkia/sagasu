@@ -3,7 +3,7 @@
 
 >[!IMPORTANT]  
 >  
-> [`Sagasu`](https://github.com/gongahkia/sagasu) 2.0.0 is actively being worked on now.
+> [`Sagasu`](https://github.com/gongahkia/sagasu) 2.0.0 is actively being worked on now as a Telegram Mini App.
 >  
 > Also see [`local_sagasu`](https://github.com/gongahkia/the-sandbox/tree/main/python/local_sagasu). Thanks!
 >  
