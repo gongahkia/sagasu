@@ -17,6 +17,8 @@
 
 Telegram bot that finds available rooms in SMU.
 
+Access [`sagasu_bot`](https://t.me/sagasu_bot) ***live***.
+
 ## Rationale
 
 [SMU's Facility Booking System](https://fbs.intranet.smu.edu.sg/home) isn't an inherently slow website. Booking facilities in itself is quick.  
@@ -27,15 +29,19 @@ If anything, the sluggish impression it gives off results from the overly conval
 
 ![](./asset/screenshot/1.png)
 
-## How to build
-
-Don't.  
-  
-Access the telegram bot [`sagasu_bot`](https://t.me/sagasu_bot).
-
-## Actually how to build
+## Local testing
 
 ...
+
+```env
+...
+```
+
+...
+
+```console
+...
+```
 
 ## Architecture
 
