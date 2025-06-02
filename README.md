@@ -1,13 +1,11 @@
 ![](https://img.shields.io/badge/sagasu_1.0.0-deprecated-red) 
-![](https://img.shields.io/badge/sagasu_2.0.0-orange-build) 
 
->[!IMPORTANT]  
->  
-> [`Sagasu`](https://github.com/gongahkia/sagasu) 2.0.0 is actively being worked on now as a Telegram Mini App.
->  
-> Also see [`local_sagasu`](https://github.com/gongahkia/the-sandbox/tree/main/python/local_sagasu). Thanks!
->  
-> ~ Gabriel 280325
+> [!WARNING]  
+> [`Sagasu`](https://github.com/gongahkia/akao)'s Telegram Bot deployment is inactive as of XXX.
+>   
+> [`Sagasu-2`](https://github.com/gongahkia/sagasu-2) is actively being worked on.
+>
+> ~ Gabriel 020625 
 
 # `Sagasu`
 
@@ -29,26 +27,9 @@ If anything, the sluggish impression it gives off results from the overly conval
 
 ![](./asset/screenshot/1.png)
 
-## Local testing
+## Other notes
 
-Specify your SMU Account username and password within a `.env` file.
-
-```env
-USERNAME=XXX
-PASSWORD=XXX
-```
-
-...
-
-```console
-...
-```
-
-## Architecture
-
-```mermaid
-...
-```
+Also see [`local_sagasu`](https://github.com/gongahkia/the-sandbox/tree/main/python/local_sagasu).
 
 ## Contributors
 
