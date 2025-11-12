@@ -1,0 +1,78 @@
+name: Daily Room Scraper
+
+on:
+  schedule:
+    # Run daily at 8:00 AM SGT (00:00 UTC)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  TZ: 'Asia/Singapore'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: ./backend
+        run: npx playwright install chromium --with-deps
+
+      - name: Run scraper
+        working-directory: ./backend
+        env:
+          SMU_EMAIL: ${{ secrets.SMU_EMAIL }}
+          SMU_PASSWORD: ${{ secrets.SMU_PASSWORD }}
+          SCRAPE_DATE: ${{ secrets.SCRAPE_DATE }}
+          SCRAPE_START_TIME: ${{ secrets.SCRAPE_START_TIME }}
+          SCRAPE_END_TIME: ${{ secrets.SCRAPE_END_TIME }}
+          SCRAPE_ROOM_CAPACITY: ${{ secrets.SCRAPE_ROOM_CAPACITY }}
+          SCRAPE_BUILDING_NAMES: ${{ secrets.SCRAPE_BUILDING_NAMES }}
+          SCRAPE_FLOOR_NAMES: ${{ secrets.SCRAPE_FLOOR_NAMES }}
+          SCRAPE_FACILITY_TYPES: ${{ secrets.SCRAPE_FACILITY_TYPES }}
+          SCRAPE_EQUIPMENT: ${{ secrets.SCRAPE_EQUIPMENT }}
+        run: node scraper-prod.js
+
+      - name: Check if data changed
+        id: check_changes
+        run: |
+          if git diff --quiet backend/log/scraped_log.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add backend/log/scraped_log.json
+          git commit -m "chore: update room availability data [skip ci]"
+          git push
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-debug-${{ github.run_number }}
+          path: |
+            backend/log/
+            backend/*.png
+          retention-days: 7

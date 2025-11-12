@@ -1,8 +1,5 @@
 todo
-- make this like junas (user brings their own keys, and when keys are detetced in localstorage it spins up the render backend server if that's possible)
-- either way actually implement local booking logic at least for myself to book fbs rooms during this exam period
-- edit the existing web app as well to fix the frontend UI and make it more efficient
-- get claude code to fix the backend
+- actually implement local booking logic for myself to book fbs rooms during this exam period
 
 [![](https://img.shields.io/badge/sagasu_4.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
 

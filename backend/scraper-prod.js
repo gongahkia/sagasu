@@ -39,9 +39,118 @@ function extractBookingTime(rawStr) {
   return match ? match[1] : null;
 }
 
+function parseBookingDetails(detailsStr) {
+  if (!detailsStr || detailsStr === "") return null;
+
+  const extractField = (fieldName) => {
+    const regex = new RegExp(`${fieldName}:\\s*(.*)`, 'm');
+    const match = detailsStr.match(regex);
+    return match ? match[1].trim() : "";
+  };
+
+  return {
+    reference: extractField("Booking Reference Number"),
+    status: extractField("Booking Status"),
+    booker_name: extractField("Booked for User Name"),
+    booker_email: extractField("Booked for User Email Address"),
+    booker_org: extractField("Booked for User Org Unit"),
+    purpose: extractField("Purpose of Booking"),
+    use_type: extractField("Use Type")
+  };
+}
+
+function extractRoomMetadata(roomName, buildingFilter, floorFilter, facilityFilter, equipmentFilter) {
+  // Extract building code (e.g., "KGC" from "KGC-4.02-PR")
+  const buildingCode = roomName.split('-')[0] || "";
+
+  // Map building codes to full names (partial mapping, expand as needed)
+  const buildingMap = {
+    "KGC": "Kwa Geok Choo Law Library",
+    "YPHSL": "Yong Pung How School of Law",
+    "LKCSB": "Lee Kong Chian School of Business",
+    "SOA": "School of Accountancy",
+    "SCIS": "School of Computing & Information Systems",
+    "SOE": "School of Economics",
+    "SOSS": "School of Social Sciences",
+    "CIS": "College of Integrative Studies",
+    "LKSL": "Li Ka Shing Library",
+    "AB": "Administration Building",
+    "SMUC": "SMU Connexion"
+  };
+
+  // Extract floor from room name (e.g., "4" from "KGC-4.02-PR")
+  const floorMatch = roomName.match(/-(\d+|B\d+)\./i);
+  let floor = "Unknown";
+  if (floorMatch) {
+    const floorNum = floorMatch[1];
+    if (floorNum.startsWith('B')) {
+      floor = `Basement ${floorNum.substring(1)}`;
+    } else {
+      floor = `Level ${floorNum}`;
+    }
+  }
+
+  // Use filters as fallback if extraction fails
+  const building = buildingMap[buildingCode] || (buildingFilter.length > 0 ? buildingFilter[0] : "Unknown");
+
+  return {
+    building_code: buildingCode,
+    building: building,
+    floor: floor,
+    facility_type: facilityFilter.length > 0 ? facilityFilter[0] : "Unknown",
+    equipment: equipmentFilter
+  };
+}
+
+function normalizeStatus(status) {
+  if (status === "not available due to timeslot") return "unavailable";
+  if (status === "free") return "free";
+  if (status === "booked") return "booked";
+  return "unknown";
+}
+
+function calculateAvailabilitySummary(timeslots) {
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  let freeCount = 0;
+  let freeDuration = 0;
+  let isAvailableNow = false;
+  let nextAvailableAt = null;
+
+  for (const slot of timeslots) {
+    if (slot.status === "free") {
+      freeCount++;
+      const start = toMinutes(slot.start);
+      const end = toMinutes(slot.end);
+      const duration = end - start;
+      freeDuration += duration;
+
+      // Check if currently available
+      if (start <= currentMinutes && currentMinutes < end) {
+        isAvailableNow = true;
+      }
+
+      // Find next available slot
+      if (!isAvailableNow && start > currentMinutes && !nextAvailableAt) {
+        const nextDate = new Date(now);
+        nextDate.setHours(Math.floor(start / 60), start % 60, 0, 0);
+        nextAvailableAt = nextDate.toISOString();
+      }
+    }
+  }
+
+  return {
+    is_available_now: isAvailableNow,
+    next_available_at: nextAvailableAt,
+    free_slots_count: freeCount,
+    free_duration_minutes: freeDuration
+  };
+}
+
 function generateTimeslotsForRoom(rawTimeslotsForRoom) {
-  const DAY_START = 0;  
-  const DAY_END = 24 * 60;   
+  const DAY_START = 0;
+  const DAY_END = 24 * 60;
   const slots = [];
   for (const ts of rawTimeslotsForRoom) {
     if (ts.includes("(not available)")) {
@@ -76,24 +185,39 @@ function generateTimeslotsForRoom(rawTimeslotsForRoom) {
   let cursor = DAY_START;
   for (const slot of slots) {
     if (slot.startMin > cursor) {
+      const [freeStart, freeEnd] = [minutesToTimeStr(cursor), minutesToTimeStr(slot.startMin)];
       fullSlots.push({
-        timeslot: timeslotStr(cursor, slot.startMin),
-        status: "free",
-        details: ""
+        start: freeStart,
+        end: freeEnd,
+        status: "free"
       });
     }
-    fullSlots.push({
-      timeslot: slot.timeslot,
-      status: slot.status,
-      details: slot.details
-    });
+
+    const [slotStart, slotEnd] = slot.timeslot.split("-");
+    const normalized = normalizeStatus(slot.status);
+    const timeslotObj = {
+      start: slotStart,
+      end: slotEnd,
+      status: normalized
+    };
+
+    if (normalized === "unavailable") {
+      timeslotObj.reason = "Outside scrape window";
+    } else if (normalized === "booked") {
+      const booking = parseBookingDetails(slot.details);
+      if (booking) {
+        timeslotObj.booking = booking;
+      }
+    }
+
+    fullSlots.push(timeslotObj);
     cursor = slot.endMin;
   }
   if (cursor < DAY_END) {
     fullSlots.push({
-      timeslot: timeslotStr(cursor, DAY_END),
-      status: "free",
-      details: ""
+      start: minutesToTimeStr(cursor),
+      end: minutesToTimeStr(DAY_END),
+      status: "free"
     });
   }
   return fullSlots;
@@ -166,13 +290,17 @@ const outputLog = './log/scraped_log.json';
 //
 
 (async () => {
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+  const scrapeStartTime = Date.now();
+  let browser;
 
-  // 1. Go to the initial site
-  await page.goto(url, { waitUntil: 'networkidle' });
-  console.log(`LOG: Navigating to ${url}`);
+  try {
+    browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    // 1. Go to the initial site
+    await page.goto(url, { waitUntil: 'networkidle' });
+    console.log(`LOG: Navigating to ${url}`);
 
   // 2. Open Microsoft login in new tab
   const [newPage] = await Promise.all([
@@ -426,27 +554,126 @@ const outputLog = './log/scraped_log.json';
   console.log(`LOG: Found ${rawBookings.length} timeslots (${rawBookings})`);
 
   // 14. Map rooms to timeslots
+  const scrapeEndTime = Date.now();
   mapping = mapTimeslotsToRooms(matchingRooms, rawBookings);
-  console.log(`LOG: Mapped rooms to timeslots as below: ${JSON.stringify(mapping, null, 2)}`);
+  console.log(`LOG: Mapped rooms to timeslots`);
 
-  // 15. Write to log
+  // 15. Transform to enhanced format
+  const rooms = [];
+  let totalAvailable = 0;
+  let totalBooked = 0;
+  let totalPartiallyAvailable = 0;
+
+  for (const roomName of Object.keys(mapping)) {
+    const timeslots = mapping[roomName];
+    const metadata = extractRoomMetadata(
+      roomName,
+      SCRAPE_CONFIG.buildingNames,
+      SCRAPE_CONFIG.floorNames,
+      SCRAPE_CONFIG.facilityTypes,
+      SCRAPE_CONFIG.equipment
+    );
+    const availabilitySummary = calculateAvailabilitySummary(timeslots);
+
+    // Update statistics
+    if (availabilitySummary.free_slots_count > 0) {
+      totalPartiallyAvailable++;
+      if (availabilitySummary.is_available_now) {
+        totalAvailable++;
+      }
+    } else {
+      totalBooked++;
+    }
+
+    rooms.push({
+      id: roomName,
+      name: roomName,
+      building: metadata.building,
+      building_code: metadata.building_code,
+      floor: metadata.floor,
+      facility_type: metadata.facility_type,
+      equipment: metadata.equipment,
+      timeslots: timeslots,
+      availability_summary: availabilitySummary
+    });
+  }
+
+  // 16. Create enhanced log data
   const logData = {
-    timestamp: (new Date()).toISOString(),
-    date: SCRAPE_CONFIG.date,
-    start_time: SCRAPE_CONFIG.startTime,
-    end_time: SCRAPE_CONFIG.endTime,
-    building_names: SCRAPE_CONFIG.buildingNames,
-    floor_names: SCRAPE_CONFIG.floorNames,
-    facility_types: SCRAPE_CONFIG.facilityTypes,
-    equipment: SCRAPE_CONFIG.equipment,
-    room_mappings: mapping,
-    raw_rooms: matchingRooms,
-    raw_timeslots: rawBookings,
+    metadata: {
+      version: "4.0.0",
+      scraped_at: (new Date()).toISOString(),
+      scrape_duration_ms: scrapeEndTime - scrapeStartTime,
+      success: true,
+      error: null,
+      scraper_version: "prod-v1.0.0"
+    },
+    config: {
+      date: SCRAPE_CONFIG.date,
+      start_time: SCRAPE_CONFIG.startTime,
+      end_time: SCRAPE_CONFIG.endTime,
+      filters: {
+        buildings: SCRAPE_CONFIG.buildingNames,
+        floors: SCRAPE_CONFIG.floorNames,
+        facility_types: SCRAPE_CONFIG.facilityTypes,
+        equipment: SCRAPE_CONFIG.equipment,
+        capacity: SCRAPE_CONFIG.roomCapacity
+      }
+    },
+    statistics: {
+      total_rooms: matchingRooms.length,
+      available_rooms: totalAvailable,
+      booked_rooms: totalBooked,
+      partially_available_rooms: totalPartiallyAvailable
+    },
+    rooms: rooms
   };
-  fs.writeFileSync(outputLog, JSON.stringify(logData, null, 2));
-  console.log('✅ Scraping complete. Data written to:', outputLog);
 
-  // await fbsPage.pause(); // debug pause for manual inspection
-  await browser.close();
+    fs.writeFileSync(outputLog, JSON.stringify(logData, null, 2));
+    console.log('✅ Scraping complete. Data written to:', outputLog);
 
+    // await fbsPage.pause(); // debug pause for manual inspection
+    if (browser) await browser.close();
+
+  } catch (error) {
+    const scrapeEndTime = Date.now();
+    console.error('❌ Scraping failed:', error.message);
+
+    // Write error log
+    const errorLogData = {
+      metadata: {
+        version: "4.0.0",
+        scraped_at: (new Date()).toISOString(),
+        scrape_duration_ms: scrapeEndTime - scrapeStartTime,
+        success: false,
+        error: error.message,
+        scraper_version: "prod-v1.0.0"
+      },
+      config: {
+        date: SCRAPE_CONFIG.date,
+        start_time: SCRAPE_CONFIG.startTime,
+        end_time: SCRAPE_CONFIG.endTime,
+        filters: {
+          buildings: SCRAPE_CONFIG.buildingNames,
+          floors: SCRAPE_CONFIG.floorNames,
+          facility_types: SCRAPE_CONFIG.facilityTypes,
+          equipment: SCRAPE_CONFIG.equipment,
+          capacity: SCRAPE_CONFIG.roomCapacity
+        }
+      },
+      statistics: {
+        total_rooms: 0,
+        available_rooms: 0,
+        booked_rooms: 0,
+        partially_available_rooms: 0
+      },
+      rooms: []
+    };
+
+    fs.writeFileSync(outputLog, JSON.stringify(errorLogData, null, 2));
+    console.log('Error log written to:', outputLog);
+
+    if (browser) await browser.close();
+    process.exit(1);
+  }
 })();
