@@ -1,5 +1,0 @@
-# Bot
-
-```console
-$ make
-```

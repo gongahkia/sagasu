@@ -1,52 +1,47 @@
-[![](https://img.shields.io/badge/sagasu_1.0.0-deprecated-red)](https://github.com/gongahkia/sagasu/releases/tag/1.0.0)
-![](https://github.com/gongahkia/sagasu/actions/workflows/ci.yml/badge.svg)
+todo
+- make this like junas (user brings their own keys, and when keys are detetced in localstorage it spins up the render backend server if that's possible)
+- either way actually implement local booking logic at least for myself to book fbs rooms during this exam period
+- edit the existing web app as well to fix the frontend UI and make it more efficient
+- get claude code to fix the backend
 
-# `Sagasu`
+[![](https://img.shields.io/badge/sagasu_4.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
+
+# `Sagasu 4`
 
 <p align="center">
-<img src="./asset/logo/icon_with_words.png" width=50% height=50%>
+    <img src="./asset/logo/four_logo.png" width=55% height=55%>
 </p>
 
-Telegram bot that finds available rooms in SMU.
+...
 
-Access [`sagasu_bot`](https://t.me/sagasu_bot) ***live***.
+## Stack
+
+...
 
 ## Rationale
 
-[SMU's Facility Booking System](https://fbs.intranet.smu.edu.sg/home) isn't an inherently slow website. Booking facilities in itself is quick.  
-  
-If anything, the sluggish impression it gives off results from the overly convaluted system users must navigate to search for available rooms.
-  
-`Sagasu` is a Telegram bot that scrapes SMU FBS per user-specified filters for available rooms, flagging any vacant facilities so users can quickly secure them on FBS.
+...
 
-![](./asset/screenshot/1.png)
+## Architecture
 
-## Contributors
+![](./asset/reference/architecture.png)
 
-<table>
-	<tbody>
-        <tr>
-	    <td align="center">
-                <a href="https://github.com/gongahkia">
-                    <img src="https://avatars.githubusercontent.com/u/117062305?v=4" width="100;" alt="gongahkia"/>
-                    <br/>
-                    <sub><b>gongahkia</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/SpringOrca69">
-                    <img src="https://avatars.githubusercontent.com/u/159885540?v=4" width="100;" alt="SpringOrca69"/>
-                    <br/>
-                    <sub><b>SpringOrca69</b></sub>
-                </a>
-            </td>
-			<td align="center">
-                <a href="https://github.com/injaneity">
-                    <img src="https://avatars.githubusercontent.com/u/44902825?v=4" width="100;" alt="injaneity"/>
-                    <br/>
-                    <sub><b>injaneity</b></sub>
-                </a>
-            </td>
-        </tr>
-	<tbody>
-</table>
+## Screenshot
+
+...
+
+## Usage
+
+...
+
+## Configuration
+
+...
+
+## Other notes
+
+`Sagasu 4` rose from the ashes of the below now archived projects.
+
+* [Sagasu](https://github.com/gongahkia/sagasu)
+* [Sagasu 2](https://github.com/gongahkia/sagasu-2)
+* [Sagasu 3](https://github.com/gongahkia/sagasu-3)
