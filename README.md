@@ -6,7 +6,7 @@ todo
 # `Sagasu 4`
 
 <p align="center">
-    <img src="./asset/logo/four_logo.png" width=55% height=55%>
+    <img src="./asset/logo/logo-four.png" width=55% height=55%>
 </p>
 
 ...

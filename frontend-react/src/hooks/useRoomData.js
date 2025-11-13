@@ -1,7 +1,16 @@
 import { useState, useEffect } from 'react';
 
-const GITHUB_RAW_URL = 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_log.json';
-const BOOKINGS_URL = 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/bookings_log.json';
+// Determine if we're in development mode
+const isDev = import.meta.env.DEV;
+
+// Use local files in development, GitHub raw URLs in production
+const GITHUB_RAW_URL = isDev
+  ? '../../backend/log/scraped_log.json'
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_log.json';
+
+const BOOKINGS_URL = isDev
+  ? '../../backend/log/bookings_log.json'
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/bookings_log.json';
 
 export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
   const [data, setData] = useState(null);

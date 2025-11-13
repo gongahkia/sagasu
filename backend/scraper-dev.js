@@ -182,8 +182,12 @@ const outputLog = './log/scraped_log.json';
   const page = await context.newPage();
 
   // 1. Go to the initial site
-  await page.goto(url, { waitUntil: 'networkidle' });
   console.log(`LOG: Navigating to ${url}`);
+  await page.goto(url, {
+    waitUntil: 'domcontentloaded',  // Less strict than networkidle
+    timeout: 60000  // 60 second timeout
+  });
+  console.log(`LOG: Successfully loaded ${url}`);
 
   // 2. Open Microsoft login in new tab
   const [newPage] = await Promise.all([
