@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import Header from './components/Header';
-import Statistics from './components/Statistics';
+import Statistics, { ScrapeConfig } from './components/Statistics';
 import Filters from './components/Filters';
 import RoomCard from './components/RoomCard';
 import BookingCard from './components/BookingCard';
@@ -119,12 +119,12 @@ function App() {
         {/* Booking Status Card */}
         <BookingCard bookings={bookings} systemStatus={systemStatus} />
 
-        {/* Statistics and Environment Status - Side by Side */}
+        {/* Statistics - 4 Cards */}
+        <Statistics statistics={data.statistics} />
+
+        {/* Scrape Config and Environment Status - Side by Side */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Statistics
-            statistics={data.statistics}
-            config={data.config}
-          />
+          <ScrapeConfig config={data.config} />
           <EnvStatusCard
             envStatus={systemStatus.envStatus}
             dataStatus={systemStatus.dataStatus}
