@@ -29,7 +29,7 @@ todo
 
 ![](./asset/reference/architecture.png)
 
-## Screenshot
+## Screenshots
 
 ...
 
