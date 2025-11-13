@@ -1,9 +1,10 @@
-// 
+//
 // --- CONFIGURATION ---
 //
 
 const { chromium } = require('playwright');
 const fs = require('fs');
+require('dotenv').config();
 
 //
 // --- HELPER FUNCTIONS ---
@@ -294,13 +295,17 @@ const outputLog = './log/scraped_log.json';
   let browser;
 
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({ headless: false });
     const context = await browser.newContext();
     const page = await context.newPage();
 
     // 1. Go to the initial site
-    await page.goto(url, { waitUntil: 'networkidle' });
     console.log(`LOG: Navigating to ${url}`);
+    await page.goto(url, {
+      waitUntil: 'domcontentloaded',  // Less strict than networkidle
+      timeout: 60000  // 60 second timeout
+    });
+    console.log(`LOG: Successfully loaded ${url}`);
 
   // 2. Open Microsoft login in new tab
   const [newPage] = await Promise.all([
@@ -518,9 +523,9 @@ const outputLog = './log/scraped_log.json';
 
   // 10. Retrieve available rooms
   await frameContent.locator('table#GridResults_gv').waitFor({ timeout: 20000 });
-  const rooms = await frameContent.locator('table#GridResults_gv tbody tr').all();
+  const roomRows = await frameContent.locator('table#GridResults_gv tbody tr').all();
   let matchingRooms = [];
-  for (const row of rooms) {
+  for (const row of roomRows) {
     const tds = await row.locator('td').all();
     if (tds.length > 1) {
       const roomName = (await tds[1].innerText()).trim();

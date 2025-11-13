@@ -79,11 +79,7 @@ SCRAPE_EQUIPMENT=TV Panel
 ### 4. Run the Scraper
 
 ```bash
-# Development scraper (more verbose logging)
-npm run scrape:dev
-
-# Production scraper (less logging)
-npm run scrape:prod
+npm run scrape
 ```
 
 The scraper will:
@@ -124,25 +120,23 @@ cd frontend-react
 npm install
 ```
 
-### 2. Configure Environment Variables (Optional)
+### 2. No Frontend Environment Variables Needed
 
-For testing environment variable detection:
+The frontend doesn't require any environment variables. It simply displays data scraped by the backend.
+
+### 3. Sync Backend Data to Frontend
+
+Before running the frontend, copy the scraped data:
 
 ```bash
-cd frontend-react
-cp .env.example .env.local
+npm run sync:data
 ```
 
-Edit `.env.local`:
+This copies `backend/log/*.json` to `frontend-react/public/data/`
 
-```env
-VITE_SMU_EMAIL=your.email@smu.edu.sg
-VITE_SMU_PASSWORD=your_password
-```
+**Note:** Run this command whenever you re-scrape data in the backend.
 
-**Note:** These are **only for display purposes** in the frontend UI. The actual scraping uses the backend `.env` file.
-
-### 3. Run the Development Server
+### 4. Run the Development Server
 
 ```bash
 npm run dev
@@ -150,7 +144,7 @@ npm run dev
 
 The frontend will:
 - Start on `http://localhost:5173`
-- Automatically fetch data from `../backend/log/scraped_log.json`
+- Fetch data from `public/data/scraped_log.json`
 - Hot-reload when you make changes
 
 ---
@@ -162,12 +156,13 @@ The frontend will:
 **Terminal 1 - Run Backend Scraper (when needed):**
 ```bash
 cd backend
-npm run scrape:dev
+npm run scrape
 ```
 
-**Terminal 2 - Run Frontend:**
+**Terminal 2 - Sync Data & Run Frontend:**
 ```bash
 cd frontend-react
+npm run sync:data  # Copy scraped data to public directory
 npm run dev
 ```
 
@@ -180,10 +175,11 @@ If you don't need to scrape repeatedly:
 ```bash
 # Run scraper once
 cd backend
-npm run scrape:dev
+npm run scrape
 
-# Then start frontend (in same or different terminal)
+# Sync data and start frontend (in same or different terminal)
 cd ../frontend-react
+npm run sync:data
 npm run dev
 ```
 
@@ -199,7 +195,7 @@ npm run dev
 1. Make sure you've run the backend scraper at least once:
    ```bash
    cd backend
-   npm run scrape:dev
+   npm run scrape
    ```
 
 2. Verify the data file exists:
@@ -238,9 +234,9 @@ npx playwright install chromium
 **Problem:** Scraper can't log in.
 
 **Solutions:**
-1. Verify your SMU email and password are correct
+1. Verify your SMU email and password are correct in `backend/.env`
 2. Check if SMU has changed their login flow
-3. Try running `scraper-dev.js` to see detailed browser logs
+3. The scraper runs with a visible browser window - watch for any login prompts
 4. Check if you need to approve MFA/2FA manually
 
 ### Environment Variable Overlay Won't Disappear
@@ -286,7 +282,7 @@ npm run dev -- --port 3000
 
 1. **Morning**: Run scraper to get fresh data
    ```bash
-   cd backend && npm run scrape:dev
+   cd backend && npm run scrape
    ```
 
 2. **Development**: Work on frontend with live reload
@@ -316,7 +312,8 @@ npm run dev -- --port 3000
 
 ## Notes
 
-- **Backend `.env`**: Used by scraper for actual authentication
-- **Frontend `.env.local`**: Used only for UI display/environment detection
-- **Local data**: Frontend fetches from `../backend/log/` in development
+- **Backend `.env`**: Contains SMU credentials for scraper authentication
+- **Frontend has no env variables**: Frontend just displays scraped data
+- **Local data**: Frontend fetches from `public/data/` (synced from backend)
 - **Production data**: Frontend fetches from GitHub raw URLs in production
+- **Archived scrapers**: Old scraper versions are in `backend/archived/` for reference

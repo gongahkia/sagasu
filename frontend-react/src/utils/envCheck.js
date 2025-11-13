@@ -1,35 +1,47 @@
 /**
  * Environment variable detection utility
- * Checks for required SMU credentials and data availability
+ * Checks if backend has successfully scraped data (indicating backend .env is configured)
  */
 
 // Check if we're in development or production
 export const isDevelopment = import.meta.env.DEV;
 export const isProduction = import.meta.env.PROD;
 
-// Required environment variables
-const REQUIRED_ENV_VARS = {
-  email: 'VITE_SMU_EMAIL',
-  password: 'VITE_SMU_PASSWORD',
-};
-
 /**
- * Check if all required environment variables are configured
- * @returns {Object} { configured: boolean, missing: string[] }
+ * Check if backend environment is configured by checking data validity
+ * Note: Frontend doesn't need SMU credentials - only backend does
+ * @param {Object} roomData - Room data from useRoomData hook
+ * @returns {Object} { configured: boolean, reason: string }
  */
-export const checkEnvVariables = () => {
-  const missing = [];
+export const checkBackendEnvConfigured = (roomData) => {
+  // If no data, backend env might not be configured
+  if (!roomData) {
+    return {
+      configured: false,
+      reason: 'No scraped data available. Backend .env might not be configured.'
+    };
+  }
 
-  Object.entries(REQUIRED_ENV_VARS).forEach(([key, envVar]) => {
-    const value = import.meta.env[envVar];
-    if (!value || value === '' || value.startsWith('your.')) {
-      missing.push(envVar);
-    }
-  });
+  // If data exists but scrape failed, backend env is likely misconfigured
+  if (roomData.metadata && !roomData.metadata.success) {
+    return {
+      configured: false,
+      reason: roomData.metadata.error || 'Backend scraper failed. Check backend/.env credentials.'
+    };
+  }
 
+  // If data exists and is successful, backend is configured
+  if (roomData.metadata && roomData.metadata.success) {
+    return {
+      configured: true,
+      reason: null
+    };
+  }
+
+  // Unknown state
   return {
-    configured: missing.length === 0,
-    missing,
+    configured: false,
+    reason: 'Unable to determine backend configuration status'
   };
 };
 
@@ -71,53 +83,54 @@ export const checkDataValidity = (roomData) => {
 
 /**
  * Get the appropriate URL for configuring environment variables
- * @returns {string} URL to GitHub secrets or local env file
+ * @returns {string} URL to GitHub secrets or local backend .env
  */
 export const getEnvConfigUrl = () => {
   if (isDevelopment) {
-    return null; // Local file, no URL
+    return null; // Local backend/.env file, no URL
   }
   return 'https://github.com/gongahkia/sagasu-4/settings/secrets/actions';
 };
 
 /**
- * Get environment status message
+ * Get environment status message based on backend data
+ * @param {Object} roomData - Room data from useRoomData hook
  * @returns {Object} { status: 'configured' | 'not-configured', message: string, url: string | null }
  */
-export const getEnvStatus = () => {
-  const { configured, missing } = checkEnvVariables();
+export const getEnvStatus = (roomData) => {
+  const backendEnv = checkBackendEnvConfigured(roomData);
 
-  if (!configured) {
+  if (!backendEnv.configured) {
     return {
       status: 'not-configured',
       message: isDevelopment
-        ? 'Environment variables not configured. Create a .env.local file with SMU_EMAIL and SMU_PASSWORD.'
-        : 'Environment variables not configured in GitHub Secrets.',
+        ? 'Backend environment not configured. Check backend/.env file with SMU_EMAIL and SMU_PASSWORD.'
+        : 'Backend environment not configured in GitHub Secrets.',
       url: getEnvConfigUrl(),
-      missing,
+      reason: backendEnv.reason,
     };
   }
 
   return {
     status: 'configured',
     message: isDevelopment
-      ? 'Environment variables configured in .env.local'
-      : 'Environment variables configured in GitHub Secrets',
+      ? 'Backend configured via backend/.env'
+      : 'Backend configured via GitHub Secrets',
     url: getEnvConfigUrl(),
-    missing: [],
+    reason: null,
   };
 };
 
 /**
- * Combined check for both env variables and data validity
+ * Combined check for backend configuration and data validity
  * @param {Object} roomData - Room data from useRoomData hook
  * @returns {Object} { shouldShowOverlay: boolean, envStatus: Object, dataStatus: Object }
  */
 export const checkSystemStatus = (roomData) => {
-  const envStatus = getEnvStatus();
+  const envStatus = getEnvStatus(roomData);
   const dataStatus = checkDataValidity(roomData);
 
-  // Show overlay if either env vars are missing OR data is invalid
+  // Show overlay if either backend is not configured OR data is invalid
   const shouldShowOverlay = envStatus.status === 'not-configured' || !dataStatus.valid;
 
   return {

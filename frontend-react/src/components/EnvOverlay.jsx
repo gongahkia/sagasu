@@ -41,11 +41,15 @@ const EnvOverlay = ({ envStatus, dataStatus }) => {
             </p>
             {isDevelopment ? (
               <div className="text-xs bg-spacemacs-light-bg-hl dark:bg-spacemacs-dark-bg-hl p-3 rounded-md text-left">
-                <p className="font-mono mb-2">Create a <span className="font-bold">.env.local</span> file with:</p>
+                <p className="font-mono mb-2">Configure <span className="font-bold">backend/.env</span> with:</p>
                 <code className="block font-mono text-spacemacs-light-green dark:text-spacemacs-dark-green">
-                  VITE_SMU_EMAIL=your.email@smu.edu.sg<br />
-                  VITE_SMU_PASSWORD=your_password
+                  SMU_EMAIL=your.email@smu.edu.sg<br />
+                  SMU_PASSWORD=your_password<br />
+                  <span className="text-spacemacs-light-fg/60 dark:text-spacemacs-dark-fg/60"># + other scrape config...</span>
                 </code>
+                <p className="mt-2 text-spacemacs-light-fg/70 dark:text-spacemacs-dark-fg/70">
+                  Then run: <span className="font-bold">npm run scrape:prod</span>
+                </p>
               </div>
             ) : (
               envStatus.url && (
@@ -94,40 +98,72 @@ const EnvOverlay = ({ envStatus, dataStatus }) => {
 };
 
 /**
- * EnvStatusBadge Component
- * Shows a small badge indicating env variable configuration status
+ * EnvStatusCard Component
+ * Shows a card indicating backend environment configuration status
  */
-export const EnvStatusBadge = ({ envStatus, dataStatus }) => {
+export const EnvStatusCard = ({ envStatus, dataStatus }) => {
   const isConfigured = envStatus.status === 'configured' && dataStatus.valid;
 
-  if (isConfigured) {
-    return (
-      <div className="flex items-center gap-2 text-xs">
-        <div className="flex items-center gap-1 px-2 py-1 rounded-md bg-spacemacs-light-green/10 dark:bg-spacemacs-dark-green/10 text-spacemacs-light-green dark:text-spacemacs-dark-green">
-          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-              clipRule="evenodd"
-            />
-          </svg>
-          <span>Env configured</span>
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${
+            isConfigured
+              ? 'bg-spacemacs-light-green/10 dark:bg-spacemacs-dark-green/10'
+              : 'bg-spacemacs-light-red/10 dark:bg-spacemacs-dark-red/10'
+          }`}>
+            {isConfigured ? (
+              <svg
+                className="w-6 h-6 text-spacemacs-light-green dark:text-spacemacs-dark-green"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="w-6 h-6 text-spacemacs-light-red dark:text-spacemacs-dark-red"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            )}
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">
+              {isConfigured ? 'Backend Configured' : 'Backend Not Configured'}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {envStatus.message}
+            </p>
+          </div>
         </div>
-        {envStatus.url && !isDevelopment && (
+
+        {envStatus.url && !isDevelopment && isConfigured && (
           <a
             href={envStatus.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-spacemacs-light-accent dark:text-spacemacs-dark-accent hover:underline"
+            className="px-4 py-2 bg-spacemacs-light-accent/10 dark:bg-spacemacs-dark-accent/10 text-spacemacs-light-accent dark:text-spacemacs-dark-accent rounded-md hover:bg-spacemacs-light-accent/20 dark:hover:bg-spacemacs-dark-accent/20 transition-colors text-sm font-medium"
           >
-            View
+            View Secrets →
           </a>
         )}
       </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 };
 
 export default EnvOverlay;

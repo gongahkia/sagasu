@@ -9,7 +9,7 @@ import { useRoomData, useBookingData } from './hooks/useRoomData';
 import { useFavorites } from './hooks/useFavorites';
 import { filterRooms, getUniqueValues, sortRooms } from './utils/filters';
 import { checkSystemStatus } from './utils/envCheck';
-import { EnvStatusBadge } from './components/EnvOverlay';
+import { EnvStatusCard } from './components/EnvOverlay';
 
 function App() {
   const { theme, toggleTheme } = useTheme();
@@ -116,22 +116,20 @@ function App() {
       />
 
       <main className="container mx-auto px-4 py-8 space-y-6">
-        {/* Environment Status Badge */}
-        <div className="flex justify-end">
-          <EnvStatusBadge
+        {/* Booking Status Card */}
+        <BookingCard bookings={bookings} systemStatus={systemStatus} />
+
+        {/* Statistics and Environment Status - Side by Side */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Statistics
+            statistics={data.statistics}
+            config={data.config}
+          />
+          <EnvStatusCard
             envStatus={systemStatus.envStatus}
             dataStatus={systemStatus.dataStatus}
           />
         </div>
-
-        {/* Booking Status Card */}
-        <BookingCard bookings={bookings} systemStatus={systemStatus} />
-
-        {/* Statistics */}
-        <Statistics
-          statistics={data.statistics}
-          config={data.config}
-        />
 
         {/* Filters */}
         <Filters
