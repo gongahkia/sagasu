@@ -18,7 +18,8 @@ todo
 
 ## Stack
 
-...
+* *Frontend*: [React](https://react.dev/), [Vite](https://vite.dev/), [Cloudflare Pages](https://pages.cloudflare.com/)
+* *Backend*: [Playwright](https://github.com/microsoft/playwright), [Node.js](https://nodejs.org/en), [Github Actions](https://docs.github.com/en/actions), [Cron](https://www.ibm.com/docs/en/db2/11.5.x?topic=task-unix-cron-format)
 
 ## Rationale
 
