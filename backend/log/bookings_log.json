@@ -1,10 +1,36 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "last_updated": "2025-01-13T00:00:00.000Z",
-    "total_bookings": 0,
-    "successful_bookings": 0,
-    "failed_bookings": 0
+    "timestamp": "2025-11-13T16:10:23.356Z",
+    "duration_ms": 91397,
+    "success": false,
+    "message": "frame.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input#bookingFormControl1_TextboxPurpose_c1') to be visible\u001b[22m\n",
+    "error_stack": "frame.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input#bookingFormControl1_TextboxPurpose_c1') to be visible\u001b[22m\n\n    at performBooking (/mnt/c/Users/angry/Desktop/coding/projects/sagasu-4/backend/booker-prod.js:401:24)\n    at async /mnt/c/Users/angry/Desktop/coding/projects/sagasu-4/backend/booker-prod.js:934:27"
+  },
+  "booking_config": {
+    "desiredStartTime": "08:00",
+    "desiredEndTime": "10:00",
+    "purpose": "Lock-in session for the ages",
+    "cobookerName": "Astin Tay"
+  },
+  "scrape_config": {
+    "date": "20-Nov-2025",
+    "startTime": "08:00",
+    "endTime": "22:00",
+    "roomCapacity": "From6To10Pax",
+    "buildingNames": [
+      "Yong Pung How School of Law/Kwa Geok Choo Law Library"
+    ],
+    "floorNames": [
+      "Level 4",
+      "Level 5"
+    ],
+    "facilityTypes": [
+      "Project Room"
+    ],
+    "equipment": [
+      "TV Panel"
+    ]
   },
   "bookings": []
 }

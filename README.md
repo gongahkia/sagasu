@@ -1,5 +1,6 @@
 todo
 
+- continue debugging the broken booking logic (unable to find the time from and time to)
 - actually implement the booking logic (via dragging/dropping the room bookings) and automate that for myself to book fbs rooms during this exam period
 - have that displayed on the frontend
 - ensure everything looks clean on desktop and mobile
