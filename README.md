@@ -1,7 +1,12 @@
 todo
-- actually implement local booking logic for myself to book fbs rooms during this exam period
 
-[![](https://img.shields.io/badge/sagasu_4.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
+- actually implement the booking logic (via dragging/dropping the room bookings) and automate that for myself to book fbs rooms during this exam period
+- have that displayed on the frontend
+- ensure everything looks clean on desktop and mobile
+- furnish the README.md
+
+[![](https://img.shields.io/badge/sagasu_4.0.0-passing_green)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
+![](https://github.com/gongahkia/sagasu-4/actions/workflows/scrape.yml/badge.svg)
 
 # `Sagasu 4`
 
@@ -37,7 +42,7 @@ todo
 
 ## Other notes
 
-`Sagasu 4` rose from the ashes of the below now archived projects.
+`Sagasu 4` is where it is today because of the below projects. 
 
 * [Sagasu](https://github.com/gongahkia/sagasu)
 * [Sagasu 2](https://github.com/gongahkia/sagasu-2)

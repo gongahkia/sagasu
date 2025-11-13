@@ -26,13 +26,13 @@ export const formatDateShort = (dateStr) => {
 export const getStatusColor = (status) => {
   switch (status) {
     case 'free':
-      return 'text-spacemacs-light-green dark:text-spacemacs-dark-green';
+      return 'text-spacemacs-light-green';
     case 'booked':
-      return 'text-spacemacs-light-red dark:text-spacemacs-dark-red';
+      return 'text-spacemacs-light-red';
     case 'unavailable':
-      return 'text-gray-400 dark:text-gray-500';
+      return 'text-gray-400';
     default:
-      return 'text-gray-600 dark:text-gray-400';
+      return 'text-gray-600';
   }
 };
 
@@ -43,7 +43,7 @@ export const getStatusBadgeClass = (status) => {
     case 'booked':
       return 'badge-danger';
     case 'unavailable':
-      return 'badge bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+      return 'badge bg-gray-100 text-gray-600';
     default:
       return 'badge-info';
   }
@@ -58,7 +58,7 @@ export const getBookingStatusColor = (status) => {
     case 'failed':
       return 'badge-danger';
     case 'cancelled':
-      return 'badge bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
+      return 'badge bg-gray-100 text-gray-600';
     default:
       return 'badge-info';
   }
