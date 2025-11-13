@@ -4,7 +4,6 @@ import Statistics, { ScrapeConfig } from './components/Statistics';
 import Filters from './components/Filters';
 import RoomCard from './components/RoomCard';
 import BookingCard from './components/BookingCard';
-import { useTheme } from './hooks/useTheme';
 import { useRoomData, useBookingData } from './hooks/useRoomData';
 import { useFavorites } from './hooks/useFavorites';
 import { filterRooms, getUniqueValues, sortRooms } from './utils/filters';
@@ -12,7 +11,6 @@ import { checkSystemStatus } from './utils/envCheck';
 import { EnvStatusCard } from './components/EnvOverlay';
 
 function App() {
-  const { theme, toggleTheme } = useTheme();
   const { data, loading, error, refetch } = useRoomData(false);
   const { bookings } = useBookingData();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
@@ -69,8 +67,8 @@ function App() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-spacemacs-light-accent dark:border-spacemacs-dark-accent mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading room data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-spacemacs-light-accent mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading room data...</p>
         </div>
       </div>
     );
@@ -81,11 +79,11 @@ function App() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="card max-w-md mx-4">
           <div className="text-center">
-            <svg className="w-12 h-12 text-spacemacs-light-red dark:text-spacemacs-dark-red mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-12 h-12 text-spacemacs-light-red mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <h2 className="text-xl font-bold mb-2">Failed to Load Data</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+            <p className="text-gray-600 mb-4">{error}</p>
             <button onClick={refetch} className="btn-primary">
               Retry
             </button>
@@ -100,7 +98,7 @@ function App() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="card max-w-md mx-4">
           <div className="text-center">
-            <p className="text-gray-600 dark:text-gray-400">No room data available</p>
+            <p className="text-gray-600">No room data available</p>
           </div>
         </div>
       </div>
@@ -110,8 +108,6 @@ function App() {
   return (
     <div className="min-h-screen">
       <Header
-        theme={theme}
-        toggleTheme={toggleTheme}
         lastUpdated={data.metadata.scraped_at}
       />
 
@@ -144,7 +140,7 @@ function App() {
 
         {/* View Controls */}
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600 dark:text-gray-400">
+          <div className="text-sm text-gray-600">
             Showing {filteredRooms.length} of {data.rooms.length} rooms
           </div>
 
@@ -164,8 +160,8 @@ function App() {
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-md transition-colors ${
                   viewMode === 'grid'
-                    ? 'bg-spacemacs-light-accent text-white dark:bg-spacemacs-dark-accent'
-                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                    ? 'bg-spacemacs-light-accent text-white'
+                    : 'bg-gray-100 text-gray-700'
                 }`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,8 +172,8 @@ function App() {
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded-md transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-spacemacs-light-accent text-white dark:bg-spacemacs-dark-accent'
-                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                    ? 'bg-spacemacs-light-accent text-white'
+                    : 'bg-gray-100 text-gray-700'
                 }`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,7 +190,7 @@ function App() {
             <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-gray-600 dark:text-gray-400">
+            <p className="text-gray-600">
               No rooms match your filters
             </p>
           </div>
@@ -217,16 +213,16 @@ function App() {
         )}
 
         {/* Footer */}
-        <footer className="pt-8 pb-4 border-t text-center text-sm text-gray-600 dark:text-gray-400">
+        <footer className="pt-8 pb-4 border-t text-center text-sm text-gray-600">
           <p>
             Made with ❤️ by {' '}
-              <a 
-                href="https://gabrielongzm.com" 
+              <a
+                href="https://gabrielongzm.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-spacemacs-light-accent dark:text-spacemacs-dark-accent hover:opacity-80">
+                className="text-spacemacs-light-accent hover:opacity-80">
                   Gabriel Ong
-              </a> 
+              </a>
           </p>
           <p className="mt-2 text-xs">
             Disclaimer: Sagasu 4 is not affiliated with SMU or SMU FBS

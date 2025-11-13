@@ -1,17 +1,17 @@
 import React from 'react';
 
-const Header = ({ theme, toggleTheme, lastUpdated }) => {
+const Header = ({ lastUpdated }) => {
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-spacemacs-dark-bg/95 dark:supports-[backdrop-filter]:bg-spacemacs-dark-bg/60">
+    <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-spacemacs-light-accent dark:text-spacemacs-dark-accent">
+          <h1 className="text-2xl font-bold text-spacemacs-light-accent">
             Sagasu 4
           </h1>
           <div className="flex items-center gap-2">
             <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-spacemacs-light-green opacity-75 dark:bg-spacemacs-dark-green"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-spacemacs-light-green dark:bg-spacemacs-dark-green"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-spacemacs-light-green opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-spacemacs-light-green"></span>
             </span>
             <img
               src="/logo-four.png"
@@ -23,7 +23,7 @@ const Header = ({ theme, toggleTheme, lastUpdated }) => {
 
         <div className="flex items-center gap-4">
           {lastUpdated && (
-            <div className="hidden sm:block text-sm text-gray-600 dark:text-gray-400">
+            <div className="hidden sm:block text-sm text-gray-600">
               Updated: {new Date(lastUpdated).toLocaleString('en-SG', {
                 month: 'short',
                 day: 'numeric',
@@ -33,27 +33,11 @@ const Header = ({ theme, toggleTheme, lastUpdated }) => {
             </div>
           )}
 
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            aria-label="Toggle theme"
-          >
-            {theme === 'light' ? (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
-            ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            )}
-          </button>
-
           <a
             href="https://github.com/gongahkia/sagasu-4"
             target="_blank"
             rel="noopener noreferrer"
-            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
             aria-label="GitHub repository"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
