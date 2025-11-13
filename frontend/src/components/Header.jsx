@@ -13,9 +13,11 @@ const Header = ({ theme, toggleTheme, lastUpdated }) => {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-spacemacs-light-green opacity-75 dark:bg-spacemacs-dark-green"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-spacemacs-light-green dark:bg-spacemacs-dark-green"></span>
             </span>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              Live Data
-            </span>
+            <img
+              src="/logo-four.png"
+              alt="Sagasu"
+              className="h-8 w-8 object-contain"
+            />
           </div>
         </div>
 
