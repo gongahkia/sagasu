@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { getBookingStatusColor } from '../utils/time';
+import EnvOverlay from './EnvOverlay';
 
-const BookingCard = ({ bookings }) => {
+const BookingCard = ({ bookings, systemStatus }) => {
   const [expanded, setExpanded] = useState(false);
 
   if (!bookings || !bookings.bookings || bookings.bookings.length === 0) {
@@ -31,7 +32,7 @@ const BookingCard = ({ bookings }) => {
   const recentBookings = bookingList.slice(0, 5);
 
   return (
-    <div className="card">
+    <div className="card relative">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-spacemacs-light-blue/10 dark:bg-spacemacs-dark-blue/10 rounded-lg">
@@ -111,6 +112,14 @@ const BookingCard = ({ bookings }) => {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Environment Variable Overlay */}
+      {systemStatus && systemStatus.shouldShowOverlay && (
+        <EnvOverlay
+          envStatus={systemStatus.envStatus}
+          dataStatus={systemStatus.dataStatus}
+        />
       )}
     </div>
   );

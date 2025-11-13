@@ -8,6 +8,8 @@ import { useTheme } from './hooks/useTheme';
 import { useRoomData, useBookingData } from './hooks/useRoomData';
 import { useFavorites } from './hooks/useFavorites';
 import { filterRooms, getUniqueValues, sortRooms } from './utils/filters';
+import { checkSystemStatus } from './utils/envCheck';
+import { EnvStatusBadge } from './components/EnvOverlay';
 
 function App() {
   const { theme, toggleTheme } = useTheme();
@@ -27,6 +29,9 @@ function App() {
 
   const [viewMode, setViewMode] = useState('grid');
   const [sortBy, setSortBy] = useState('name');
+
+  // Check system status (env variables and data validity)
+  const systemStatus = useMemo(() => checkSystemStatus(data), [data]);
 
   // Update favorites in filters when they change
   React.useEffect(() => {
@@ -111,8 +116,16 @@ function App() {
       />
 
       <main className="container mx-auto px-4 py-8 space-y-6">
+        {/* Environment Status Badge */}
+        <div className="flex justify-end">
+          <EnvStatusBadge
+            envStatus={systemStatus.envStatus}
+            dataStatus={systemStatus.dataStatus}
+          />
+        </div>
+
         {/* Booking Status Card */}
-        <BookingCard bookings={bookings} />
+        <BookingCard bookings={bookings} systemStatus={systemStatus} />
 
         {/* Statistics */}
         <Statistics
@@ -199,6 +212,7 @@ function App() {
                 room={room}
                 isFavorite={isFavorite(room.id)}
                 toggleFavorite={toggleFavorite}
+                systemStatus={systemStatus}
               />
             ))}
           </div>

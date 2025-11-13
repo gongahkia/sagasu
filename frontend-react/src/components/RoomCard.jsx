@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { getStatusBadgeClass, formatDuration } from '../utils/time';
+import EnvOverlay from './EnvOverlay';
 
-const RoomCard = ({ room, isFavorite, toggleFavorite }) => {
+const RoomCard = ({ room, isFavorite, toggleFavorite, systemStatus }) => {
   const [expanded, setExpanded] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState(null);
 
@@ -17,7 +18,7 @@ const RoomCard = ({ room, isFavorite, toggleFavorite }) => {
 
   return (
     <>
-      <div className="card hover:shadow-lg transition-shadow">
+      <div className="card hover:shadow-lg transition-shadow relative">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
@@ -125,6 +126,14 @@ const RoomCard = ({ room, isFavorite, toggleFavorite }) => {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Environment Variable Overlay */}
+        {systemStatus && systemStatus.shouldShowOverlay && (
+          <EnvOverlay
+            envStatus={systemStatus.envStatus}
+            dataStatus={systemStatus.dataStatus}
+          />
         )}
       </div>
 
