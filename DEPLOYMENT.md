@@ -32,9 +32,14 @@ Go to your repository: `Settings` → `Secrets and variables` → `Actions` → 
 
 Add the following secrets:
 
+**Required (for scraper authentication):**
 ```
 SMU_EMAIL=your.email@smu.edu.sg
 SMU_PASSWORD=your_password
+```
+
+**Optional (scraper configuration - can be adjusted in frontend UI):**
+```
 SCRAPE_DATE=20-Nov-2025 (or whatever date format you use)
 SCRAPE_START_TIME=08:00
 SCRAPE_END_TIME=22:00
@@ -46,6 +51,8 @@ SCRAPE_EQUIPMENT=TV Panel
 ```
 
 **Notes:**
+- `SMU_EMAIL` and `SMU_PASSWORD` are **required** for the scraper to authenticate
+- Without these credentials, the frontend will display an overlay indicating env variables are not configured
 - Use comma-separated values for multi-value fields
 - Date format: `DD-MMM-YYYY` (e.g., `20-Nov-2025`)
 - Time format: `HH:MM` (24-hour)
@@ -107,9 +114,37 @@ SCRAPE_EQUIPMENT=TV Panel
    - Add your custom domain
    - Follow DNS configuration instructions
 
-#### Environment Variables
+#### Environment Variables (Frontend)
 
-No environment variables needed! The app fetches data directly from GitHub.
+**For Production (Vercel):**
+
+No frontend environment variables are required for production deployment. The app will:
+- Fetch scraped data directly from GitHub raw URLs
+- Display an overlay if GitHub Secrets (`SMU_EMAIL` and `SMU_PASSWORD`) are not configured
+- Show a link to configure secrets at: `https://github.com/gongahkia/sagasu-4/settings/secrets/actions`
+
+**For Local Development:**
+
+If you want to test the environment variable detection locally:
+
+1. Create a `.env.local` file in the `frontend-react` directory:
+   ```bash
+   cd frontend-react
+   cp .env.example .env.local
+   ```
+
+2. Edit `.env.local` with your credentials:
+   ```env
+   VITE_SMU_EMAIL=your.email@smu.edu.sg
+   VITE_SMU_PASSWORD=your_password
+   ```
+
+3. The frontend will check for these variables and:
+   - Show an overlay if they're missing
+   - Display "Env configured" badge if present
+   - Link to the local `.env.local` file location
+
+**Note:** `.env.local` is gitignored and won't be committed to the repository.
 
 ---
 
