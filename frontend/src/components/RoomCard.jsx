@@ -22,30 +22,30 @@ const RoomCard = ({ room, isFavorite, toggleFavorite, systemStatus }) => {
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-bold text-lg text-spacemacs-light-accent dark:text-spacemacs-dark-accent">
+              <h3 className="font-bold text-lg text-spacemacs-light-accent">
                 {room.name}
               </h3>
               {room.availability_summary.is_available_now && (
                 <span className="badge-success">Available Now</span>
               )}
             </div>
-            <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-sm text-gray-600">
               {room.building} • {room.floor}
             </div>
-            <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+            <div className="text-xs text-gray-500 mt-1">
               {room.facility_type}
             </div>
           </div>
 
           <button
             onClick={() => toggleFavorite(room.id)}
-            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="p-2 rounded-md hover:bg-gray-100 transition-colors"
             aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
           >
             <svg
               className={`w-5 h-5 transition-colors ${
                 isFavorite
-                  ? 'fill-spacemacs-light-yellow text-spacemacs-light-yellow dark:fill-spacemacs-dark-yellow dark:text-spacemacs-dark-yellow'
+                  ? 'fill-spacemacs-light-yellow text-spacemacs-light-yellow'
                   : 'fill-none text-gray-400'
               }`}
               stroke="currentColor"
@@ -63,20 +63,20 @@ const RoomCard = ({ room, isFavorite, toggleFavorite, systemStatus }) => {
 
         <div className="space-y-2 mb-3">
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">Free Duration:</span>
+            <span className="text-gray-600">Free Duration:</span>
             <span className="font-medium">
               {formatDuration(room.availability_summary.free_duration_minutes)}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">Free Slots:</span>
+            <span className="text-gray-600">Free Slots:</span>
             <span className="font-medium">
               {room.availability_summary.free_slots_count}
             </span>
           </div>
           {room.equipment.length > 0 && (
             <div className="flex items-start gap-2 text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Equipment:</span>
+              <span className="text-gray-600">Equipment:</span>
               <div className="flex flex-wrap gap-1">
                 {room.equipment.map((eq, idx) => (
                   <span key={idx} className="badge-info text-xs">
@@ -90,7 +90,7 @@ const RoomCard = ({ room, isFavorite, toggleFavorite, systemStatus }) => {
 
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-between text-sm text-spacemacs-light-accent dark:text-spacemacs-dark-accent hover:opacity-80 transition-opacity"
+          className="w-full flex items-center justify-between text-sm text-spacemacs-light-accent hover:opacity-80 transition-opacity"
         >
           <span className="font-medium">
             {expanded ? 'Hide Timeslots' : 'Show Timeslots'}
@@ -112,8 +112,8 @@ const RoomCard = ({ room, isFavorite, toggleFavorite, systemStatus }) => {
                 key={idx}
                 className={`flex items-center justify-between p-2 rounded-md text-sm ${
                   slot.status === 'booked'
-                    ? 'bg-red-50 dark:bg-red-900/20 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30'
-                    : 'bg-gray-50 dark:bg-gray-800/50'
+                    ? 'bg-red-50 cursor-pointer hover:bg-red-100'
+                    : 'bg-gray-50'
                 }`}
                 onClick={() => slot.status === 'booked' && handleBookingClick(slot)}
               >
@@ -143,16 +143,16 @@ const RoomCard = ({ room, isFavorite, toggleFavorite, systemStatus }) => {
           onClick={closeModal}
         >
           <div
-            className="bg-white dark:bg-spacemacs-dark-bg-alt rounded-lg shadow-xl max-w-md w-full p-6"
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-spacemacs-light-accent dark:text-spacemacs-dark-accent">
+              <h3 className="text-xl font-bold text-spacemacs-light-accent">
                 Booking Details
               </h3>
               <button
                 onClick={closeModal}
-                className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -162,29 +162,29 @@ const RoomCard = ({ room, isFavorite, toggleFavorite, systemStatus }) => {
 
             <div className="space-y-3">
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Reference</div>
+                <div className="text-sm text-gray-600">Reference</div>
                 <div className="font-medium">{selectedBooking.reference}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Status</div>
+                <div className="text-sm text-gray-600">Status</div>
                 <div className="font-medium">{selectedBooking.status}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Booked By</div>
+                <div className="text-sm text-gray-600">Booked By</div>
                 <div className="font-medium">{selectedBooking.booker_name}</div>
               </div>
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Email</div>
+                <div className="text-sm text-gray-600">Email</div>
                 <div className="font-medium text-sm">{selectedBooking.booker_email}</div>
               </div>
               {selectedBooking.purpose && (
                 <div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">Purpose</div>
+                  <div className="text-sm text-gray-600">Purpose</div>
                   <div className="font-medium">{selectedBooking.purpose}</div>
                 </div>
               )}
               <div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Type</div>
+                <div className="text-sm text-gray-600">Type</div>
                 <div className="font-medium">{selectedBooking.use_type}</div>
               </div>
             </div>
