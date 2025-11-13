@@ -219,18 +219,17 @@ function App() {
         {/* Footer */}
         <footer className="pt-8 pb-4 border-t text-center text-sm text-gray-600 dark:text-gray-400">
           <p>
-            Sagasu 4 • Made with ❤️ for SMU students •{' '}
-            <a
-              href="https://github.com/gongahkia/sagasu-4"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-spacemacs-light-accent dark:text-spacemacs-dark-accent hover:opacity-80"
-            >
-              GitHub
-            </a>
+            Made with ❤️ by {' '}
+              <a 
+                href="https://gabrielongzm.com" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-spacemacs-light-accent dark:text-spacemacs-dark-accent hover:opacity-80">
+                  Gabriel Ong
+              </a> 
           </p>
           <p className="mt-2 text-xs">
-            Data scraped from SMU FBS • Not affiliated with SMU
+            Disclaimer: Sagasu 4 is not affiliated with SMU or SMU FBS
           </p>
         </footer>
       </main>
