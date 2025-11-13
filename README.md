@@ -4,6 +4,7 @@ todo
 - have that displayed on the frontend
 - ensure everything looks clean on desktop and mobile
 - furnish the README.md
+- add a button to the navbar to automatically star the project on Github if they like it 
 
 [![](https://img.shields.io/badge/sagasu_4.0.0-passing-green)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
 ![](https://github.com/gongahkia/sagasu-4/actions/workflows/scrape.yml/badge.svg)
