@@ -295,7 +295,7 @@ const outputLog = './log/scraped_log.json';
   let browser;
 
   try {
-    browser = await chromium.launch({ headless: false });
+    browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
     const page = await context.newPage();
 
