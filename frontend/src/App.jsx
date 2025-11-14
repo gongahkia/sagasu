@@ -112,8 +112,8 @@ function App() {
       />
 
       <main className="container mx-auto px-4 py-8 space-y-6">
-        {/* Booking Status Card */}
-        <BookingCard bookings={bookings} systemStatus={systemStatus} />
+        {/* Booking Status Card - REMOVED: Booking automation archived */}
+        {/* <BookingCard bookings={bookings} systemStatus={systemStatus} /> */}
 
         {/* Statistics - 4 Cards */}
         <Statistics statistics={data.statistics} />

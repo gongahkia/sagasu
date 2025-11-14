@@ -1,11 +1,9 @@
-todo
+## Status
 
-- continue debugging the broken booking logic (unable to find the time from and time to)
-- actually implement the booking logic (via dragging/dropping the room bookings) and automate that for myself to book fbs rooms during this exam period
-- have that displayed on the frontend
-- ensure everything looks clean on desktop and mobile
-- furnish the README.md
-- add a button to the navbar to automatically star the project on Github if they like it 
+✅ **Room Availability Scraper** - Fully functional
+❌ **Booking Automation** - Archived (see `archived/backend/`)
+
+The booking automation feature has been archived due to the complexity of SMU's modern SPA-based booking form. The scraper continues to work perfectly and updates daily at 8:00 AM SGT. 
 
 [![](https://img.shields.io/badge/sagasu_4.0.0-passing-green)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
 ![](https://github.com/gongahkia/sagasu-4/actions/workflows/scrape.yml/badge.svg)
