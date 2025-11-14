@@ -1,17 +1,17 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "timestamp": "2025-11-13T16:10:23.356Z",
-    "duration_ms": 91397,
+    "timestamp": "2025-11-14T12:39:22.377Z",
+    "duration_ms": 117553,
     "success": false,
-    "message": "frame.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input#bookingFormControl1_TextboxPurpose_c1') to be visible\u001b[22m\n",
-    "error_stack": "frame.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('input#bookingFormControl1_TextboxPurpose_c1') to be visible\u001b[22m\n\n    at performBooking (/mnt/c/Users/angry/Desktop/coding/projects/sagasu-4/backend/booker-prod.js:401:24)\n    at async /mnt/c/Users/angry/Desktop/coding/projects/sagasu-4/backend/booker-prod.js:934:27"
+    "message": "Could not find CONFIRM button to submit booking",
+    "error_stack": "Error: Could not find CONFIRM button to submit booking\n    at performBooking (/home/gongahkia/Desktop/coding/projects/sagasu-4/backend/booker-prod.js:1111:11)\n    at async /home/gongahkia/Desktop/coding/projects/sagasu-4/backend/booker-prod.js:1510:27"
   },
   "booking_config": {
-    "desiredStartTime": "08:00",
-    "desiredEndTime": "10:00",
-    "purpose": "Lock-in session for the ages",
-    "cobookerName": "Astin Tay"
+    "desiredStartTime": "09:00",
+    "desiredEndTime": "11:00",
+    "purpose": "Genuinely locking in",
+    "cobookerName": "John Doe"
   },
   "scrape_config": {
     "date": "20-Nov-2025",

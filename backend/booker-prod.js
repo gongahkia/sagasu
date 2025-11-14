@@ -365,19 +365,32 @@ async function performBooking(frameContent, page, roomName, desiredStartTime, de
 
   // Wait for navigation to complete
   await page.waitForLoadState('networkidle', { timeout: 10000 });
-  await page.waitForTimeout(5000); // Wait for full page load
+  console.log(`LOG: Network idle reached, waiting longer for SPA/React components to render...`);
+
+  // EXTENDED WAIT: Modern SPAs need more time to render after network idle
+  await page.waitForTimeout(15000); // Increased from 5s to 15s for component rendering
+  console.log(`LOG: Extended wait completed (15 seconds)`);
+
+  // Additional wait for any lazy-loaded scripts
+  await page.waitForTimeout(10000); // Extra 10 seconds
+  console.log(`LOG: Additional wait completed (total 25 seconds after network idle)`);
 
   // Step 2.5: Wait for booking form to actually load
   console.log(`LOG: Waiting for booking form to load in iframe...`);
 
-  // Wait for a specific element that only exists on the booking form page
-  // This ensures the iframe has actually navigated to the booking form
+  // IMPROVED: Wait for the container div first, then discover elements within it
+  let containerFound = false;
+  let formContainer = null;
+
   try {
-    // Wait up to 15 seconds for the booking form purpose input to appear
-    await frameContent.waitForSelector('input#bookingFormControl1_TextboxPurpose_c1', { timeout: 15000 });
-    console.log(`LOG: Booking form has loaded (found purpose input field)`);
+    // Try waiting for the form container first (more reliable than individual fields)
+    console.log(`LOG: Attempting to find booking form container: div#bookingFormControl1_CollapsibleDetails_container`);
+    await frameContent.waitForSelector('div#bookingFormControl1_CollapsibleDetails_container', { timeout: 15000 });
+    formContainer = frameContent.locator('div#bookingFormControl1_CollapsibleDetails_container');
+    containerFound = true;
+    console.log(`✓ Booking form container found in iframe`);
   } catch (e) {
-    console.log(`WARN: Booking form purpose field not found in original iframe context, refreshing iframe references...`);
+    console.log(`WARN: Container not found in original iframe context, refreshing iframe references...`);
 
     // The iframe content has changed, get fresh references
     await page.waitForTimeout(2000);
@@ -397,9 +410,228 @@ async function performBooking(frameContent, page, roomName, desiredStartTime, de
     // Use the NEW frame reference
     frameContent = newFrameContent;
 
-    // Try waiting for the purpose field again
-    await frameContent.waitForSelector('input#bookingFormControl1_TextboxPurpose_c1', { timeout: 10000 });
-    console.log(`LOG: Booking form has loaded after refresh`);
+    // Try waiting for the container again
+    try {
+      await frameContent.waitForSelector('div#bookingFormControl1_CollapsibleDetails_container', { timeout: 10000 });
+      formContainer = frameContent.locator('div#bookingFormControl1_CollapsibleDetails_container');
+      containerFound = true;
+      console.log(`✓ Booking form container found after iframe refresh`);
+    } catch (e2) {
+      console.log(`ERROR: Container still not found, trying alternative approaches...`);
+    }
+  }
+
+  // Take screenshot for debugging
+  await page.screenshot({ path: './log/screenshot/booking_form_after_navigation.png', fullPage: true });
+  console.log(`📸 Screenshot saved: booking_form_after_navigation.png`);
+
+  // CRITICAL DEBUG: Dump the entire HTML to understand the actual structure
+  console.log(`\n📄 STEP 2A: Dumping iframe HTML to file for analysis...`);
+  try {
+    const pageContent = await frameContent.content();
+    const fs = require('fs');
+    fs.writeFileSync('./log/booking_form_structure.html', pageContent);
+    console.log(`✓ HTML structure saved to: ./log/booking_form_structure.html`);
+
+    // Also log a preview of the HTML
+    const preview = pageContent.substring(0, 2000);
+    console.log(`\n=== HTML PREVIEW (first 2000 chars) ===`);
+    console.log(preview);
+    console.log(`=== END PREVIEW ===\n`);
+
+  } catch (e) {
+    console.log(`✗ Could not dump HTML: ${e.message}`);
+  }
+
+  // Log current page and iframe URLs
+  console.log(`\n🔗 STEP 2B: Checking current URLs...`);
+  console.log(`Main page URL: ${page.url()}`);
+  try {
+    const frameUrl = await frameContent.evaluate(() => window.location.href);
+    console.log(`Iframe URL: ${frameUrl}`);
+  } catch (e) {
+    console.log(`Could not get iframe URL: ${e.message}`);
+  }
+
+  // Log page title
+  try {
+    const pageTitle = await page.title();
+    console.log(`Page title: ${pageTitle}`);
+    const frameTitle = await frameContent.evaluate(() => document.title);
+    console.log(`Iframe title: ${frameTitle}`);
+  } catch (e) {
+    console.log(`Could not get titles: ${e.message}`);
+  }
+
+  // Check for specific text that should appear on booking form
+  console.log(`\n🔍 STEP 2C: Checking for booking form indicators...`);
+  try {
+    const bodyText = await frameContent.evaluate(() => document.body.innerText);
+    const hasBookingDetails = bodyText.includes('Booking Details') || bodyText.includes('BOOKING DETAILS');
+    const hasPurpose = bodyText.includes('Purpose') || bodyText.includes('PURPOSE');
+    const hasTimeFrom = bodyText.includes('TIME FROM') || bodyText.includes('Time From');
+    const hasConfirm = bodyText.includes('CONFIRM') || bodyText.includes('Confirm');
+
+    console.log(`Page contains "Booking Details": ${hasBookingDetails}`);
+    console.log(`Page contains "Purpose": ${hasPurpose}`);
+    console.log(`Page contains "TIME FROM": ${hasTimeFrom}`);
+    console.log(`Page contains "CONFIRM": ${hasConfirm}`);
+
+    if (!hasBookingDetails && !hasPurpose && !hasTimeFrom) {
+      console.log(`\n⚠️  WARNING: Page does not appear to be the booking form!`);
+      console.log(`Body text preview (first 500 chars):`);
+      console.log(bodyText.substring(0, 500));
+    }
+  } catch (e) {
+    console.log(`Could not check page text: ${e.message}`);
+  }
+
+  // Discover all form elements (container or not - we'll work with what exists)
+  console.log(`\n=== FORM DISCOVERY: Analyzing page for form elements ===`);
+  const searchContext = containerFound ? formContainer : frameContent;
+  const contextName = containerFound ? 'container' : 'entire iframe';
+  console.log(`Searching within: ${contextName}`);
+
+  // Discover all input fields
+  const inputs = await searchContext.locator('input').all();
+  console.log(`\nFound ${inputs.length} input fields:`);
+  for (let i = 0; i < inputs.length; i++) {
+    const id = await inputs[i].getAttribute('id');
+    const name = await inputs[i].getAttribute('name');
+    const type = await inputs[i].getAttribute('type');
+    const placeholder = await inputs[i].getAttribute('placeholder');
+    const value = await inputs[i].getAttribute('value');
+    const visible = await inputs[i].isVisible();
+    const enabled = await inputs[i].isEnabled();
+    console.log(`  [${i}] id="${id}", name="${name}", type="${type}", placeholder="${placeholder}", value="${value}", visible=${visible}, enabled=${enabled}`);
+  }
+
+  // Discover all select/dropdown fields
+  const selects = await searchContext.locator('select').all();
+  console.log(`\nFound ${selects.length} select/dropdown fields:`);
+  for (let i = 0; i < selects.length; i++) {
+    const id = await selects[i].getAttribute('id');
+    const name = await selects[i].getAttribute('name');
+    const visible = await selects[i].isVisible();
+    const enabled = await selects[i].isEnabled();
+
+    // Get current selected value
+    let selectedValue = null;
+    try {
+      selectedValue = await selects[i].inputValue();
+    } catch (e) {
+      // Ignore if can't get value
+    }
+
+    console.log(`  [${i}] id="${id}", name="${name}", visible=${visible}, enabled=${enabled}, selectedValue="${selectedValue}"`);
+  }
+
+  // Discover all textarea fields
+  const textareas = await searchContext.locator('textarea').all();
+  console.log(`\nFound ${textareas.length} textarea fields:`);
+  for (let i = 0; i < textareas.length; i++) {
+    const id = await textareas[i].getAttribute('id');
+    const name = await textareas[i].getAttribute('name');
+    const placeholder = await textareas[i].getAttribute('placeholder');
+    const visible = await textareas[i].isVisible();
+    const enabled = await textareas[i].isEnabled();
+    console.log(`  [${i}] id="${id}", name="${name}", placeholder="${placeholder}", visible=${visible}, enabled=${enabled}`);
+  }
+
+  // EXTRA: Discover all buttons and links
+  console.log(`\n🔘 Discovering buttons and links...`);
+  const buttons = await searchContext.locator('button, input[type="button"], input[type="submit"], a.button, a[role="button"]').all();
+  console.log(`Found ${buttons.length} buttons/links:`);
+  for (let i = 0; i < Math.min(buttons.length, 10); i++) {
+    const id = await buttons[i].getAttribute('id');
+    const text = await buttons[i].innerText().catch(() => '');
+    const href = await buttons[i].getAttribute('href');
+    const visible = await buttons[i].isVisible();
+    console.log(`  [${i}] id="${id}", text="${text}", href="${href}", visible=${visible}`);
+  }
+
+  console.log(`=== END FORM DISCOVERY ===\n`);
+
+  // Write comprehensive debug report to file
+  console.log(`📊 Writing comprehensive debug report...`);
+  try {
+    const debugReport = {
+      timestamp: new Date().toISOString(),
+      urls: {
+        mainPage: page.url(),
+        iframe: await frameContent.evaluate(() => window.location.href).catch(() => 'N/A')
+      },
+      pageIndicators: {
+        hasBookingDetails: await frameContent.evaluate(() =>
+          document.body.innerText.includes('Booking Details') ||
+          document.body.innerText.includes('BOOKING DETAILS')
+        ).catch(() => false),
+        hasPurpose: await frameContent.evaluate(() =>
+          document.body.innerText.includes('Purpose') ||
+          document.body.innerText.includes('PURPOSE')
+        ).catch(() => false),
+        hasTimeFrom: await frameContent.evaluate(() =>
+          document.body.innerText.includes('TIME FROM') ||
+          document.body.innerText.includes('Time From')
+        ).catch(() => false),
+      },
+      elementCounts: {
+        inputs: inputs.length,
+        selects: selects.length,
+        textareas: textareas.length,
+        buttons: buttons.length
+      },
+      visibleInputs: [],
+      visibleSelects: [],
+      visibleTextareas: []
+    };
+
+    // Collect visible elements only
+    for (const inp of inputs) {
+      if (await inp.isVisible().catch(() => false)) {
+        debugReport.visibleInputs.push({
+          id: await inp.getAttribute('id'),
+          name: await inp.getAttribute('name'),
+          type: await inp.getAttribute('type'),
+          placeholder: await inp.getAttribute('placeholder'),
+          value: await inp.getAttribute('value')
+        });
+      }
+    }
+
+    for (const sel of selects) {
+      if (await sel.isVisible().catch(() => false)) {
+        debugReport.visibleSelects.push({
+          id: await sel.getAttribute('id'),
+          name: await sel.getAttribute('name'),
+          selectedValue: await sel.inputValue().catch(() => null)
+        });
+      }
+    }
+
+    for (const txt of textareas) {
+      if (await txt.isVisible().catch(() => false)) {
+        debugReport.visibleTextareas.push({
+          id: await txt.getAttribute('id'),
+          name: await txt.getAttribute('name'),
+          placeholder: await txt.getAttribute('placeholder')
+        });
+      }
+    }
+
+    fs.writeFileSync('./log/debug_report.json', JSON.stringify(debugReport, null, 2));
+    console.log(`✓ Debug report saved to: ./log/debug_report.json`);
+    console.log(`\n📋 QUICK SUMMARY:`);
+    console.log(`  Total inputs: ${inputs.length} (${debugReport.visibleInputs.length} visible)`);
+    console.log(`  Total selects: ${selects.length} (${debugReport.visibleSelects.length} visible)`);
+    console.log(`  Total textareas: ${textareas.length} (${debugReport.visibleTextareas.length} visible)`);
+  } catch (e) {
+    console.log(`✗ Could not write debug report: ${e.message}`);
+  }
+
+  // Continue regardless of container status - the form clearly exists
+  if (!containerFound) {
+    console.log(`\n⚠️  Note: Expected container not found, but form elements may still be accessible. Proceeding...`);
   }
 
   // Step 3: Wait for booking form to load
@@ -416,140 +648,484 @@ async function performBooking(frameContent, page, roomName, desiredStartTime, de
     console.log(`WARN: Could not click confirm button (might not exist yet): ${e.message}`);
   }
 
-  // Search for the specific start time dropdown by name or ID
-  console.log(`LOG: Looking for start time dropdown by name...`);
+  // Search for form fields using VISUAL/LABEL-BASED detection
+  console.log(`\n🔍 STEP 4: Locating form fields using VISUAL/LABEL-BASED detection...`);
+  console.log(`This approach searches for labels and finds associated input fields`);
 
-  // Try multiple selectors to find the dropdowns
+  // STRATEGY: Find elements by their visible labels on the page
   let startTimeDropdown = null;
   let endTimeDropdown = null;
-  let foundContext = null;
+  let foundDropdowns = false;
 
-  // Try by name attribute first in the iframe
-  try {
-    await frameContent.waitForSelector('select[name="bookingFormControl1$DropDownStartTime_c1"]', { timeout: 5000 });
-    startTimeDropdown = frameContent.locator('select[name="bookingFormControl1$DropDownStartTime_c1"]');
-    endTimeDropdown = frameContent.locator('select[name="bookingFormControl1$DropDownEndTime_c1"]');
-    foundContext = 'iframe (by name)';
-    console.log(`LOG: Found dropdowns in iframe by name attribute`);
-  } catch (e) {
-    console.log(`WARN: Could not find dropdowns by name in iframe, trying by ID...`);
+  // Helper function to find input by label text
+  async function findFieldByLabel(labelText, fieldType = 'select') {
+    console.log(`  Searching for ${fieldType} with label containing: "${labelText}"`);
 
-    // Try by ID in iframe
     try {
-      await frameContent.waitForSelector('select#bookingFormControl1_DropDownStartTime_c1', { timeout: 3000 });
-      startTimeDropdown = frameContent.locator('select#bookingFormControl1_DropDownStartTime_c1');
-      endTimeDropdown = frameContent.locator('select#bookingFormControl1_DropDownEndTime_c1');
-      foundContext = 'iframe (by ID)';
-      console.log(`LOG: Found dropdowns in iframe by ID`);
-    } catch (e2) {
-      console.log(`WARN: Could not find in iframe, trying main page context...`);
+      // Find all labels or text elements containing the label text
+      const labels = await frameContent.locator(`text=${labelText}`).all();
+      console.log(`    Found ${labels.length} elements with text "${labelText}"`);
 
-      // Try in main page context (not iframe)
-      try {
-        await page.waitForSelector('select[name="bookingFormControl1$DropDownStartTime_c1"]', { timeout: 3000 });
-        startTimeDropdown = page.locator('select[name="bookingFormControl1$DropDownStartTime_c1"]');
-        endTimeDropdown = page.locator('select[name="bookingFormControl1$DropDownEndTime_c1"]');
-        foundContext = 'main page (by name)';
-        console.log(`LOG: Found dropdowns in MAIN PAGE (not iframe) by name`);
-      } catch (e3) {
-        console.log(`ERROR: Could not find time dropdowns anywhere`);
-
-        // Debug: list all select elements in both contexts
-        console.log(`\n=== DEBUG: Select elements in IFRAME ===`);
-        const iframeSelects = await frameContent.locator('select').all();
-        console.log(`Found ${iframeSelects.length} select elements in iframe:`);
-        for (let i = 0; i < iframeSelects.length; i++) {
-          const name = await iframeSelects[i].getAttribute('name');
-          const id = await iframeSelects[i].getAttribute('id');
-          console.log(`  [${i}] name="${name}", id="${id}"`);
+      if (labels.length === 0) {
+        // Try case-insensitive
+        const labelsCI = await frameContent.locator(`text=/${labelText}/i`).all();
+        console.log(`    Found ${labelsCI.length} elements with text "${labelText}" (case-insensitive)`);
+        if (labelsCI.length > 0) {
+          labels.push(...labelsCI);
         }
-
-        console.log(`\n=== DEBUG: Select elements in MAIN PAGE ===`);
-        const pageSelects = await page.locator('select').all();
-        console.log(`Found ${pageSelects.length} select elements in main page:`);
-        for (let i = 0; i < pageSelects.length; i++) {
-          const name = await pageSelects[i].getAttribute('name');
-          const id = await pageSelects[i].getAttribute('id');
-          console.log(`  [${i}] name="${name}", id="${id}"`);
-        }
-
-        await page.screenshot({ path: './log/screenshot/debug_booking_form.png', fullPage: true });
-        throw new Error(`Could not find start/end time dropdowns on booking form`);
       }
+
+      for (const label of labels) {
+        try {
+          // Strategy 1: Look for the field as a sibling
+          const parent = label.locator('..');
+          const sibling = parent.locator(`${fieldType}`).first();
+
+          if (await sibling.count() > 0 && await sibling.isVisible()) {
+            console.log(`    ✓ Found ${fieldType} as sibling of label`);
+            return sibling;
+          }
+
+          // Strategy 2: Look for field as child of parent's parent
+          const grandparent = parent.locator('..');
+          const cousin = grandparent.locator(`${fieldType}`).first();
+
+          if (await cousin.count() > 0 && await cousin.isVisible()) {
+            console.log(`    ✓ Found ${fieldType} as cousin of label`);
+            return cousin;
+          }
+
+          // Strategy 3: Look for field in the same row (common table layout)
+          const row = label.locator('xpath=ancestor::tr[1]');
+          if (await row.count() > 0) {
+            const rowField = row.locator(`${fieldType}`).first();
+            if (await rowField.count() > 0 && await rowField.isVisible()) {
+              console.log(`    ✓ Found ${fieldType} in same table row as label`);
+              return rowField;
+            }
+          }
+
+          // Strategy 4: Look for field in same div container
+          const container = label.locator('xpath=ancestor::div[1]');
+          if (await container.count() > 0) {
+            const containerField = container.locator(`${fieldType}`).first();
+            if (await containerField.count() > 0 && await containerField.isVisible()) {
+              console.log(`    ✓ Found ${fieldType} in same div as label`);
+              return containerField;
+            }
+          }
+
+        } catch (e) {
+          console.log(`    ✗ Error searching near label: ${e.message}`);
+          continue;
+        }
+      }
+
+      console.log(`    ✗ Could not find ${fieldType} near label "${labelText}"`);
+      return null;
+
+    } catch (e) {
+      console.log(`    ✗ Error in findFieldByLabel: ${e.message}`);
+      return null;
     }
   }
 
-  console.log(`LOG: Using dropdowns from: ${foundContext}`);
+  // Use label-based detection to find TIME FROM and TO dropdowns
+  console.log(`\n⏰ Searching for TIME FROM and TO dropdowns by label...`);
 
-  // Step 4: Select start time
-  console.log(`LOG: Setting start time to ${desiredStartTime}`);
-  await startTimeDropdown.selectOption(desiredStartTime);
-  await frameContent.waitForTimeout(500);
-
-  // Step 5: Select end time
-  console.log(`LOG: Setting end time to ${desiredEndTime}`);
-  await endTimeDropdown.selectOption(desiredEndTime);
-  await frameContent.waitForTimeout(500);
-
-  // Step 6: Fill in booking purpose
-  console.log(`LOG: Filling booking purpose: "${purpose}"`);
-  await frameContent.locator('input#bookingFormControl1_TextboxPurpose_c1').fill(purpose);
-  await frameContent.waitForTimeout(500);
-
-  // Step 6: Select "Meeting" from usage dropdown
-  console.log(`LOG: Selecting "Meeting" from usage dropdown`);
-  await frameContent.selectOption('select#bookingFormControl1_DropDownSpaceBookingUsage_c1', 'Meeting');
-  await frameContent.waitForTimeout(500);
-
-  // Step 7: Add co-booker
-  console.log(`LOG: Opening co-booker dialog`);
-  await frameContent.locator('a#bookingFormControl1_GridCoBookers_ctl14').click();
-  await frameContent.waitForTimeout(2000);
-
-  // Step 8: Search for co-booker
-  console.log(`LOG: Searching for co-booker: "${cobookerName}"`);
-  await frameContent.locator('input.textbox.watermark').fill(cobookerName);
-  await frameContent.waitForTimeout(500);
-
-  await frameContent.locator('a#bookingFormControl1_DialogSearchCoBooker_searchPanel_buttonSearch').click();
-  await frameContent.waitForTimeout(2000);
-
-  // Step 9: Find and click the checkbox (first click - selection context)
-  console.log(`LOG: Selecting co-booker from search results`);
-  const checkboxes = await frameContent.locator('input[type="checkbox"]').all();
-
-  if (checkboxes.length === 0) {
-    throw new Error(`No co-booker found with name "${cobookerName}"`);
+  startTimeDropdown = await findFieldByLabel('TIME FROM', 'select');
+  if (!startTimeDropdown) {
+    // Try variations
+    startTimeDropdown = await findFieldByLabel('Time From', 'select');
+  }
+  if (!startTimeDropdown) {
+    startTimeDropdown = await findFieldByLabel('TIME FROM*', 'select');
   }
 
-  // Click the first checkbox and store its ID
-  const checkbox = checkboxes[0];
-  const checkboxId = await checkbox.getAttribute('id');
-  console.log(`LOG: Found checkbox with ID: ${checkboxId}`);
+  endTimeDropdown = await findFieldByLabel('TO*', 'select');
+  if (!endTimeDropdown) {
+    endTimeDropdown = await findFieldByLabel('TO:', 'select');
+  }
+  if (!endTimeDropdown) {
+    endTimeDropdown = await findFieldByLabel('Time To', 'select');
+  }
 
-  await checkbox.click();
-  await frameContent.waitForTimeout(1000);
+  if (startTimeDropdown && endTimeDropdown) {
+    foundDropdowns = true;
+    console.log(`✅ Successfully found BOTH time dropdowns using label-based detection!`);
 
-  // Step 10: Click confirm button in dialog
-  console.log(`LOG: Confirming co-booker selection`);
-  await frameContent.locator('a#bookingFormControl1_DialogSearchCoBooker_dialogBox_b1').click();
-  await frameContent.waitForTimeout(2000);
+    // Log the field details
+    try {
+      const startId = await startTimeDropdown.getAttribute('id');
+      const startName = await startTimeDropdown.getAttribute('name');
+      const endId = await endTimeDropdown.getAttribute('id');
+      const endName = await endTimeDropdown.getAttribute('name');
+      console.log(`  Start time dropdown: id="${startId}", name="${startName}"`);
+      console.log(`  End time dropdown: id="${endId}", name="${endName}"`);
+    } catch (e) {
+      console.log(`  Could not log field details: ${e.message}`);
+    }
+  } else {
+    console.log(`❌ Label-based detection failed for time dropdowns`);
+    console.log(`  Start time found: ${startTimeDropdown !== null}`);
+    console.log(`  End time found: ${endTimeDropdown !== null}`);
 
-  // Step 11: Click the checkbox again (second click - confirmation context)
-  console.log(`LOG: Confirming co-booker in main form`);
-  await frameContent.locator(`input#${checkboxId}`).click();
-  await frameContent.waitForTimeout(1000);
+    // Take screenshot before failing
+    await page.screenshot({ path: './log/screenshot/label_detection_failed.png', fullPage: true });
 
-  // Step 12: Accept terms and conditions
-  console.log(`LOG: Accepting terms and conditions`);
-  await frameContent.locator('input#bookingFormControl1_TermsAndConditionsCheckbox_c1').click();
+    // Try one more fallback: just get the first two visible select elements
+    console.log(`\n🔄 FALLBACK: Attempting to use first two visible select elements...`);
+    try {
+      const allVisibleSelects = [];
+      for (const sel of selects) {
+        if (await sel.isVisible()) {
+          allVisibleSelects.push(sel);
+        }
+      }
+
+      if (allVisibleSelects.length >= 2) {
+        // Check if these are time-related by looking at their options
+        const firstOptions = await allVisibleSelects[0].locator('option').allInnerTexts();
+        const secondOptions = await allVisibleSelects[1].locator('option').allInnerTexts();
+
+        const looksLikeTime = (opts) => opts.some(o => /\d{2}:\d{2}/.test(o));
+
+        if (looksLikeTime(firstOptions) && looksLikeTime(secondOptions)) {
+          startTimeDropdown = allVisibleSelects[0];
+          endTimeDropdown = allVisibleSelects[1];
+          foundDropdowns = true;
+          console.log(`  ✓ Using first two visible select elements as time dropdowns`);
+          console.log(`    First dropdown options: ${firstOptions.slice(0, 3).join(', ')}...`);
+          console.log(`    Second dropdown options: ${secondOptions.slice(0, 3).join(', ')}...`);
+        }
+      }
+    } catch (e) {
+      console.log(`  ✗ Fallback failed: ${e.message}`);
+    }
+  }
+
+  if (!foundDropdowns) {
+    await page.screenshot({ path: './log/screenshot/all_strategies_failed.png', fullPage: true });
+    throw new Error(`Could not find start/end time dropdowns after trying all strategies including label-based detection`);
+  }
+
+  // Step 5: Select start time
+  console.log(`\n⏰ STEP 5: Setting start time to ${desiredStartTime}`);
+  await startTimeDropdown.selectOption(desiredStartTime);
   await frameContent.waitForTimeout(500);
+  console.log(`✓ Start time set successfully`);
 
-  // Step 13: Submit booking
-  console.log(`LOG: Submitting booking...`);
-  await frameContent.locator('a#panel_UIButton2').click();
-  await page.waitForLoadState('networkidle');
-  await frameContent.waitForTimeout(3000);
+  // Step 6: Select end time
+  console.log(`\n⏰ STEP 6: Setting end time to ${desiredEndTime}`);
+  await endTimeDropdown.selectOption(desiredEndTime);
+  await frameContent.waitForTimeout(500);
+  console.log(`✓ End time set successfully`);
+
+  // Step 7: Fill in booking purpose using LABEL-BASED detection
+  console.log(`\n📝 STEP 7: Filling booking purpose: "${purpose}"`);
+  let purposeField = null;
+  let foundPurpose = false;
+
+  // Try to find PURPOSE field by label
+  purposeField = await findFieldByLabel('PURPOSE', 'input');
+  if (!purposeField) {
+    purposeField = await findFieldByLabel('PURPOSE*', 'input');
+  }
+  if (!purposeField) {
+    purposeField = await findFieldByLabel('Purpose', 'input');
+  }
+  if (!purposeField) {
+    // Maybe it's a textarea
+    purposeField = await findFieldByLabel('PURPOSE', 'textarea');
+  }
+  if (!purposeField) {
+    purposeField = await findFieldByLabel('PURPOSE*', 'textarea');
+  }
+
+  if (purposeField) {
+    foundPurpose = true;
+    console.log(`✅ Found purpose field using label-based detection!`);
+
+    try {
+      const id = await purposeField.getAttribute('id');
+      const name = await purposeField.getAttribute('name');
+      console.log(`  Purpose field: id="${id}", name="${name}"`);
+    } catch (e) {
+      console.log(`  Could not log field details: ${e.message}`);
+    }
+  } else {
+    console.log(`❌ Label-based detection failed for purpose field`);
+
+    // Fallback: Look for any visible text input or textarea
+    console.log(`\n🔄 FALLBACK: Searching for visible text input/textarea...`);
+    try {
+      for (const inp of inputs) {
+        const type = await inp.getAttribute('type');
+        const visible = await inp.isVisible();
+
+        if (visible && type === 'text') {
+          // Check if it's not a readonly/disabled field
+          const readonly = await inp.getAttribute('readonly');
+          const disabled = await inp.getAttribute('disabled');
+
+          if (!readonly && !disabled) {
+            purposeField = inp;
+            foundPurpose = true;
+            const id = await inp.getAttribute('id');
+            console.log(`  ✓ Using first editable text input: id="${id}"`);
+            break;
+          }
+        }
+      }
+
+      // If still not found, try textareas
+      if (!foundPurpose && textareas.length > 0) {
+        for (const txt of textareas) {
+          if (await txt.isVisible()) {
+            purposeField = txt;
+            foundPurpose = true;
+            const id = await txt.getAttribute('id');
+            console.log(`  ✓ Using first visible textarea: id="${id}"`);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`  ✗ Fallback failed: ${e.message}`);
+    }
+  }
+
+  if (!foundPurpose) {
+    await page.screenshot({ path: './log/screenshot/purpose_field_not_found.png', fullPage: true });
+    throw new Error(`Could not find purpose field after trying all strategies including label-based detection`);
+  }
+
+  await purposeField.fill(purpose);
+  await frameContent.waitForTimeout(500);
+  console.log(`✓ Purpose field filled successfully with: "${purpose}"`);
+
+  // Step 8: Find USE TYPE dropdown using LABEL-BASED detection
+  console.log(`\n🏢 STEP 8: Finding USE TYPE dropdown`);
+  let useTypeDropdown = await findFieldByLabel('USE TYPE', 'select');
+  if (!useTypeDropdown) {
+    useTypeDropdown = await findFieldByLabel('USE TYPE*', 'select');
+  }
+  if (!useTypeDropdown) {
+    useTypeDropdown = await findFieldByLabel('Use Type', 'select');
+  }
+
+  if (useTypeDropdown) {
+    console.log(`✅ Found USE TYPE dropdown using label-based detection`);
+    // Usually defaults to "AdHoc", leave as is
+    try {
+      const currentValue = await useTypeDropdown.inputValue();
+      console.log(`  Current value: "${currentValue}" (leaving as is)`);
+    } catch (e) {
+      console.log(`  Could not get current value`);
+    }
+  } else {
+    console.log(`⚠️  USE TYPE dropdown not found, continuing...`);
+  }
+
+  // Step 9: Find BOOKING USAGE dropdown using LABEL-BASED detection
+  console.log(`\n📊 STEP 9: Finding BOOKING USAGE dropdown`);
+  let usageDropdown = await findFieldByLabel('BOOKING USAGE', 'select');
+  if (!usageDropdown) {
+    usageDropdown = await findFieldByLabel('BOOKING USAGE:', 'select');
+  }
+  if (!usageDropdown) {
+    usageDropdown = await findFieldByLabel('Booking Usage', 'select');
+  }
+
+  if (usageDropdown) {
+    console.log(`✅ Found BOOKING USAGE dropdown using label-based detection`);
+    try {
+      // Try to select "Meeting" if available
+      await usageDropdown.selectOption('Meeting');
+      console.log(`  ✓ Set to "Meeting"`);
+    } catch (e) {
+      console.log(`  ⚠️  Could not select "Meeting": ${e.message}`);
+      console.log(`  Leaving as default value`);
+    }
+    await frameContent.waitForTimeout(500);
+  } else {
+    console.log(`⚠️  BOOKING USAGE dropdown not found, continuing...`);
+  }
+
+  // Step 10: Add co-booker (OPTIONAL - skip if not available)
+  console.log(`\n👥 STEP 10: Adding co-booker (optional)`);
+  console.log(`  Attempting to find ADD button for co-bookers...`);
+
+  let addButtonFound = false;
+  let addButton = null;
+
+  // Try to find ADD button by text
+  try {
+    addButton = await frameContent.locator('text=ADD').first();
+    if (await addButton.isVisible({ timeout: 3000 })) {
+      addButtonFound = true;
+      console.log(`  ✓ Found ADD button by text`);
+    }
+  } catch (e) {
+    console.log(`  ✗ ADD button not found by text: ${e.message}`);
+  }
+
+  // Try finding button with "+ ADD" text (with plus icon)
+  if (!addButtonFound) {
+    try {
+      addButton = await frameContent.locator('text=+ ADD').first();
+      if (await addButton.isVisible({ timeout: 3000 })) {
+        addButtonFound = true;
+        console.log(`  ✓ Found "+ ADD" button`);
+      }
+    } catch (e) {
+      console.log(`  ✗ "+ ADD" button not found`);
+    }
+  }
+
+  // Try finding by role and text
+  if (!addButtonFound) {
+    try {
+      addButton = await frameContent.locator('button:has-text("ADD"), a:has-text("ADD")').first();
+      if (await addButton.isVisible({ timeout: 3000 })) {
+        addButtonFound = true;
+        console.log(`  ✓ Found ADD button by has-text`);
+      }
+    } catch (e) {
+      console.log(`  ✗ ADD button not found by has-text`);
+    }
+  }
+
+  if (!addButtonFound) {
+    console.log(`  ⚠️  ADD button not found - skipping co-booker step (may be optional)`);
+    console.log(`  Proceeding without adding co-bookers...`);
+  } else {
+    console.log(`  Clicking ADD button to open co-booker dialog...`);
+    try {
+      await addButton.click({ timeout: 5000 });
+      await frameContent.waitForTimeout(2000);
+      console.log(`  ✓ ADD button clicked successfully`);
+
+      // Note: Skipping the actual co-booker search and selection for now
+      // as the dialog interaction might have changed
+      console.log(`  ⚠️  Co-booker dialog opened but not implementing search/selection yet`);
+      console.log(`  TODO: Implement co-booker search if needed`);
+
+      // Try to close the dialog or cancel
+      try {
+        const cancelButton = await frameContent.locator('text=Cancel, text=CANCEL, text=Close, text=CLOSE').first();
+        if (await cancelButton.isVisible({ timeout: 2000 })) {
+          await cancelButton.click();
+          console.log(`  ✓ Closed co-booker dialog`);
+        }
+      } catch (e) {
+        console.log(`  Could not find close button for dialog`);
+      }
+
+    } catch (e) {
+      console.log(`  ✗ Error clicking ADD button: ${e.message}`);
+      console.log(`  Continuing without co-bookers...`);
+    }
+  }
+
+  // Step 11: Click CONFIRM button to submit booking
+  console.log(`\n✅ STEP 11: Submitting booking by clicking CONFIRM button`);
+
+  let confirmButton = null;
+  let confirmFound = false;
+
+  // IMPORTANT: Look for the actual CONFIRM button, not the "3. Confirmation" breadcrumb
+  // The button should be in the top-right corner of the form
+
+  // Strategy 1: Look for button/link with EXACT text "CONFIRM" (not "Confirmation")
+  try {
+    const confirmButtons = await frameContent.locator('button, a, input[type="button"], input[type="submit"]').all();
+    console.log(`  Found ${confirmButtons.length} total buttons/links`);
+
+    for (const btn of confirmButtons) {
+      try {
+        const text = (await btn.innerText()).trim();
+        const visible = await btn.isVisible();
+
+        // Look for EXACT match "CONFIRM" (not "Confirmation")
+        if (visible && text === 'CONFIRM') {
+          confirmButton = btn;
+          confirmFound = true;
+          const id = await btn.getAttribute('id');
+          const className = await btn.getAttribute('class');
+          console.log(`  ✓ Found CONFIRM button: id="${id}", class="${className}"`);
+          break;
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+  } catch (e) {
+    console.log(`  ✗ Error searching for CONFIRM button: ${e.message}`);
+  }
+
+  // Strategy 2: Look in specific areas (bottom-right or top-right of form)
+  if (!confirmFound) {
+    console.log(`  Trying to find button by looking at all visible buttons...`);
+    try {
+      const allButtons = await frameContent.locator('button, a[role="button"], input[type="button"], input[type="submit"]').all();
+
+      for (const btn of allButtons) {
+        try {
+          const text = await btn.innerText();
+          const visible = await btn.isVisible();
+          const id = await btn.getAttribute('id');
+
+          // Check if it's a submit-type button
+          if (visible && text && (
+            text.trim() === 'CONFIRM' ||
+            text.trim() === 'Submit' ||
+            text.trim() === 'SUBMIT' ||
+            (id && (id.includes('Confirm') || id.includes('Submit') || id.includes('Button2')))
+          )) {
+            // Make sure it's NOT the breadcrumb (which would be an <a> with href="javascript:v()")
+            const href = await btn.getAttribute('href');
+            const tagName = await btn.evaluate(el => el.tagName.toLowerCase());
+
+            if (href === 'javascript:v();' && text.includes('Confirmation')) {
+              console.log(`  ⚠️  Skipping breadcrumb: "${text}"`);
+              continue; // Skip the breadcrumb
+            }
+
+            confirmButton = btn;
+            confirmFound = true;
+            console.log(`  ✓ Found submit button: text="${text}", id="${id}", tag="${tagName}"`);
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+    } catch (e) {
+      console.log(`  ✗ Error in button search: ${e.message}`);
+    }
+  }
+
+  if (!confirmFound) {
+    await page.screenshot({ path: './log/screenshot/confirm_button_not_found.png', fullPage: true });
+    throw new Error(`Could not find CONFIRM button to submit booking`);
+  }
+
+  // Click the confirm button with force if overlay blocking
+  console.log(`  Clicking CONFIRM button to submit booking...`);
+  try {
+    await confirmButton.click({ force: true }); // Use force to bypass overlays
+    console.log(`  ✓ CONFIRM button clicked`);
+  } catch (e) {
+    console.log(`  ✗ Normal click failed, trying with force: ${e.message}`);
+    await confirmButton.click({ force: true, timeout: 10000 });
+    console.log(`  ✓ CONFIRM button clicked with force`);
+  }
+
+  // Wait for submission to complete
+  console.log(`  Waiting for booking submission to complete...`);
+  await page.waitForLoadState('networkidle', { timeout: 15000 });
+  await frameContent.waitForTimeout(5000);
 
   // Step 14: Take screenshot as confirmation
   console.log(`LOG: Taking confirmation screenshot`);

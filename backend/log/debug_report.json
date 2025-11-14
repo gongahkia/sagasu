@@ -1,0 +1,164 @@
+{
+  "timestamp": "2025-11-14T12:39:14.603Z",
+  "urls": {
+    "mainPage": "https://fbs.intranet.smu.edu.sg/home",
+    "iframe": "https://fbs.intranet.smu.edu.sg/modules/BigSpace/BookingCalendar/Calendar.aspx?TYPE=%23suzW4%2b2DOMVtgb1IZ%2bhGO4rvaLP7%2fkSr%2baBUfFmr3PGILDIChm3xmtiSfZoLof1T&MODE=%23KzX4PbPksfHsFId6khlqn52MDKzKaNqyfw6nQcKSeU0%3d&SpaceType=&Building=&Floor=&Room=&"
+  },
+  "pageIndicators": {
+    "hasBookingDetails": true,
+    "hasPurpose": false,
+    "hasTimeFrom": false
+  },
+  "elementCounts": {
+    "inputs": 94,
+    "selects": 3,
+    "textareas": 0,
+    "buttons": 8
+  },
+  "visibleInputs": [
+    {
+      "id": "DateBookingFrom_c1_textDate",
+      "name": "DateBookingFrom_c1$textDate",
+      "type": "text",
+      "placeholder": null,
+      "value": "20-Nov-2025"
+    },
+    {
+      "id": "DropMultiBuildingList_c1_textItem",
+      "name": "DropMultiBuildingList_c1_textItem",
+      "type": "text",
+      "placeholder": null,
+      "value": "Yong Pung How School of Law/Kwa Geok Choo Law Library"
+    },
+    {
+      "id": "DropMultiFloorList_c1_textItem",
+      "name": "DropMultiFloorList_c1_textItem",
+      "type": "text",
+      "placeholder": null,
+      "value": "Level  4, Level  5"
+    },
+    {
+      "id": "DropMultiFacilityTypeList_c1_textItem",
+      "name": "DropMultiFacilityTypeList_c1_textItem",
+      "type": "text",
+      "placeholder": null,
+      "value": "Project Room"
+    },
+    {
+      "id": "DropMultiEquipmentList_c1_textItem",
+      "name": "DropMultiEquipmentList_c1_textItem",
+      "type": "text",
+      "placeholder": null,
+      "value": "TV Panel"
+    },
+    {
+      "id": null,
+      "name": null,
+      "type": "text",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl02_checkMultiple",
+      "name": "GridResults$gv$ctl02$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl03_checkMultiple",
+      "name": "GridResults$gv$ctl03$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl04_checkMultiple",
+      "name": "GridResults$gv$ctl04$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl05_checkMultiple",
+      "name": "GridResults$gv$ctl05$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl06_checkMultiple",
+      "name": "GridResults$gv$ctl06$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl07_checkMultiple",
+      "name": "GridResults$gv$ctl07$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl08_checkMultiple",
+      "name": "GridResults$gv$ctl08$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl09_checkMultiple",
+      "name": "GridResults$gv$ctl09$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl10_checkMultiple",
+      "name": "GridResults$gv$ctl10$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl11_checkMultiple",
+      "name": "GridResults$gv$ctl11$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl12_checkMultiple",
+      "name": "GridResults$gv$ctl12$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    },
+    {
+      "id": "GridResults_gv_ctl13_checkMultiple",
+      "name": "GridResults$gv$ctl13$checkMultiple",
+      "type": "checkbox",
+      "placeholder": null,
+      "value": null
+    }
+  ],
+  "visibleSelects": [
+    {
+      "id": "TimeFrom_c1_ctl04",
+      "name": "TimeFrom_c1$ctl04",
+      "selectedValue": "08:00"
+    },
+    {
+      "id": "TimeTo_c1_ctl04",
+      "name": "TimeTo_c1$ctl04",
+      "selectedValue": "22:00"
+    },
+    {
+      "id": "DropCapacity_c1",
+      "name": "DropCapacity_c1",
+      "selectedValue": "From6To10Pax"
+    }
+  ],
+  "visibleTextareas": []
+}
