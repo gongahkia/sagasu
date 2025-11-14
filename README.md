@@ -1,10 +1,3 @@
-## Status
-
-✅ **Room Availability Scraper** - Fully functional
-❌ **Booking Automation** - Archived (see `archived/backend/`)
-
-The booking automation feature has been archived due to the complexity of SMU's modern SPA-based booking form. The scraper continues to work perfectly and updates daily at 8:00 AM SGT. 
-
 [![](https://img.shields.io/badge/sagasu_4.0.0-passing-green)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
 ![](https://github.com/gongahkia/sagasu-4/actions/workflows/scrape.yml/badge.svg)
 
