@@ -9,8 +9,8 @@ const GITHUB_RAW_URL = isDev
   : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_log.json';
 
 const BOOKINGS_URL = isDev
-  ? '/data/bookings_log.json'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/bookings_log.json';
+  ? '/data/scraped_bookings.json'
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_bookings.json';
 
 export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
   const [data, setData] = useState(null);
@@ -50,35 +50,51 @@ export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
   return { data, loading, error, refetch: fetchData };
 };
 
-export const useBookingData = () => {
-  const [bookings, setBookings] = useState(null);
+export const useBookingData = (autoRefresh = false, intervalMs = 30000) => {
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(BOOKINGS_URL + '?t=' + Date.now());
+  const fetchBookings = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(BOOKINGS_URL + '?t=' + Date.now());
 
-        if (!response.ok) {
-          // Bookings file might not exist yet
-          setBookings({ metadata: { total_bookings: 0 }, bookings: [] });
-          return;
-        }
-
-        const data = await response.json();
-        setBookings(data);
-      } catch (err) {
-        // File doesn't exist yet, use empty data
-        setBookings({ metadata: { total_bookings: 0 }, bookings: [] });
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        // Bookings file might not exist yet
+        setData({
+          metadata: { success: false },
+          statistics: { total_bookings: 0, confirmed_bookings: 0, pending_bookings: 0, total_price: 0 },
+          bookings: []
+        });
+        return;
       }
-    };
 
+      const jsonData = await response.json();
+      setData(jsonData);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching bookings data:', err);
+      // File doesn't exist yet, use empty data
+      setData({
+        metadata: { success: false },
+        statistics: { total_bookings: 0, confirmed_bookings: 0, pending_bookings: 0, total_price: 0 },
+        bookings: []
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchBookings();
-  }, []);
 
-  return { bookings, loading, error };
+    if (autoRefresh) {
+      const interval = setInterval(fetchBookings, intervalMs);
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh, intervalMs]);
+
+  return { data, loading, error, refetch: fetchBookings };
 };
