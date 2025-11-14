@@ -1,4 +1,0 @@
-dotenv
-questionary
-datetime
-python-dateutil
