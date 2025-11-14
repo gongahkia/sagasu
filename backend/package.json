@@ -5,6 +5,7 @@
   "scripts": {
     "scrape": "node scraper-prod.js",
     "scrape:bookings": "node scraper-bookings.js",
+    "scrape:tasks": "node scraper-tasks.js",
     "scrape:all": "node scraper-orchestrator.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -158,18 +158,59 @@ const outputLog = './log/scraped_tasks.json';
 
     for (const row of rows) {
       const cells = await row.locator('td').all();
-      if (cells.length > 0) {
-        const rowData = [];
-        for (const cell of cells) {
-          const text = (await cell.innerText()).trim();
-          rowData.push(text);
-        }
-        tasks.push(rowData);
-        console.log(`LOG: Row data: ${JSON.stringify(rowData)}`);
+      if (cells.length >= 8) {
+        // Extract text from each cell
+        const referenceNumber = (await cells[1].innerText()).trim();
+        const dateTimeRaw = (await cells[2].innerText()).trim();
+        const building = (await cells[3].innerText()).trim();
+        const roomName = (await cells[4].innerText()).trim();
+        const taskType = (await cells[5].innerText()).trim();
+        const requestedBy = (await cells[6].innerText()).trim();
+        const status = (await cells[7].innerText()).trim();
+
+        // Parse date and time from format: "15-Nov-2025\n16:00 - 19:00 (3hrs)"
+        const dateTimeLines = dateTimeRaw.split('\n');
+        const datePart = dateTimeLines[0] || '';
+        const timePart = dateTimeLines[1] || '';
+
+        // Extract date (e.g., "15-Nov-2025")
+        const dateMatch = datePart.match(/(\d{2}-[A-Za-z]{3}-\d{4})/);
+        const date = dateMatch ? dateMatch[1] : '';
+
+        // Extract time range (e.g., "16:00 - 19:00")
+        const timeMatch = timePart.match(/(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+        const startTime = timeMatch ? timeMatch[1] : '';
+        const endTime = timeMatch ? timeMatch[2] : '';
+
+        // Extract duration (e.g., "3hrs")
+        const durationMatch = timePart.match(/\((\d+(?:\.\d+)?)hrs?\)/);
+        const durationHours = durationMatch ? parseFloat(durationMatch[1]) : 0;
+
+        const task = {
+          reference_number: referenceNumber,
+          date: date,
+          start_time: startTime,
+          end_time: endTime,
+          duration_hours: durationHours,
+          building: building,
+          room_name: roomName,
+          task_type: taskType,
+          requested_by: requestedBy,
+          status: status,
+          raw_datetime: dateTimeRaw
+        };
+
+        tasks.push(task);
+        console.log(`LOG: Parsed task: ${referenceNumber} - ${taskType} - ${roomName} on ${date} ${startTime}-${endTime}`);
       }
     }
 
-    // 8. Create log data
+    // 8. Calculate statistics
+    const pendingTasks = tasks.filter(t => t.status === 'Pending Confirmation').length;
+    const approvedTasks = tasks.filter(t => t.status === 'Approved').length;
+    const rejectedTasks = tasks.filter(t => t.status === 'Rejected').length;
+
+    // 9. Create log data
     const scrapeEndTime = Date.now();
     const logData = {
       metadata: {
@@ -180,8 +221,13 @@ const outputLog = './log/scraped_tasks.json';
         error: null,
         scraper_version: "tasks-v1.0.0"
       },
-      raw_tasks: tasks,
-      tasks_count: tasks.length
+      statistics: {
+        total_tasks: tasks.length,
+        pending_tasks: pendingTasks,
+        approved_tasks: approvedTasks,
+        rejected_tasks: rejectedTasks
+      },
+      tasks: tasks
     };
 
     fs.writeFileSync(outputLog, JSON.stringify(logData, null, 2));
@@ -203,8 +249,13 @@ const outputLog = './log/scraped_tasks.json';
         error: error.message,
         scraper_version: "tasks-v1.0.0"
       },
-      raw_tasks: [],
-      tasks_count: 0
+      statistics: {
+        total_tasks: 0,
+        pending_tasks: 0,
+        approved_tasks: 0,
+        rejected_tasks: 0
+      },
+      tasks: []
     };
 
     fs.writeFileSync(outputLog, JSON.stringify(errorLogData, null, 2));

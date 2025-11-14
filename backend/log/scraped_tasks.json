@@ -1,0 +1,31 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "scraped_at": "2025-11-14T13:25:03.052Z",
+    "scrape_duration_ms": 23529,
+    "success": true,
+    "error": null,
+    "scraper_version": "tasks-v1.0.0"
+  },
+  "statistics": {
+    "total_tasks": 1,
+    "pending_tasks": 1,
+    "approved_tasks": 0,
+    "rejected_tasks": 0
+  },
+  "tasks": [
+    {
+      "reference_number": "BK-20251114-000853",
+      "date": "15-Nov-2025",
+      "start_time": "16:00",
+      "end_time": "19:00",
+      "duration_hours": 3,
+      "building": "Li Ka Shing Library",
+      "room_name": "LKSLIB Project Room 4-2",
+      "task_type": "Booking Request",
+      "requested_by": "TAY WEE LOON, ASTIN",
+      "status": "Pending Confirmation",
+      "raw_datetime": "15-Nov-2025\n16:00 - 19:00 (3hrs)"
+    }
+  ]
+}

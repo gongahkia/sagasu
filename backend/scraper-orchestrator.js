@@ -75,6 +75,13 @@ function runScript(scriptPath, scriptName) {
     );
     results.push(scraperBookingsResult);
 
+    // 3. Run the tasks scraper (user's task list)
+    const scraperTasksResult = await runScript(
+      './scraper-tasks.js',
+      'User Tasks Scraper (scraper-tasks.js)'
+    );
+    results.push(scraperTasksResult);
+
     // 3. Create summary report
     const orchestrationEndTime = Date.now();
     const totalDuration = ((orchestrationEndTime - orchestrationStartTime) / 1000).toFixed(2);
@@ -93,6 +100,7 @@ function runScript(scriptPath, scriptName) {
     try {
       const roomsLog = JSON.parse(fs.readFileSync('./log/scraped_log.json', 'utf8'));
       const bookingsLog = JSON.parse(fs.readFileSync('./log/scraped_bookings.json', 'utf8'));
+      const tasksLog = JSON.parse(fs.readFileSync('./log/scraped_tasks.json', 'utf8'));
 
       console.log('\n' + '='.repeat(60));
       console.log('DATA SUMMARY');
@@ -116,6 +124,16 @@ function runScript(scriptPath, scriptName) {
         console.log(`  - Total price: $${bookingsLog.statistics.total_price.toFixed(2)}`);
       } else {
         console.log(`\nUser Bookings: FAILED - ${bookingsLog.metadata.error}`);
+      }
+
+      if (tasksLog.metadata.success) {
+        console.log(`\nUser Tasks:`);
+        console.log(`  - Total tasks: ${tasksLog.statistics.total_tasks}`);
+        console.log(`  - Pending: ${tasksLog.statistics.pending_tasks}`);
+        console.log(`  - Approved: ${tasksLog.statistics.approved_tasks}`);
+        console.log(`  - Rejected: ${tasksLog.statistics.rejected_tasks}`);
+      } else {
+        console.log(`\nUser Tasks: FAILED - ${tasksLog.metadata.error}`);
       }
 
       console.log('='.repeat(60) + '\n');

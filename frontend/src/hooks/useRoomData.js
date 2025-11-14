@@ -12,6 +12,10 @@ const BOOKINGS_URL = isDev
   ? '/data/scraped_bookings.json'
   : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_bookings.json';
 
+const TASKS_URL = isDev
+  ? '/data/scraped_tasks.json'
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_tasks.json';
+
 export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -97,4 +101,53 @@ export const useBookingData = (autoRefresh = false, intervalMs = 30000) => {
   }, [autoRefresh, intervalMs]);
 
   return { data, loading, error, refetch: fetchBookings };
+};
+
+export const useTaskData = (autoRefresh = false, intervalMs = 30000) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(TASKS_URL + '?t=' + Date.now());
+
+      if (!response.ok) {
+        // Tasks file might not exist yet
+        setData({
+          metadata: { success: false },
+          statistics: { total_tasks: 0, pending_tasks: 0, approved_tasks: 0, rejected_tasks: 0 },
+          tasks: []
+        });
+        return;
+      }
+
+      const jsonData = await response.json();
+      setData(jsonData);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching tasks data:', err);
+      // File doesn't exist yet, use empty data
+      setData({
+        metadata: { success: false },
+        statistics: { total_tasks: 0, pending_tasks: 0, approved_tasks: 0, rejected_tasks: 0 },
+        tasks: []
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasks();
+
+    if (autoRefresh) {
+      const interval = setInterval(fetchTasks, intervalMs);
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh, intervalMs]);
+
+  return { data, loading, error, refetch: fetchTasks };
 };
