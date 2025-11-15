@@ -184,7 +184,7 @@ export default function CalendarView({ rooms, systemStatus }) {
           {/* Current time line across all rooms */}
           <div
             className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10 pointer-events-none"
-            style={{ left: `calc(12rem + ${currentTimePosition}%)` }}
+            style={{ left: `calc(12rem + (100% - 12rem) * ${currentTimePosition / 100})` }}
           />
         </div>
 
