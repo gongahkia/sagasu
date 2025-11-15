@@ -88,7 +88,7 @@ export default function CalendarView({ rooms, systemStatus }) {
 
   return (
     <div className="hidden md:block card overflow-x-auto">
-      <div className="min-w-[1200px]">
+      <div className="min-w-[1200px] relative">
         {/* Header with time markers */}
         <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
           <div className="w-48 flex-shrink-0 p-3 font-semibold border-r border-gray-200">
@@ -107,11 +107,22 @@ export default function CalendarView({ rooms, systemStatus }) {
                 </div>
               ))}
             </div>
+
+            {/* Current time indicator - only in header */}
+            <div
+              className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-20 pointer-events-none"
+              style={{ left: `${currentTimePosition}%` }}
+            >
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-500 rounded-full" />
+              <div className="absolute top-0 left-2 bg-blue-500 text-white text-xs px-1 rounded whitespace-nowrap">
+                {currentTimeString}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Room rows */}
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-200 relative">
           {rooms.map((room) => {
             const blocks = getRoomBlocks(room);
 
@@ -165,21 +176,16 @@ export default function CalendarView({ rooms, systemStatus }) {
                       )}
                     </div>
                   ))}
-
-                  {/* Current time indicator */}
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10"
-                    style={{ left: `${currentTimePosition}%` }}
-                  >
-                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-500 rounded-full" />
-                    <div className="absolute top-0 left-2 bg-blue-500 text-white text-xs px-1 rounded whitespace-nowrap">
-                      {currentTimeString}
-                    </div>
-                  </div>
                 </div>
               </div>
             );
           })}
+
+          {/* Current time line across all rooms */}
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10 pointer-events-none"
+            style={{ left: `calc(12rem + ${currentTimePosition}%)` }}
+          />
         </div>
 
         {/* Legend */}
@@ -200,7 +206,7 @@ export default function CalendarView({ rooms, systemStatus }) {
             </div>
             <div className="flex items-center gap-2">
               <div className="w-0.5 h-4 bg-blue-500"></div>
-              <span>Current Time ({currentTimeString})</span>
+              <span>Current Time</span>
             </div>
           </div>
         </div>
