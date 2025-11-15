@@ -58,7 +58,7 @@ For those interested, `Sagasu 4` is configured with the below environment variab
 | `SCRAPE_FACILITY_TYPES` | Types of facilities to search (comma-separated) | 
 | `SCRAPE_EQUIPMENT` | Required equipment (comma-separated) | 
 
-#### Buildings
+### Buildings
 
 Available building options (exact names, case-sensitive):
 
@@ -73,9 +73,7 @@ Available building options (exact names, case-sensitive):
 - `Sports & Recreation Centre`
 - `Campus Centre`
 
-**Note:** Use exact building names as they appear in SMU FBS. Multiple buildings can be specified by comma-separation.
-
-#### Floors
+### Floors
 
 Available floor options (exact names, case-sensitive):
 
@@ -89,9 +87,7 @@ Available floor options (exact names, case-sensitive):
 - `Level 6`
 - `Level 7`
 
-**Note:** Not all floors exist in all buildings. The scraper will only return results for valid floor-building combinations.
-
-#### Facility Types
+### Facility Types
 
 Available facility type options:
 
@@ -104,7 +100,7 @@ Available facility type options:
 - `Auditorium`
 - `Classroom`
 
-#### Equipment
+### Equipment
 
 Available equipment options:
 
@@ -114,65 +110,6 @@ Available equipment options:
 - `Video Conference System`
 - `Computer`
 - `Audio System`
-
-**Note:** Equipment availability varies by room and building. Specifying equipment will filter results to only rooms with that equipment.
-
-### Local Setup (Development)
-
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-
-2. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Edit `.env` with your configuration:
-   ```bash
-   nano .env  # or use your preferred editor
-   ```
-
-4. Run the scrapers:
-   ```bash
-   # Run all scrapers (rooms, bookings, tasks)
-   npm run scrape:all
-
-   # Or run individual scrapers
-   npm run scrape           # Rooms only
-   npm run scrape:bookings  # Bookings only
-   npm run scrape:tasks     # Tasks only
-   ```
-
-### GitHub Actions Setup (Production)
-
-1. Go to your repository settings → Secrets and variables → Actions
-
-2. Add the following secrets:
-   - `SMU_EMAIL` (required)
-   - `SMU_PASSWORD` (required)
-   - `SCRAPE_START_TIME` (required)
-   - `SCRAPE_END_TIME` (required)
-   - `SCRAPE_ROOM_CAPACITY` (required)
-   - `SCRAPE_BUILDING_NAMES` (required)
-   - `SCRAPE_FLOOR_NAMES` (required)
-   - `SCRAPE_FACILITY_TYPES` (required)
-   - `SCRAPE_EQUIPMENT` (required)
-
-   **Note:** `SCRAPE_DATE` is not needed as a secret - the workflow automatically uses the current date (TODAY) for daily scheduled runs.
-
-3. The workflow will automatically run daily at 8:00 AM SGT (00:00 UTC) and scrape data for that day
-
-4. You can also trigger it manually from the Actions tab
-
-### Important Notes
-
-- **Security:** Never commit your `.env` file or expose your SMU credentials
-- **Date Format:** Must use `DD-MMM-YYYY` format (e.g., `20-Nov-2025`, not `20-11-2025`)
-- **Time Format:** Must use 24-hour format `HH:MM` (e.g., `08:00`, `22:00`)
-- **Comma-separated values:** No spaces after commas unless the value itself contains spaces
-- **Case sensitivity:** Building names, floor names, and facility types are case-sensitive and must match exactly as shown above
 
 ## Other notes
 
