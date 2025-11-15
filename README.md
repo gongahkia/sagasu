@@ -28,35 +28,35 @@ See [this](https://github.com/gongahkia/sagasu#rationale), [this](https://github
 
 ## Usage
 
-...
+`Sagasu 4` was primarily made for my own use.
+
+The easiest way to view `Sagasu 4` is via the ***Live Web App*** at [sagasu-4.pages.dev](https://sagasu-4.pages.dev/).
+
+It's also the only way to access it. 
 
 ## Configuration
 
-### Environment Variables
+For those interested, `Sagasu 4` is configured with the below environment variables locally in an `.env` file for dev and [Github Secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) for prod.
 
-Sagasu 4 uses environment variables for configuration. You can configure these either locally in a `.env` file (for development) or as GitHub Secrets (for the automated workflow).
+### Auth
 
-#### Required Variables
+| Variable | Description | 
+|----------|-------------|
+| `SMU_EMAIL` | Your SMU email address | 
+| `SMU_PASSWORD` | Your SMU password | 
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `SMU_EMAIL` | Your SMU email address | `your.email@smu.edu.sg` |
-| `SMU_PASSWORD` | Your SMU password | `your_password` |
+### Scraping settings
 
-#### Scraper Configuration
-
-These variables control what rooms are scraped and when:
-
-| Variable | Description | Possible Values | Example |
-|----------|-------------|-----------------|---------|
-| `SCRAPE_DATE` | Date to check room availability | `TODAY` for current date, or any valid date in `DD-MMM-YYYY` format | `TODAY` or `20-Nov-2025` |
-| `SCRAPE_START_TIME` | Start of time window to check | Time in `HH:MM` format (24-hour) | `08:00` |
-| `SCRAPE_END_TIME` | End of time window to check | Time in `HH:MM` format (24-hour) | `22:00` |
-| `SCRAPE_ROOM_CAPACITY` | Filter rooms by capacity | `From2To5Pax`, `From6To10Pax`, `From11To15Pax`, `From16To20Pax`, `Above20Pax` | `From6To10Pax` |
-| `SCRAPE_BUILDING_NAMES` | Buildings to search (comma-separated) | See [Buildings List](#buildings) below | `Yong Pung How School of Law/Kwa Geok Choo Law Library` |
-| `SCRAPE_FLOOR_NAMES` | Floors to search (comma-separated) | See [Floors List](#floors) below | `Level 4,Level 5` |
-| `SCRAPE_FACILITY_TYPES` | Types of facilities to search (comma-separated) | See [Facility Types](#facility-types) below | `Project Room` |
-| `SCRAPE_EQUIPMENT` | Required equipment (comma-separated) | See [Equipment List](#equipment) below | `TV Panel` |
+| Variable | Description | 
+|----------|-------------|
+| `SCRAPE_DATE` | Date to check room availability | 
+| `SCRAPE_START_TIME` | Start of time window to check | 
+| `SCRAPE_END_TIME` | End of time window to check | 
+| `SCRAPE_ROOM_CAPACITY` | Filter rooms by capacity | 
+| `SCRAPE_BUILDING_NAMES` | Buildings to search (comma-separated) 
+| `SCRAPE_FLOOR_NAMES` | Floors to search (comma-separated) | 
+| `SCRAPE_FACILITY_TYPES` | Types of facilities to search (comma-separated) | 
+| `SCRAPE_EQUIPMENT` | Required equipment (comma-separated) | 
 
 #### Buildings
 
