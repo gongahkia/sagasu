@@ -34,7 +34,7 @@ jobs:
         working-directory: ./backend
         run: npx playwright install chromium --with-deps
 
-      - name: Run scraper
+      - name: Run scraper orchestrator
         working-directory: ./backend
         env:
           SMU_EMAIL: ${{ secrets.SMU_EMAIL }}
@@ -47,12 +47,12 @@ jobs:
           SCRAPE_FLOOR_NAMES: ${{ secrets.SCRAPE_FLOOR_NAMES }}
           SCRAPE_FACILITY_TYPES: ${{ secrets.SCRAPE_FACILITY_TYPES }}
           SCRAPE_EQUIPMENT: ${{ secrets.SCRAPE_EQUIPMENT }}
-        run: node scraper-prod.js
+        run: node scraper-orchestrator.js
 
       - name: Check if data changed
         id: check_changes
         run: |
-          if git diff --quiet backend/log/scraped_log.json; then
+          if git diff --quiet backend/log/scraped_log.json backend/log/scraped_bookings.json backend/log/scraped_tasks.json; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -63,8 +63,8 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add backend/log/scraped_log.json
-          git commit -m "chore: update room availability data [skip ci]"
+          git add backend/log/scraped_log.json backend/log/scraped_bookings.json backend/log/scraped_tasks.json
+          git commit -m "chore: update scraped data (rooms, bookings, tasks) [skip ci]"
           git push
 
       - name: Upload artifacts on failure

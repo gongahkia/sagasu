@@ -6,6 +6,8 @@ import RoomCard from './components/RoomCard';
 import BookingCard from './components/BookingCard';
 import MyBookings from './components/MyBookings';
 import MyTasks from './components/MyTasks';
+import MobileBottomNav from './components/MobileBottomNav';
+import CalendarView from './components/CalendarView';
 import { useRoomData, useBookingData, useTaskData } from './hooks/useRoomData';
 import { useFavorites } from './hooks/useFavorites';
 import { filterRooms, getUniqueValues, sortRooms } from './utils/filters';
@@ -115,9 +117,9 @@ function App() {
         lastUpdated={data.metadata.scraped_at}
       />
 
-      <main className="container mx-auto px-4 py-8 space-y-6">
-        {/* Tab Navigation */}
-        <div className="flex gap-2 border-b border-gray-200 overflow-x-auto">
+      <main className="container mx-auto px-4 py-8 pb-24 md:pb-8 space-y-6">
+        {/* Tab Navigation - Hidden on mobile, shown on desktop */}
+        <div className="hidden md:flex gap-2 border-b border-gray-200 overflow-x-auto">
           <button
             onClick={() => setActiveTab('rooms')}
             className={`px-6 py-3 font-medium transition-colors border-b-2 whitespace-nowrap ${
@@ -224,8 +226,9 @@ function App() {
                     className={`p-2 rounded-md transition-colors ${
                       viewMode === 'grid'
                         ? 'bg-spacemacs-light-accent text-white'
-                        : 'bg-gray-100 text-gray-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
+                    title="Grid view"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
@@ -236,18 +239,32 @@ function App() {
                     className={`p-2 rounded-md transition-colors ${
                       viewMode === 'list'
                         ? 'bg-spacemacs-light-accent text-white'
-                        : 'bg-gray-100 text-gray-700'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
+                    title="List view"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('calendar')}
+                    className={`p-2 rounded-md transition-colors ${
+                      viewMode === 'calendar'
+                        ? 'bg-spacemacs-light-accent text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                    title="Calendar view (desktop only)"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* Rooms Grid/List */}
+            {/* Rooms Grid/List/Calendar */}
             {filteredRooms.length === 0 ? (
               <div className="card text-center py-12">
                 <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,6 +274,8 @@ function App() {
                   No rooms match your filters
                 </p>
               </div>
+            ) : viewMode === 'calendar' ? (
+              <CalendarView rooms={filteredRooms} systemStatus={systemStatus} />
             ) : (
               <div className={
                 viewMode === 'grid'
@@ -322,6 +341,9 @@ function App() {
           </p>
         </footer>
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 }
