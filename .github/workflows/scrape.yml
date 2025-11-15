@@ -39,7 +39,7 @@ jobs:
         env:
           SMU_EMAIL: ${{ secrets.SMU_EMAIL }}
           SMU_PASSWORD: ${{ secrets.SMU_PASSWORD }}
-          SCRAPE_DATE: ${{ secrets.SCRAPE_DATE }}
+          SCRAPE_DATE: TODAY  # Always use current date for scheduled runs
           SCRAPE_START_TIME: ${{ secrets.SCRAPE_START_TIME }}
           SCRAPE_END_TIME: ${{ secrets.SCRAPE_END_TIME }}
           SCRAPE_ROOM_CAPACITY: ${{ secrets.SCRAPE_ROOM_CAPACITY }}

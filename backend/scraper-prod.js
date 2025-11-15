@@ -30,6 +30,15 @@ function timeslotStr(start, end) {
   return `${minutesToTimeStr(start)}-${minutesToTimeStr(end)}`;
 }
 
+function getTodayDate() {
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, '0');
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = monthNames[today.getMonth()];
+  const year = today.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 function parseTimeRange(timeRangeStr) {
   const [startStr, endStr] = timeRangeStr.split("-");
   return [toMinutes(startStr), toMinutes(endStr)];
@@ -264,8 +273,14 @@ function mapTimeslotsToRooms(rawRooms, rawTimeslots) {
 
 const EMAIL = requireEnv('SMU_EMAIL');
 const PASSWORD = requireEnv('SMU_PASSWORD');
+
+// Get scrape date - use TODAY if env var is not set or is set to "TODAY"
+const scrapeDate = process.env.SCRAPE_DATE && process.env.SCRAPE_DATE !== 'TODAY'
+  ? process.env.SCRAPE_DATE
+  : getTodayDate();
+
 const SCRAPE_CONFIG = {
-  date: requireEnv('SCRAPE_DATE'),
+  date: scrapeDate,
   startTime: requireEnv('SCRAPE_START_TIME'),
   endTime: requireEnv('SCRAPE_END_TIME'),
   roomCapacity: requireEnv('SCRAPE_ROOM_CAPACITY'),

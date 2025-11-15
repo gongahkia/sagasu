@@ -49,7 +49,7 @@ These variables control what rooms are scraped and when:
 
 | Variable | Description | Possible Values | Example |
 |----------|-------------|-----------------|---------|
-| `SCRAPE_DATE` | Date to check room availability | Any valid date in `DD-MMM-YYYY` format | `20-Nov-2025` |
+| `SCRAPE_DATE` | Date to check room availability | `TODAY` for current date, or any valid date in `DD-MMM-YYYY` format | `TODAY` or `20-Nov-2025` |
 | `SCRAPE_START_TIME` | Start of time window to check | Time in `HH:MM` format (24-hour) | `08:00` |
 | `SCRAPE_END_TIME` | End of time window to check | Time in `HH:MM` format (24-hour) | `22:00` |
 | `SCRAPE_ROOM_CAPACITY` | Filter rooms by capacity | `From2To5Pax`, `From6To10Pax`, `From11To15Pax`, `From16To20Pax`, `Above20Pax` | `From6To10Pax` |
@@ -150,18 +150,19 @@ Available equipment options:
 1. Go to your repository settings → Secrets and variables → Actions
 
 2. Add the following secrets:
-   - `SMU_EMAIL`
-   - `SMU_PASSWORD`
-   - `SCRAPE_DATE`
-   - `SCRAPE_START_TIME`
-   - `SCRAPE_END_TIME`
-   - `SCRAPE_ROOM_CAPACITY`
-   - `SCRAPE_BUILDING_NAMES`
-   - `SCRAPE_FLOOR_NAMES`
-   - `SCRAPE_FACILITY_TYPES`
-   - `SCRAPE_EQUIPMENT`
+   - `SMU_EMAIL` (required)
+   - `SMU_PASSWORD` (required)
+   - `SCRAPE_START_TIME` (required)
+   - `SCRAPE_END_TIME` (required)
+   - `SCRAPE_ROOM_CAPACITY` (required)
+   - `SCRAPE_BUILDING_NAMES` (required)
+   - `SCRAPE_FLOOR_NAMES` (required)
+   - `SCRAPE_FACILITY_TYPES` (required)
+   - `SCRAPE_EQUIPMENT` (required)
 
-3. The workflow will automatically run daily at 8:00 AM SGT (00:00 UTC)
+   **Note:** `SCRAPE_DATE` is not needed as a secret - the workflow automatically uses the current date (TODAY) for daily scheduled runs.
+
+3. The workflow will automatically run daily at 8:00 AM SGT (00:00 UTC) and scrape data for that day
 
 4. You can also trigger it manually from the Actions tab
 
