@@ -7,7 +7,7 @@
     <img src="./asset/logo/logo-four.png" width=55% height=55%>
 </p>
 
-...
+[Fourth](#other-notes) time's the charm.
 
 ## Stack
 
@@ -16,7 +16,7 @@
 
 ## Rationale
 
-...
+See [this](https://github.com/gongahkia/sagasu#rationale), [this](https://github.com/gongahkia/sagasu-2#rationale) and [this](https://github.com/gongahkia/sagasu-3#rationale).
 
 ## Architecture
 
