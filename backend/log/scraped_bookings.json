@@ -1,49 +1,19 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "scraped_at": "2025-11-16T00:05:21.694Z",
-    "scrape_duration_ms": 35330,
+    "scraped_at": "2025-11-17T00:05:04.411Z",
+    "scrape_duration_ms": 31720,
     "success": true,
     "error": null,
     "scraper_version": "bookings-v1.0.0"
   },
   "statistics": {
-    "total_bookings": 9,
-    "confirmed_bookings": 6,
-    "pending_bookings": 3,
-    "total_price": 262.5
+    "total_bookings": 7,
+    "confirmed_bookings": 5,
+    "pending_bookings": 2,
+    "total_price": 215.25
   },
   "bookings": [
-    {
-      "reference_number": "BK-20251109-000187",
-      "date": "16-Nov-2025",
-      "day_of_week": "Sun",
-      "start_time": "13:30",
-      "end_time": "16:30",
-      "duration_hours": 3,
-      "building": "Li Ka Shing Library",
-      "room_name": "LKSLIB Project Room 4-12",
-      "booked_by": "GOH CHENG ERN, PETER",
-      "booking_type": "AdHoc",
-      "price": 15.75,
-      "status": "Confirmed",
-      "raw_datetime": "16-Nov-2025 (Sun)\n13:30 - 16:30 (3hrs)"
-    },
-    {
-      "reference_number": "BK-20251113-001025",
-      "date": "16-Nov-2025",
-      "day_of_week": "Sun",
-      "start_time": "15:00",
-      "end_time": "18:00",
-      "duration_hours": 3,
-      "building": "Li Ka Shing Library",
-      "room_name": "LKSLIB Project Room 4-6",
-      "booked_by": "GABRIEL ONG ZHE MIAN",
-      "booking_type": "AdHoc",
-      "price": 31.5,
-      "status": "Pending Confirmation",
-      "raw_datetime": "16-Nov-2025 (Sun)\n15:00 - 18:00 (3hrs)"
-    },
     {
       "reference_number": "BK-20251109-000194",
       "date": "19-Nov-2025",
