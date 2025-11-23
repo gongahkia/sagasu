@@ -1,34 +1,19 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "scraped_at": "2025-11-22T00:05:01.053Z",
-    "scrape_duration_ms": 32063,
+    "scraped_at": "2025-11-23T00:05:37.262Z",
+    "scrape_duration_ms": 34547,
     "success": true,
     "error": null,
     "scraper_version": "bookings-v1.0.0"
   },
   "statistics": {
-    "total_bookings": 6,
-    "confirmed_bookings": 4,
+    "total_bookings": 5,
+    "confirmed_bookings": 3,
     "pending_bookings": 2,
-    "total_price": 199.5
+    "total_price": 183.75
   },
   "bookings": [
-    {
-      "reference_number": "BK-20251109-000189",
-      "date": "22-Nov-2025",
-      "day_of_week": "Sat",
-      "start_time": "13:00",
-      "end_time": "16:00",
-      "duration_hours": 3,
-      "building": "Li Ka Shing Library",
-      "room_name": "LKSLIB Project Room 4-12",
-      "booked_by": "GOH CHENG ERN, PETER",
-      "booking_type": "AdHoc",
-      "price": 15.75,
-      "status": "Confirmed",
-      "raw_datetime": "22-Nov-2025 (Sat)\n13:00 - 16:00 (3hrs)"
-    },
     {
       "reference_number": "BK-20251109-000190",
       "date": "23-Nov-2025",
