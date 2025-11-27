@@ -1,63 +1,17 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "scraped_at": "2025-11-26T00:05:07.571Z",
-    "scrape_duration_ms": 32880,
+    "scraped_at": "2025-11-27T00:05:09.802Z",
+    "scrape_duration_ms": 35013,
     "success": true,
     "error": null,
     "scraper_version": "bookings-v1.0.0"
   },
   "statistics": {
-    "total_bookings": 3,
-    "confirmed_bookings": 2,
-    "pending_bookings": 1,
-    "total_price": 99.75
+    "total_bookings": 0,
+    "confirmed_bookings": 0,
+    "pending_bookings": 0,
+    "total_price": 0
   },
-  "bookings": [
-    {
-      "reference_number": "BK-20251125-000287",
-      "date": "26-Nov-2025",
-      "day_of_week": "Wed",
-      "start_time": "10:30",
-      "end_time": "13:30",
-      "duration_hours": 3,
-      "building": "Li Ka Shing Library",
-      "room_name": "LKSLIB Project Room 4-5",
-      "booked_by": "GOH CHENG ERN, PETER",
-      "booking_type": "AdHoc",
-      "price": 15.75,
-      "status": "Confirmed",
-      "raw_datetime": "26-Nov-2025 (Wed)\n10:30 - 13:30 (3hrs)"
-    },
-    {
-      "reference_number": "BK-20251112-000466",
-      "date": "26-Nov-2025",
-      "day_of_week": "Wed",
-      "start_time": "11:30",
-      "end_time": "15:30",
-      "duration_hours": 4,
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "room_name": "SOE/SCIS2 GSR 3-4",
-      "booked_by": "KEITH TANG ZIHENG",
-      "booking_type": "AdHoc",
-      "price": 42,
-      "status": "Confirmed",
-      "raw_datetime": "26-Nov-2025 (Wed)\n11:30 - 15:30 (4hrs)"
-    },
-    {
-      "reference_number": "BK-20251112-000610",
-      "date": "26-Nov-2025",
-      "day_of_week": "Wed",
-      "start_time": "15:30",
-      "end_time": "19:30",
-      "duration_hours": 4,
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "room_name": "SOE/SCIS2 GSR 3-4",
-      "booked_by": "GABRIEL ONG ZHE MIAN",
-      "booking_type": "AdHoc",
-      "price": 42,
-      "status": "Pending Confirmation",
-      "raw_datetime": "26-Nov-2025 (Wed)\n15:30 - 19:30 (4hrs)"
-    }
-  ]
+  "bookings": []
 }
