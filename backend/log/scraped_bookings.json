@@ -1,48 +1,17 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "scraped_at": "2025-11-29T00:05:17.602Z",
-    "scrape_duration_ms": 34420,
+    "scraped_at": "2025-11-30T00:05:29.825Z",
+    "scrape_duration_ms": 34780,
     "success": true,
     "error": null,
     "scraper_version": "bookings-v1.0.0"
   },
   "statistics": {
-    "total_bookings": 2,
-    "confirmed_bookings": 2,
+    "total_bookings": 0,
+    "confirmed_bookings": 0,
     "pending_bookings": 0,
-    "total_price": 73.5
+    "total_price": 0
   },
-  "bookings": [
-    {
-      "reference_number": "MBK-20251128-000038",
-      "date": "29-Nov-2025",
-      "day_of_week": "Sat",
-      "start_time": "10:00",
-      "end_time": "14:00",
-      "duration_hours": 4,
-      "building": "School of Computing & Information Systems 1",
-      "room_name": "SCIS1 GSR 2-2",
-      "booked_by": "GABRIEL ONG ZHE MIAN",
-      "booking_type": "AdHoc",
-      "price": 42,
-      "status": "Confirmed",
-      "raw_datetime": "29-Nov-2025 (Sat)\n10:00 - 14:00 (4hrs)"
-    },
-    {
-      "reference_number": "BK-20251128-001556",
-      "date": "29-Nov-2025",
-      "day_of_week": "Sat",
-      "start_time": "14:00",
-      "end_time": "17:00",
-      "duration_hours": 3,
-      "building": "School of Computing & Information Systems 1",
-      "room_name": "SCIS1 GSR 2-2",
-      "booked_by": "TAN LE XUAN",
-      "booking_type": "AdHoc",
-      "price": 31.5,
-      "status": "Confirmed",
-      "raw_datetime": "29-Nov-2025 (Sat)\n14:00 - 17:00 (3hrs)"
-    }
-  ]
+  "bookings": []
 }
