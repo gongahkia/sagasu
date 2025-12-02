@@ -1,17 +1,48 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "scraped_at": "2025-12-01T00:06:21.196Z",
-    "scrape_duration_ms": 32730,
+    "scraped_at": "2025-12-02T00:05:29.430Z",
+    "scrape_duration_ms": 32008,
     "success": true,
     "error": null,
     "scraper_version": "bookings-v1.0.0"
   },
   "statistics": {
-    "total_bookings": 0,
-    "confirmed_bookings": 0,
+    "total_bookings": 2,
+    "confirmed_bookings": 2,
     "pending_bookings": 0,
-    "total_price": 0
+    "total_price": 73.5
   },
-  "bookings": []
+  "bookings": [
+    {
+      "reference_number": "BK-20251201-000195",
+      "date": "02-Dec-2025",
+      "day_of_week": "Tue",
+      "start_time": "09:00",
+      "end_time": "12:00",
+      "duration_hours": 3,
+      "building": "Yong Pung How School of Law/Kwa Geok Choo Law Library",
+      "room_name": "KGC-4.04-PR",
+      "booked_by": "TAN LE XUAN",
+      "booking_type": "AdHoc",
+      "price": 31.5,
+      "status": "Confirmed",
+      "raw_datetime": "02-Dec-2025 (Tue)\n09:00 - 12:00 (3hrs)"
+    },
+    {
+      "reference_number": "BK-20251201-000200",
+      "date": "02-Dec-2025",
+      "day_of_week": "Tue",
+      "start_time": "16:00",
+      "end_time": "20:00",
+      "duration_hours": 4,
+      "building": "Yong Pung How School of Law/Kwa Geok Choo Law Library",
+      "room_name": "YPHSL GSR 2-13",
+      "booked_by": "TAN LE XUAN",
+      "booking_type": "AdHoc",
+      "price": 42,
+      "status": "Confirmed",
+      "raw_datetime": "02-Dec-2025 (Tue)\n16:00 - 20:00 (4hrs)"
+    }
+  ]
 }
