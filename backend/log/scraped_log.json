@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-03T00:04:50.397Z",
-    "scrape_duration_ms": 62570,
+    "scraped_at": "2025-12-04T00:04:54.005Z",
+    "scrape_duration_ms": 62580,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "03-Dec-2025",
+    "date": "04-Dec-2025",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -54,48 +54,57 @@
         },
         {
           "start": "08:00",
-          "end": "11:00",
+          "end": "12:30",
           "status": "free"
         },
         {
-          "start": "11:00",
-          "end": "14:00",
+          "start": "12:30",
+          "end": "13:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251130-000094",
+            "reference": "BK-20251203-000991",
             "status": "Confirmed",
-            "booker_name": "LAU HOI NING, ANNTHEA",
-            "booker_email": "annthea.lau.2022@accountancy.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: annthea.lau.2022@accountancy.smu.edu.sg",
-            "purpose": "meditate",
+            "booker_name": "Florian GAMPER",
+            "booker_email": "fgamper@smu.edu.sg",
+            "booker_org": "Centre for Digital Law",
+            "purpose": "Meeting",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "14:00",
-          "end": "17:00",
+          "start": "13:00",
+          "end": "13:30",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251120-000613",
+            "reference": "BK-20251203-000992",
             "status": "Confirmed",
-            "booker_name": "CHOW TJIN HON, LUCAS",
-            "booker_email": "lucas.chow.2024@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: lucas.chow.2024@business.smu.edu.sg",
-            "purpose": "study",
+            "booker_name": "Florian GAMPER",
+            "booker_email": "fgamper@smu.edu.sg",
+            "booker_org": "Centre for Digital Law",
+            "purpose": "Meeting",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "17:00",
-          "end": "18:30",
-          "status": "free"
-        },
-        {
-          "start": "18:30",
-          "end": "21:30",
+          "start": "13:30",
+          "end": "16:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251123-000064",
+            "reference": "BK-20251203-001440",
+            "status": "Confirmed",
+            "booker_name": "EBER GARETH FU ZI EN",
+            "booker_email": "eber.fu.2025@economics.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: eber.fu.2025@economics.smu.edu.sg",
+            "purpose": "Study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "16:00",
+          "end": "19:00",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251123-000074",
             "status": "Confirmed",
             "booker_name": "FREDRICK SUWANDI",
             "booker_email": "f.suwandi.2025@economics.smu.edu.sg",
@@ -105,7 +114,26 @@
           }
         },
         {
-          "start": "21:30",
+          "start": "19:00",
+          "end": "20:00",
+          "status": "free"
+        },
+        {
+          "start": "20:00",
+          "end": "23:00",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251123-000073",
+            "status": "Confirmed",
+            "booker_name": "ALEXANDER LAM WEI JIE",
+            "booker_email": "alexander.l.2025@economics.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: alexander.l.2025@economics.smu.edu.sg",
+            "purpose": "study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "23:00",
           "end": "24:00",
           "status": "free"
         }
@@ -114,7 +142,7 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 3,
-        "free_duration_minutes": 420
+        "free_duration_minutes": 390
       }
     },
     {
@@ -136,72 +164,131 @@
         },
         {
           "start": "08:00",
-          "end": "09:30",
+          "end": "12:00",
           "status": "free"
         },
         {
-          "start": "09:30",
-          "end": "12:30",
+          "start": "12:00",
+          "end": "15:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251124-000434",
+            "reference": "BK-20251120-000015",
             "status": "Confirmed",
-            "booker_name": "ARIQ LIM KIAT SIANG",
-            "booker_email": "ariq.lim.2025@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: ariq.lim.2025@computing.smu.edu.sg",
-            "purpose": "Assignment Meeting",
+            "booker_name": "ANUMITAA MURALI",
+            "booker_email": "anumitaa.m.2024@computing.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: anumitaa.m.2024@computing.smu.edu.sg",
+            "purpose": "Meeting",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "12:30",
+          "start": "15:00",
           "end": "15:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251128-001477",
-            "status": "Confirmed",
-            "booker_name": "LIM XU SHENG SHAUN",
-            "booker_email": "shaun.lim.2022@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: shaun.lim.2022@business.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
+          "status": "free"
         },
         {
           "start": "15:30",
-          "end": "16:00",
+          "end": "18:30",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251120-000002",
+            "status": "Confirmed",
+            "booker_name": "LIEW ZHENG LONG",
+            "booker_email": "zl.liew.2024@computing.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: zl.liew.2024@computing.smu.edu.sg",
+            "purpose": "consulting service for the marginalised quails",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "18:30",
+          "end": "19:00",
           "status": "free"
         },
         {
-          "start": "16:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251121-000099",
-            "status": "Confirmed",
-            "booker_name": "QIN YIHUI",
-            "booker_email": "yihui.qin.2025@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: yihui.qin.2025@business.smu.edu.sg",
-            "purpose": "meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
           "start": "19:00",
-          "end": "22:00",
+          "end": "21:30",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251202-000857",
+            "reference": "BK-20251120-000022",
             "status": "Confirmed",
-            "booker_name": "TAN JING JIE DYLAN",
-            "booker_email": "dylan.tan.2024@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: dylan.tan.2024@business.smu.edu.sg",
-            "purpose": "meeting",
+            "booker_name": "MAX SKYLAR KOH",
+            "booker_email": "maxkoh.2023@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: maxkoh.2023@business.smu.edu.sg",
+            "purpose": "meow",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "22:00",
+          "start": "21:30",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 4,
+        "free_duration_minutes": 450
+      }
+    },
+    {
+      "id": "KGC-4.04-PR",
+      "name": "KGC-4.04-PR",
+      "building": "Kwa Geok Choo Law Library",
+      "building_code": "KGC",
+      "floor": "Level 4",
+      "facility_type": "Project Room",
+      "equipment": [
+        "TV Panel"
+      ],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:00",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:00",
+          "end": "12:00",
+          "status": "free"
+        },
+        {
+          "start": "12:00",
+          "end": "15:00",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251120-000018",
+            "status": "Confirmed",
+            "booker_name": "YANG, YUNG-CHING",
+            "booker_email": "yc.yang.2023@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: yc.yang.2023@business.smu.edu.sg",
+            "purpose": "meow",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "15:00",
+          "end": "15:30",
+          "status": "free"
+        },
+        {
+          "start": "15:30",
+          "end": "18:30",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251120-000021",
+            "status": "Confirmed",
+            "booker_name": "JAREN GOH",
+            "booker_email": "jaren.goh.2022@economics.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: jaren.goh.2022@economics.smu.edu.sg",
+            "purpose": "meow",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "18:30",
           "end": "24:00",
           "status": "free"
         }
@@ -210,12 +297,12 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 3,
-        "free_duration_minutes": 240
+        "free_duration_minutes": 600
       }
     },
     {
-      "id": "KGC-4.04-PR",
-      "name": "KGC-4.04-PR",
+      "id": "KGC-4.05-PR",
+      "name": "KGC-4.05-PR",
       "building": "Kwa Geok Choo Law Library",
       "building_code": "KGC",
       "floor": "Level 4",
@@ -240,146 +327,50 @@
           "end": "13:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251119-000003",
+            "reference": "BK-20251121-000145",
             "status": "Confirmed",
-            "booker_name": "TAN CHONG KAI",
-            "booker_email": "cktan.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: cktan.2023@business.smu.edu.sg",
-            "purpose": "meow",
+            "booker_name": "ZHANG ZHIMING",
+            "booker_email": "zm.zhang.2025@mba.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: zm.zhang.2025@mba.smu.edu.sg",
+            "purpose": "study",
             "use_type": "AdHoc"
           }
         },
         {
           "start": "13:00",
-          "end": "15:30",
+          "end": "16:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251127-001142",
+            "reference": "BK-20251128-001508",
             "status": "Confirmed",
-            "booker_name": "MAX SKYLAR KOH",
-            "booker_email": "maxkoh.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: maxkoh.2023@business.smu.edu.sg",
-            "purpose": "meow",
+            "booker_name": "IAN LIM ZHEN JUN",
+            "booker_email": "ian.lim.2022@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: ian.lim.2022@business.smu.edu.sg",
+            "purpose": "wrk",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "15:30",
-          "end": "18:30",
-          "status": "booked",
-          "booking": {
-            "reference": "MBK-20251119-000003",
-            "status": "Confirmed",
-            "booker_name": "YANG, YUNG-CHING",
-            "booker_email": "yc.yang.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: yc.yang.2023@business.smu.edu.sg",
-            "purpose": "Meow",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "18:30",
-          "end": "19:00",
+          "start": "16:00",
+          "end": "16:30",
           "status": "free"
         },
         {
-          "start": "19:00",
-          "end": "22:00",
+          "start": "16:30",
+          "end": "19:30",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251119-000022",
+            "reference": "MBK-20251128-000034",
             "status": "Confirmed",
-            "booker_name": "JASDEV SINGH",
-            "booker_email": "jasdevsingh.2023@scis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: jasdevsingh.2023@scis.smu.edu.sg",
-            "purpose": "study",
+            "booker_name": "LAI RUEY YEE",
+            "booker_email": "rueyyee.lai.2022@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: rueyyee.lai.2022@business.smu.edu.sg",
+            "purpose": "work",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "22:00",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 3,
-        "free_duration_minutes": 270
-      }
-    },
-    {
-      "id": "KGC-4.05-PR",
-      "name": "KGC-4.05-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:00",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:00",
-          "end": "10:30",
-          "status": "free"
-        },
-        {
-          "start": "10:30",
-          "end": "13:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251119-000036",
-            "status": "Confirmed",
-            "booker_name": "DANG TRA MI",
-            "booker_email": "trami.dang.2025@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: trami.dang.2025@computing.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "13:30",
-          "end": "14:00",
-          "status": "free"
-        },
-        {
-          "start": "14:00",
-          "end": "17:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251122-000073",
-            "status": "Confirmed",
-            "booker_name": "KOH XIN YIN DAWN",
-            "booker_email": "dawn.koh.2023@socsc.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: dawn.koh.2023@socsc.smu.edu.sg",
-            "purpose": "lock in",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "17:00",
-          "end": "20:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251123-000190",
-            "status": "Confirmed",
-            "booker_name": "SARAH SIM KAI ERN",
-            "booker_email": "sarah.sim.2024@cis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: sarah.sim.2024@cis.smu.edu.sg",
-            "purpose": "s",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "20:00",
+          "start": "19:30",
           "end": "24:00",
           "status": "free"
         }
@@ -410,63 +401,44 @@
         },
         {
           "start": "08:00",
-          "end": "10:30",
+          "end": "12:00",
           "status": "free"
         },
         {
-          "start": "10:30",
-          "end": "13:30",
+          "start": "12:00",
+          "end": "15:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251120-000197",
+            "reference": "BK-20251122-000075",
             "status": "Confirmed",
-            "booker_name": "OLIVIA YEO XUE-YIN",
-            "booker_email": "olivia.yeo.2023@socsc.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: olivia.yeo.2023@socsc.smu.edu.sg",
-            "purpose": "study",
+            "booker_name": "KOH XIN YIN DAWN",
+            "booker_email": "dawn.koh.2023@socsc.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: dawn.koh.2023@socsc.smu.edu.sg",
+            "purpose": "lock in",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "13:30",
-          "end": "14:00",
+          "start": "15:00",
+          "end": "16:00",
           "status": "free"
         },
         {
-          "start": "14:00",
-          "end": "17:00",
+          "start": "16:00",
+          "end": "18:30",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251120-000182",
+            "reference": "BK-20251127-000137",
             "status": "Confirmed",
-            "booker_name": "SETH AURELIUS CHAN KIAT",
-            "booker_email": "seth.chan.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: seth.chan.2023@business.smu.edu.sg",
-            "purpose": "Meeting",
+            "booker_name": "FAITH KOH KAI LING",
+            "booker_email": "faith.koh.2024@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: faith.koh.2024@business.smu.edu.sg",
+            "purpose": "crashout",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "17:00",
-          "end": "17:30",
-          "status": "free"
-        },
-        {
-          "start": "17:30",
-          "end": "20:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251120-000195",
-            "status": "Confirmed",
-            "booker_name": "RAY TAN",
-            "booker_email": "ray.tan.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: ray.tan.2023@business.smu.edu.sg",
-            "purpose": "POKEDUKU",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "20:30",
+          "start": "18:30",
           "end": "24:00",
           "status": "free"
         }
@@ -474,8 +446,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 4,
-        "free_duration_minutes": 420
+        "free_slots_count": 3,
+        "free_duration_minutes": 630
       }
     },
     {
@@ -505,45 +477,55 @@
           "end": "14:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251119-000006",
+            "reference": "BK-20251203-001453",
             "status": "Confirmed",
-            "booker_name": "VINCENT HEWITT LIMAVADY",
-            "booker_email": "vh.limavady.2024@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: vh.limavady.2024@business.smu.edu.sg",
-            "purpose": "Group Study",
+            "booker_name": "TOMINAGA YUMI",
+            "booker_email": "y.tominaga.2025@mba.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: y.tominaga.2025@mba.smu.edu.sg",
+            "purpose": "OIP meeting",
             "use_type": "AdHoc"
           }
         },
         {
           "start": "14:00",
-          "end": "17:00",
+          "end": "15:00",
+          "status": "free"
+        },
+        {
+          "start": "15:00",
+          "end": "18:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251119-000002",
+            "reference": "MBK-20251120-000004",
             "status": "Confirmed",
-            "booker_name": "LIM JIE CHING",
-            "booker_email": "jc.lim.2024@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: jc.lim.2024@computing.smu.edu.sg",
-            "purpose": "S",
+            "booker_name": "MEENAKSHI ILANGO",
+            "booker_email": "meenakshi.i.2024@law.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: meenakshi.i.2024@law.smu.edu.sg",
+            "purpose": "s",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "17:00",
-          "end": "20:00",
+          "start": "18:00",
+          "end": "19:00",
+          "status": "free"
+        },
+        {
+          "start": "19:00",
+          "end": "22:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251119-000009",
+            "reference": "MBK-20251121-000014",
             "status": "Confirmed",
-            "booker_name": "RAKSHIT MANGLA",
-            "booker_email": "rakshit.m.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: rakshit.m.2023@business.smu.edu.sg",
-            "purpose": "study",
+            "booker_name": "JAMIE TAN JIAHUI",
+            "booker_email": "jamie.tan.2023@scis.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: jamie.tan.2023@scis.smu.edu.sg",
+            "purpose": "-",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "20:00",
+          "start": "22:00",
           "end": "24:00",
           "status": "free"
         }
@@ -551,7 +533,7 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 2,
+        "free_slots_count": 4,
         "free_duration_minutes": 420
       }
     },
@@ -574,82 +556,25 @@
         },
         {
           "start": "08:00",
-          "end": "09:00",
+          "end": "13:30",
           "status": "free"
         },
         {
-          "start": "09:00",
-          "end": "12:00",
+          "start": "13:30",
+          "end": "16:30",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251202-000673",
+            "reference": "BK-20251203-001415",
             "status": "Confirmed",
-            "booker_name": "JOEL QUEK ZHEHAN",
-            "booker_email": "joel.quek.2025@socsc.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: joel.quek.2025@socsc.smu.edu.sg",
-            "purpose": "meeting",
+            "booker_name": "QIAN, YUMENG",
+            "booker_email": "yumeng.qian.2024@maf.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: yumeng.qian.2024@maf.smu.edu.sg",
+            "purpose": "interview",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "12:00",
-          "end": "12:30",
-          "status": "free"
-        },
-        {
-          "start": "12:30",
-          "end": "15:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251127-001161",
-            "status": "Confirmed",
-            "booker_name": "LIM KAY HWEE TRISTAL",
-            "booker_email": "tristal.lim.2024@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: tristal.lim.2024@business.smu.edu.sg",
-            "purpose": "work",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "15:00",
-          "end": "15:30",
-          "status": "free"
-        },
-        {
-          "start": "15:30",
-          "end": "18:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251127-001162",
-            "status": "Confirmed",
-            "booker_name": "LIM YONG HAN",
-            "booker_email": "yonghan.lim.2024@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: yonghan.lim.2024@computing.smu.edu.sg",
-            "purpose": "cry",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "18:30",
-          "end": "19:00",
-          "status": "free"
-        },
-        {
-          "start": "19:00",
-          "end": "22:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251123-000235",
-            "status": "Confirmed",
-            "booker_name": "EDMUND ALDRICH RUDYPUTRA",
-            "booker_email": "earudyputra.2025@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: earudyputra.2025@business.smu.edu.sg",
-            "purpose": "cry",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "22:00",
+          "start": "16:30",
           "end": "24:00",
           "status": "free"
         }
@@ -657,8 +582,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 5,
-        "free_duration_minutes": 270
+        "free_slots_count": 2,
+        "free_duration_minutes": 780
       }
     },
     {
@@ -688,7 +613,7 @@
           "end": "14:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251119-000029",
+            "reference": "BK-20251120-000005",
             "status": "Confirmed",
             "booker_name": "TOH CHEN HAN, CLEMENT",
             "booker_email": "clement.toh.2023@business.smu.edu.sg",
@@ -707,7 +632,7 @@
           "end": "17:30",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251119-000014",
+            "reference": "MBK-20251120-000005",
             "status": "Confirmed",
             "booker_name": "CHIA YEE SUEN",
             "booker_email": "yeesuenchia.2023@business.smu.edu.sg",
@@ -726,12 +651,12 @@
           "end": "21:00",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251119-000015",
+            "reference": "MBK-20251120-000009",
             "status": "Confirmed",
             "booker_name": "DARRON NG JUN JIE",
             "booker_email": "darron.ng.2023@accountancy.smu.edu.sg",
             "booker_org": "Booked for User Email Address: darron.ng.2023@accountancy.smu.edu.sg",
-            "purpose": "Study",
+            "purpose": "Pls save me",
             "use_type": "AdHoc"
           }
         },
@@ -740,7 +665,7 @@
           "end": "23:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251126-000789",
+            "reference": "BK-20251126-000791",
             "status": "Confirmed",
             "booker_name": "TAN WEI XIANG",
             "booker_email": "wxtan.2023@business.smu.edu.sg",
@@ -781,44 +706,39 @@
         },
         {
           "start": "08:00",
-          "end": "12:00",
+          "end": "13:00",
           "status": "free"
         },
         {
-          "start": "12:00",
-          "end": "15:00",
+          "start": "13:00",
+          "end": "16:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251124-001030",
-            "status": "Confirmed",
-            "booker_name": "MUHAMMAD AL-MALIKI BIN MULYANI",
-            "booker_email": "muhammadm.2022@scis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: muhammadm.2022@scis.smu.edu.sg",
-            "purpose": "meeting",
+            "reference": "BK-20251203-001489",
+            "status": "Pending Confirmation",
+            "booker_name": "ZOE CHEANG JING IE",
+            "booker_email": "zoe.cheang.2023@cis.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: zoe.cheang.2023@cis.smu.edu.sg",
+            "purpose": "talk",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "15:00",
-          "end": "15:30",
-          "status": "free"
-        },
-        {
-          "start": "15:30",
-          "end": "18:30",
+          "start": "16:00",
+          "end": "19:00",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251124-000037",
+            "reference": "BK-20251128-001479",
             "status": "Confirmed",
-            "booker_name": "LOW YUN KIN VENICE",
-            "booker_email": "venice.low.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: venice.low.2023@business.smu.edu.sg",
-            "purpose": ":p",
+            "booker_name": "LIM XU SHENG SHAUN",
+            "booker_email": "shaun.lim.2022@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: shaun.lim.2022@business.smu.edu.sg",
+            "purpose": "study",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "18:30",
+          "start": "19:00",
           "end": "24:00",
           "status": "free"
         }
@@ -826,7 +746,7 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 3,
+        "free_slots_count": 2,
         "free_duration_minutes": 600
       }
     },
@@ -857,59 +777,55 @@
           "end": "14:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251119-000202",
+            "reference": "BK-20251126-000916",
             "status": "Confirmed",
             "booker_name": "HANG JIE XIANG, JUSTIN",
             "booker_email": "justin.hang.2024@business.smu.edu.sg",
             "booker_org": "Booked for User Email Address: justin.hang.2024@business.smu.edu.sg",
-            "purpose": "chow",
+            "purpose": "BAKAAAAA",
             "use_type": "AdHoc"
           }
         },
         {
           "start": "14:00",
-          "end": "17:00",
+          "end": "14:30",
+          "status": "free"
+        },
+        {
+          "start": "14:30",
+          "end": "17:30",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251119-000638",
+            "reference": "BK-20251127-000003",
             "status": "Confirmed",
-            "booker_name": "JONTE LEE JUN LE",
-            "booker_email": "jonte.lee.2022@scis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: jonte.lee.2022@scis.smu.edu.sg",
-            "purpose": "sing song",
+            "booker_name": "NG JUN HAO JAY",
+            "booker_email": "jay.ng.2024@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: jay.ng.2024@business.smu.edu.sg",
+            "purpose": "jaykayfaymay",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "17:00",
-          "end": "20:00",
+          "start": "17:30",
+          "end": "18:00",
+          "status": "free"
+        },
+        {
+          "start": "18:00",
+          "end": "21:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251129-000094",
+            "reference": "BK-20251126-000926",
             "status": "Confirmed",
-            "booker_name": "MAK ZHEN WEI, KENNETH",
-            "booker_email": "kenneth.mak.2023@accountancy.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: kenneth.mak.2023@accountancy.smu.edu.sg",
-            "purpose": "lalala mamama",
+            "booker_name": "CHOW TJIN HON, LUCAS",
+            "booker_email": "lucas.chow.2024@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: lucas.chow.2024@business.smu.edu.sg",
+            "purpose": "study",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "20:00",
-          "end": "23:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251129-000097",
-            "status": "Confirmed",
-            "booker_name": "DAVE SU YUNWEI",
-            "booker_email": "davesu.2023@accountancy.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: davesu.2023@accountancy.smu.edu.sg",
-            "purpose": "!!!",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "23:00",
+          "start": "21:00",
           "end": "24:00",
           "status": "free"
         }
@@ -917,8 +833,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 240
+        "free_slots_count": 4,
+        "free_duration_minutes": 420
       }
     },
     {
@@ -940,25 +856,6 @@
         },
         {
           "start": "08:00",
-          "end": "11:00",
-          "status": "free"
-        },
-        {
-          "start": "11:00",
-          "end": "14:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251119-000494",
-            "status": "Confirmed",
-            "booker_name": "RACHEL CHOW ENQI",
-            "booker_email": "rachel.chow.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: rachel.chow.2023@business.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "14:00",
           "end": "14:30",
           "status": "free"
         },
@@ -967,36 +864,17 @@
           "end": "17:30",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251119-000037",
+            "reference": "BK-20251203-001480",
             "status": "Confirmed",
-            "booker_name": "CHEN HSIEU MUNN, NATALIE",
-            "booker_email": "nataliechen.2023@socsc.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: nataliechen.2023@socsc.smu.edu.sg",
-            "purpose": "study",
+            "booker_name": "LEE CHAEHYUN",
+            "booker_email": "ch.lee.2023@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: ch.lee.2023@business.smu.edu.sg",
+            "purpose": "meeting",
             "use_type": "AdHoc"
           }
         },
         {
           "start": "17:30",
-          "end": "18:00",
-          "status": "free"
-        },
-        {
-          "start": "18:00",
-          "end": "21:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251119-000855",
-            "status": "Confirmed",
-            "booker_name": "ANDY HU SHUANG",
-            "booker_email": "andyhu.2023@law.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: andyhu.2023@law.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "21:00",
           "end": "24:00",
           "status": "free"
         }
@@ -1004,8 +882,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 4,
-        "free_duration_minutes": 420
+        "free_slots_count": 2,
+        "free_duration_minutes": 780
       }
     },
     {
@@ -1035,7 +913,7 @@
           "end": "15:00",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251119-000001",
+            "reference": "BK-20251120-000028",
             "status": "Confirmed",
             "booker_name": "YEO LI CHIN",
             "booker_email": "lichin.yeo.2022@law.smu.edu.sg",
@@ -1054,12 +932,12 @@
           "end": "18:30",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251119-000002",
+            "reference": "MBK-20251120-000011",
             "status": "Confirmed",
             "booker_name": "GABRIELLE JOY CHUA LE XUAN",
             "booker_email": "lxchua.2022@law.smu.edu.sg",
             "booker_org": "Booked for User Email Address: lxchua.2022@law.smu.edu.sg",
-            "purpose": "stduy",
+            "purpose": "study",
             "use_type": "AdHoc"
           }
         },
@@ -1073,12 +951,12 @@
           "end": "22:00",
           "status": "booked",
           "booking": {
-            "reference": "MBK-20251119-000004",
+            "reference": "MBK-20251120-000012",
             "status": "Confirmed",
-            "booker_name": "OBBARD KLARA OLIVIA",
-            "booker_email": "koobbard.2022@law.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: koobbard.2022@law.smu.edu.sg",
-            "purpose": "sleeeeeep",
+            "booker_name": "EMILY TAN XIN HUI",
+            "booker_email": "emily.tan.2023@law.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: emily.tan.2023@law.smu.edu.sg",
+            "purpose": "Lol",
             "use_type": "AdHoc"
           }
         },
