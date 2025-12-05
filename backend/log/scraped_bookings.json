@@ -1,33 +1,17 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "scraped_at": "2025-12-04T00:05:28.785Z",
-    "scrape_duration_ms": 34489,
+    "scraped_at": "2025-12-05T00:05:19.630Z",
+    "scrape_duration_ms": 31470,
     "success": true,
     "error": null,
     "scraper_version": "bookings-v1.0.0"
   },
   "statistics": {
-    "total_bookings": 1,
-    "confirmed_bookings": 1,
+    "total_bookings": 0,
+    "confirmed_bookings": 0,
     "pending_bookings": 0,
-    "total_price": 42
+    "total_price": 0
   },
-  "bookings": [
-    {
-      "reference_number": "BK-20251203-000834",
-      "date": "04-Dec-2025",
-      "day_of_week": "Thu",
-      "start_time": "09:00",
-      "end_time": "13:00",
-      "duration_hours": 4,
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "room_name": "SOE/SCIS2 GSR 2-12",
-      "booked_by": "TAN LE XUAN",
-      "booking_type": "AdHoc",
-      "price": 42,
-      "status": "Confirmed",
-      "raw_datetime": "04-Dec-2025 (Thu)\n09:00 - 13:00 (4hrs)"
-    }
-  ]
+  "bookings": []
 }
