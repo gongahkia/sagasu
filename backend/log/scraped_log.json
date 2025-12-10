@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-09T00:04:43.759Z",
-    "scrape_duration_ms": 61390,
+    "scraped_at": "2025-12-10T00:04:55.392Z",
+    "scrape_duration_ms": 73633,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "09-Dec-2025",
+    "date": "10-Dec-2025",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -54,6 +54,25 @@
         },
         {
           "start": "08:00",
+          "end": "10:00",
+          "status": "free"
+        },
+        {
+          "start": "10:00",
+          "end": "13:00",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251208-000579",
+            "status": "Confirmed",
+            "booker_name": "KYRAN MARIEL NARAYANAN",
+            "booker_email": "kyranm.n.2023@law.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: kyranm.n.2023@law.smu.edu.sg",
+            "purpose": "poop",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "13:00",
           "end": "18:00",
           "status": "free"
         },
@@ -72,8 +91,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_slots_count": 3,
+        "free_duration_minutes": 421
       }
     },
     {
@@ -177,6 +196,25 @@
         },
         {
           "start": "08:00",
+          "end": "12:00",
+          "status": "free"
+        },
+        {
+          "start": "12:00",
+          "end": "14:30",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251210-000002",
+            "status": "Confirmed",
+            "booker_name": "CHEE LI MIN",
+            "booker_email": "limin.chee.2025@mba.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: limin.chee.2025@mba.smu.edu.sg",
+            "purpose": "Project discussion",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "14:30",
           "end": "18:00",
           "status": "free"
         },
@@ -195,8 +233,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_slots_count": 3,
+        "free_duration_minutes": 451
       }
     },
     {
@@ -259,6 +297,25 @@
         },
         {
           "start": "08:00",
+          "end": "13:00",
+          "status": "free"
+        },
+        {
+          "start": "13:00",
+          "end": "16:00",
+          "status": "booked",
+          "booking": {
+            "reference": "MBK-20251209-000009",
+            "status": "Confirmed",
+            "booker_name": "LIU, HANXUE",
+            "booker_email": "hanxue.liu.2023@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: hanxue.liu.2023@business.smu.edu.sg",
+            "purpose": "Meeting",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "16:00",
           "end": "18:00",
           "status": "free"
         },
@@ -277,8 +334,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_slots_count": 3,
+        "free_duration_minutes": 421
       }
     },
     {
@@ -300,25 +357,6 @@
         },
         {
           "start": "08:00",
-          "end": "12:00",
-          "status": "free"
-        },
-        {
-          "start": "12:00",
-          "end": "15:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251208-000574",
-            "status": "Confirmed",
-            "booker_name": "RENEE LAU XIN YING",
-            "booker_email": "renee.lau.2025@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: renee.lau.2025@business.smu.edu.sg",
-            "purpose": "Group project",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "15:00",
           "end": "18:00",
           "status": "free"
         },
@@ -337,8 +375,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 3,
-        "free_duration_minutes": 421
+        "free_slots_count": 2,
+        "free_duration_minutes": 601
       }
     },
     {
