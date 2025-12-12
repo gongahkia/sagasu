@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-11T00:04:51.457Z",
-    "scrape_duration_ms": 61060,
+    "scraped_at": "2025-12-12T00:04:55.199Z",
+    "scrape_duration_ms": 63446,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "11-Dec-2025",
+    "date": "12-Dec-2025",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -259,6 +259,25 @@
         },
         {
           "start": "08:00",
+          "end": "13:00",
+          "status": "free"
+        },
+        {
+          "start": "13:00",
+          "end": "16:00",
+          "status": "booked",
+          "booking": {
+            "reference": "MBK-20251211-000007",
+            "status": "Confirmed",
+            "booker_name": "LIU, HANXUE",
+            "booker_email": "hanxue.liu.2023@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: hanxue.liu.2023@business.smu.edu.sg",
+            "purpose": "Meeting",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "16:00",
           "end": "18:00",
           "status": "free"
         },
@@ -277,8 +296,8 @@
       "availability_summary": {
         "is_available_now": true,
         "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_slots_count": 3,
+        "free_duration_minutes": 421
       }
     },
     {
