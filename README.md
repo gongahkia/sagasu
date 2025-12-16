@@ -1,5 +1,6 @@
 [![](https://img.shields.io/badge/sagasu_4.0.0-passing-green)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
 ![](https://github.com/gongahkia/sagasu-4/actions/workflows/scrape.yml/badge.svg)
+![Vercel Deploy](https://deploy-badge.vercel.app/vercel/sagasu-4)
 
 # `Sagasu 4`
 
