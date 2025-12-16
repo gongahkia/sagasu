@@ -1,83 +1,85 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-15T00:04:58.762Z",
-    "scrape_duration_ms": 61234,
+    "scraped_at": "2025-12-16T01:07:35.746Z",
+    "scrape_duration_ms": 62763,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "15-Dec-2025",
+    "date": "16-Dec-2025",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
       "buildings": [
-        "Yong Pung How School of Law/Kwa Geok Choo Law Library"
+        "School of Economics/School of Computing & Information Systems 2",
+        "School of Computing & Information Systems 1",
+        "School of Accountancy",
+        "Yong Pung How School of Law/Kwa Geok Choo Law Library",
+        "School of Social Sciences/College of Integrative Studies",
+        "SMU Connexion"
       ],
       "floors": [
-        "Level 4",
-        "Level 5"
+        "Basement 1",
+        "Level 3",
+        "Level 4"
       ],
       "facility_types": [
-        "Project Room"
+        "Meeting Pod"
       ],
-      "equipment": [
-        "TV Panel"
-      ],
+      "equipment": [],
       "capacity": "From6To10Pax"
     }
   },
   "statistics": {
-    "total_rooms": 12,
-    "available_rooms": 12,
+    "total_rooms": 7,
+    "available_rooms": 7,
     "booked_rooms": 0,
-    "partially_available_rooms": 12
+    "partially_available_rooms": 7
   },
   "rooms": [
     {
-      "id": "KGC-4.02-PR",
-      "name": "KGC-4.02-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
+      "id": "SMUC Meeting Pod 4-1",
+      "name": "SMUC Meeting Pod 4-1",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "12:30",
+          "start": "08:30",
+          "end": "15:00",
           "status": "free"
         },
         {
-          "start": "12:30",
-          "end": "15:30",
+          "start": "15:00",
+          "end": "17:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20251214-000043",
-            "status": "Pending Confirmation",
-            "booker_name": "LIM PEI YI, IVORY",
-            "booker_email": "ivory.lim.2025@mba.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: ivory.lim.2025@mba.smu.edu.sg",
+            "reference": "BK-20251216-000084",
+            "status": "Confirmed",
+            "booker_name": "Nathanael KOH",
+            "booker_email": "nathanaelkoh@smu.edu.sg",
+            "booker_org": "Institute of Innovation and Entrepreneurship",
             "purpose": "Meeting",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "15:30",
-          "end": "18:00",
+          "start": "17:00",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "18:00",
+          "start": "22:30",
           "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
@@ -92,33 +94,31 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 3,
-        "free_duration_minutes": 421
+        "free_duration_minutes": 721
       }
     },
     {
-      "id": "KGC-4.03-PR",
-      "name": "KGC-4.03-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
+      "id": "SMUC Meeting Pod 4-2",
+      "name": "SMUC Meeting Pod 4-2",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "18:00",
+          "start": "08:30",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "18:00",
+          "start": "22:30",
           "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
@@ -133,33 +133,31 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_duration_minutes": 841
       }
     },
     {
-      "id": "KGC-4.04-PR",
-      "name": "KGC-4.04-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
+      "id": "SMUC Meeting Pod 4-3",
+      "name": "SMUC Meeting Pod 4-3",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "18:00",
+          "start": "08:30",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "18:00",
+          "start": "22:30",
           "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
@@ -174,33 +172,31 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_duration_minutes": 841
       }
     },
     {
-      "id": "KGC-4.05-PR",
-      "name": "KGC-4.05-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
+      "id": "SMUC Meeting Pod 4-4",
+      "name": "SMUC Meeting Pod 4-4",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "18:00",
+          "start": "08:30",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "18:00",
+          "start": "22:30",
           "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
@@ -215,33 +211,31 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_duration_minutes": 841
       }
     },
     {
-      "id": "KGC-4.06-PR",
-      "name": "KGC-4.06-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
+      "id": "SMUC Meeting Pod 4-5",
+      "name": "SMUC Meeting Pod 4-5",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "18:00",
+          "start": "08:30",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "18:00",
+          "start": "22:30",
           "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
@@ -256,33 +250,31 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_duration_minutes": 841
       }
     },
     {
-      "id": "KGC-4.07-PR",
-      "name": "KGC-4.07-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
+      "id": "SMUC Meeting Pod 4-6",
+      "name": "SMUC Meeting Pod 4-6",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "18:00",
+          "start": "08:30",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "18:00",
+          "start": "22:30",
           "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
@@ -297,33 +289,31 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_duration_minutes": 841
       }
     },
     {
-      "id": "KGC-4.08-PR",
-      "name": "KGC-4.08-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
+      "id": "SMUC Meeting Pod 4-7",
+      "name": "SMUC Meeting Pod 4-7",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "18:00",
+          "start": "08:30",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "18:00",
+          "start": "22:30",
           "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
@@ -338,212 +328,7 @@
         "is_available_now": true,
         "next_available_at": null,
         "free_slots_count": 2,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "KGC-4.09-PR",
-      "name": "KGC-4.09-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:00",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:00",
-          "end": "18:00",
-          "status": "free"
-        },
-        {
-          "start": "18:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "KGC-4.10-PR",
-      "name": "KGC-4.10-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:00",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:00",
-          "end": "18:00",
-          "status": "free"
-        },
-        {
-          "start": "18:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "KGC-4.11-PR",
-      "name": "KGC-4.11-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:00",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:00",
-          "end": "18:00",
-          "status": "free"
-        },
-        {
-          "start": "18:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "KGC-4.12-PR",
-      "name": "KGC-4.12-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:00",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:00",
-          "end": "18:00",
-          "status": "free"
-        },
-        {
-          "start": "18:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "KGC-4.13-PR",
-      "name": "KGC-4.13-PR",
-      "building": "Kwa Geok Choo Law Library",
-      "building_code": "KGC",
-      "floor": "Level 4",
-      "facility_type": "Project Room",
-      "equipment": [
-        "TV Panel"
-      ],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:00",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:00",
-          "end": "18:00",
-          "status": "free"
-        },
-        {
-          "start": "18:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_duration_minutes": 841
       }
     }
   ]
