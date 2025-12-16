@@ -62,16 +62,20 @@ For those interested, `Sagasu 4` is configured with the below environment variab
 
 Available building options (exact names, case-sensitive):
 
+- `School of Economics/School of Computing & Information Systems 2`
+- `School of Computing & Information Systems 1`
 - `School of Accountancy`
-- `School of Economics`
-- `School of Information Systems`
 - `Lee Kong Chian School of Business`
 - `Yong Pung How School of Law/Kwa Geok Choo Law Library`
-- `School of Social Sciences`
+- `School of Social Sciences/College of Integrative Studies`
 - `Administration Building`
 - `Li Ka Shing Library`
 - `Sports & Recreation Centre`
 - `Campus Centre`
+- `Prinsep Street Residences`
+- `Concourse - Room/Lab`
+- `Campus Open Spaces - Events/Activities`
+- `SMU Connexion`
 
 ### Floors
 
@@ -92,24 +96,42 @@ Available floor options (exact names, case-sensitive):
 Available facility type options:
 
 - `Project Room`
+- `Project Room (Level 5)`
 - `Discussion Room`
 - `Seminar Room`
-- `Meeting Room`
-- `Study Room`
-- `Computer Lab`
-- `Auditorium`
 - `Classroom`
+- `Chatterbox`
+- `Group Study Room`
+- `Hostel Facilities`
+- `Meeting Pod`
+- `MPH / Sports Hall`
+- `Phone Booth`
+- `SMUC Facilities`
+- `Student Activities Area`
+- `Study Booth`
 
 ### Equipment
 
 Available equipment options:
 
-- `TV Panel`
+- `Classroom PC`
+- `Classroom Prompter`
+- `Clip-on Mic`
+- `Doc Camera`
+- `DVD Player`
+- `Gooseneck Mic`
+- `Handheld Mic`
+- `Hybrid (USB connection)`
+- `In-room VC System`
 - `Projector`
-- `Whiteboard`
-- `Video Conference System`
-- `Computer`
-- `Audio System`
+- `Rostrum Mic`
+- `Teams Room`
+- `Teams Room NEAT Board`
+- `TV Panel`
+- `USB Connection VC room`
+- `Video Recording`
+- `Wired Mic`
+- `Wireless Projection`       
 
 ## Other notes
 
