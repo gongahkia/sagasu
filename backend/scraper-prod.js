@@ -271,6 +271,7 @@ function mapTimeslotsToRooms(rawRooms, rawTimeslots) {
 // --- CONFIGURATION ---
 //
 
+// Required credentials
 const EMAIL = requireEnv('SMU_EMAIL');
 const PASSWORD = requireEnv('SMU_PASSWORD');
 
@@ -283,18 +284,18 @@ const SCRAPE_CONFIG = {
   date: scrapeDate,
   startTime: requireEnv('SCRAPE_START_TIME'),
   endTime: requireEnv('SCRAPE_END_TIME'),
-  roomCapacity: requireEnv('SCRAPE_ROOM_CAPACITY'),
-  buildingNames: requireEnv('SCRAPE_BUILDING_NAMES')
-    ? requireEnv('SCRAPE_BUILDING_NAMES').split(',').map(s => s.trim())
+  roomCapacity: process.env.SCRAPE_ROOM_CAPACITY || '',
+  buildingNames: process.env.SCRAPE_BUILDING_NAMES
+    ? process.env.SCRAPE_BUILDING_NAMES.split(',').map(s => s.trim())
     : [],
-  floorNames: requireEnv('SCRAPE_FLOOR_NAMES')
-    ? requireEnv('SCRAPE_FLOOR_NAMES').split(',').map(s => s.trim())
+  floorNames: process.env.SCRAPE_FLOOR_NAMES
+    ? process.env.SCRAPE_FLOOR_NAMES.split(',').map(s => s.trim())
     : [],
-  facilityTypes: requireEnv('SCRAPE_FACILITY_TYPES')
-    ? requireEnv('SCRAPE_FACILITY_TYPES').split(',').map(s => s.trim())
+  facilityTypes: process.env.SCRAPE_FACILITY_TYPES
+    ? process.env.SCRAPE_FACILITY_TYPES.split(',').map(s => s.trim())
     : [],
-  equipment: requireEnv('SCRAPE_EQUIPMENT')
-    ? requireEnv('SCRAPE_EQUIPMENT').split(',').map(s => s.trim())
+  equipment: process.env.SCRAPE_EQUIPMENT
+    ? process.env.SCRAPE_EQUIPMENT.split(',').map(s => s.trim())
     : [],
 }
 
@@ -509,11 +510,15 @@ const outputLog = './log/scraped_log.json';
   await frameContent.waitForTimeout(3000); 
   console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
-  // 8. Set room capacity
-  await frameContent.locator('select#DropCapacity_c1').selectOption({ value: SCRAPE_CONFIG.roomCapacity });
-  console.log(`LOG: Set room capacity to ${SCRAPE_CONFIG.roomCapacity}`);
+  // 8. Set room capacity (optional)
+  if (SCRAPE_CONFIG.roomCapacity) {
+    await frameContent.locator('select#DropCapacity_c1').selectOption({ value: SCRAPE_CONFIG.roomCapacity });
+    console.log(`LOG: Set room capacity to ${SCRAPE_CONFIG.roomCapacity}`);
+  } else {
+    console.log(`LOG: Skipping room capacity filter (not specified)`);
+  }
 
-  await frameContent.waitForTimeout(3000); 
+  await frameContent.waitForTimeout(3000);
   console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
   // 9. Set equipment (optional)
