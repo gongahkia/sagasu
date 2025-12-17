@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-16T01:07:35.746Z",
-    "scrape_duration_ms": 62763,
+    "scraped_at": "2025-12-17T00:04:41.905Z",
+    "scrape_duration_ms": 64587,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "16-Dec-2025",
+    "date": "17-Dec-2025",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -34,7 +34,7 @@
   },
   "statistics": {
     "total_rooms": 7,
-    "available_rooms": 7,
+    "available_rooms": 0,
     "booked_rooms": 0,
     "partially_available_rooms": 7
   },
@@ -56,25 +56,6 @@
         },
         {
           "start": "08:30",
-          "end": "15:00",
-          "status": "free"
-        },
-        {
-          "start": "15:00",
-          "end": "17:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251216-000084",
-            "status": "Confirmed",
-            "booker_name": "Nathanael KOH",
-            "booker_email": "nathanaelkoh@smu.edu.sg",
-            "booker_org": "Institute of Innovation and Entrepreneurship",
-            "purpose": "Meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "17:00",
           "end": "22:30",
           "status": "free"
         },
@@ -91,10 +72,10 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 3,
-        "free_duration_minutes": 721
+        "is_available_now": false,
+        "next_available_at": "2025-12-17T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -130,8 +111,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
+        "is_available_now": false,
+        "next_available_at": "2025-12-17T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -169,8 +150,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
+        "is_available_now": false,
+        "next_available_at": "2025-12-17T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -208,8 +189,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
+        "is_available_now": false,
+        "next_available_at": "2025-12-17T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -247,8 +228,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
+        "is_available_now": false,
+        "next_available_at": "2025-12-17T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -286,8 +267,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
+        "is_available_now": false,
+        "next_available_at": "2025-12-17T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -325,8 +306,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
+        "is_available_now": false,
+        "next_available_at": "2025-12-17T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
