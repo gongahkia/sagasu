@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-21T00:04:54.312Z",
-    "scrape_duration_ms": 60114,
+    "scraped_at": "2025-12-22T00:06:14.209Z",
+    "scrape_duration_ms": 63236,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "21-Dec-2025",
+    "date": "22-Dec-2025",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -34,7 +34,7 @@
   },
   "statistics": {
     "total_rooms": 7,
-    "available_rooms": 7,
+    "available_rooms": 0,
     "booked_rooms": 0,
     "partially_available_rooms": 7
   },
@@ -50,21 +50,60 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "18:30",
+          "status": "free"
+        },
+        {
+          "start": "18:30",
+          "end": "20:30",
+          "status": "booked",
+          "booking": {
+            "reference": "MBK-20251219-000008",
+            "status": "Confirmed",
+            "booker_name": "TAN KAI QI",
+            "booker_email": "kaiqi.tan.2022@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: kaiqi.tan.2022@business.smu.edu.sg",
+            "purpose": "Study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "20:30",
+          "end": "22:30",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20251219-000186",
+            "status": "Confirmed",
+            "booker_name": "TAN AI QI",
+            "booker_email": "aiqi.tan.2025@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: aiqi.tan.2025@business.smu.edu.sg",
+            "purpose": "study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 601
       }
     },
     {
@@ -78,41 +117,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251216-000192",
-            "status": "Confirmed",
-            "booker_name": "Nadia Binte ASMIR",
-            "booker_email": "nadiaasmir@smu.edu.sg",
-            "booker_org": "Facilities, Services & Contracts (FMS)",
-            "purpose": "Carpet Shampooing",
-            "use_type": "Maintenance"
-          }
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
         },
         {
-          "start": "19:00",
-          "end": "00:00",
+          "start": "22:30",
+          "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -126,41 +156,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251216-000193",
-            "status": "Confirmed",
-            "booker_name": "Nadia Binte ASMIR",
-            "booker_email": "nadiaasmir@smu.edu.sg",
-            "booker_org": "Facilities, Services & Contracts (FMS)",
-            "purpose": "Carpet Shampooing",
-            "use_type": "Maintenance"
-          }
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
         },
         {
-          "start": "19:00",
-          "end": "00:00",
+          "start": "22:30",
+          "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -174,41 +195,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251216-000194",
-            "status": "Confirmed",
-            "booker_name": "Nadia Binte ASMIR",
-            "booker_email": "nadiaasmir@smu.edu.sg",
-            "booker_org": "Facilities, Services & Contracts (FMS)",
-            "purpose": "Carpet Shampooing",
-            "use_type": "Maintenance"
-          }
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
         },
         {
-          "start": "19:00",
-          "end": "00:00",
+          "start": "22:30",
+          "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -222,41 +234,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251216-000195",
-            "status": "Confirmed",
-            "booker_name": "Nadia Binte ASMIR",
-            "booker_email": "nadiaasmir@smu.edu.sg",
-            "booker_org": "Facilities, Services & Contracts (FMS)",
-            "purpose": "Carpet Shampooing",
-            "use_type": "Maintenance"
-          }
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
         },
         {
-          "start": "19:00",
-          "end": "00:00",
+          "start": "22:30",
+          "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -270,41 +273,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251216-000196",
-            "status": "Confirmed",
-            "booker_name": "Nadia Binte ASMIR",
-            "booker_email": "nadiaasmir@smu.edu.sg",
-            "booker_org": "Facilities, Services & Contracts (FMS)",
-            "purpose": "Carpet Shampooing",
-            "use_type": "Maintenance"
-          }
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
         },
         {
-          "start": "19:00",
-          "end": "00:00",
+          "start": "22:30",
+          "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -318,41 +312,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251216-000197",
-            "status": "Confirmed",
-            "booker_name": "Nadia Binte ASMIR",
-            "booker_email": "nadiaasmir@smu.edu.sg",
-            "booker_org": "Facilities, Services & Contracts (FMS)",
-            "purpose": "Carpet Shampooing",
-            "use_type": "Maintenance"
-          }
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
         },
         {
-          "start": "19:00",
-          "end": "00:00",
+          "start": "22:30",
+          "end": "23:59",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     }
   ]
