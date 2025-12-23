@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-22T00:06:14.209Z",
-    "scrape_duration_ms": 63236,
+    "scraped_at": "2025-12-23T00:04:53.011Z",
+    "scrape_duration_ms": 61308,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "22-Dec-2025",
+    "date": "23-Dec-2025",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -56,36 +56,8 @@
         },
         {
           "start": "08:30",
-          "end": "18:30",
-          "status": "free"
-        },
-        {
-          "start": "18:30",
-          "end": "20:30",
-          "status": "booked",
-          "booking": {
-            "reference": "MBK-20251219-000008",
-            "status": "Confirmed",
-            "booker_name": "TAN KAI QI",
-            "booker_email": "kaiqi.tan.2022@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: kaiqi.tan.2022@business.smu.edu.sg",
-            "purpose": "Study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "20:30",
           "end": "22:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20251219-000186",
-            "status": "Confirmed",
-            "booker_name": "TAN AI QI",
-            "booker_email": "aiqi.tan.2025@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: aiqi.tan.2025@business.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
+          "status": "free"
         },
         {
           "start": "22:30",
@@ -101,9 +73,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "next_available_at": "2025-12-23T00:30:00.000Z",
         "free_slots_count": 2,
-        "free_duration_minutes": 601
+        "free_duration_minutes": 841
       }
     },
     {
@@ -140,7 +112,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "next_available_at": "2025-12-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -179,7 +151,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "next_available_at": "2025-12-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -218,7 +190,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "next_available_at": "2025-12-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -257,7 +229,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "next_available_at": "2025-12-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -296,7 +268,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "next_available_at": "2025-12-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -335,7 +307,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2025-12-22T00:30:00.000Z",
+        "next_available_at": "2025-12-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
