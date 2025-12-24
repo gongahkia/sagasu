@@ -1,8 +1,8 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-24T01:13:05.336Z",
-    "scrape_duration_ms": 60346,
+    "scraped_at": "2025-12-24T01:21:52.105Z",
+    "scrape_duration_ms": 61322,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
@@ -29,16 +29,133 @@
         "Meeting Pod"
       ],
       "equipment": [],
-      "capacity": "From6To10Pax"
+      "capacity": ""
     }
   },
   "statistics": {
-    "total_rooms": 7,
-    "available_rooms": 7,
+    "total_rooms": 22,
+    "available_rooms": 22,
     "booked_rooms": 0,
-    "partially_available_rooms": 7
+    "partially_available_rooms": 22
   },
   "rooms": [
+    {
+      "id": "KGC Meeting Pod 3-01",
+      "name": "KGC Meeting Pod 3-01",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "KGC Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SCIS1 Meeting Pod 3-1",
+      "name": "SCIS1 Meeting Pod 3-1",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SCIS1 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SCIS1 Meeting Pod 3-2",
+      "name": "SCIS1 Meeting Pod 3-2",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SCIS1 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
     {
       "id": "SMUC Meeting Pod 4-1",
       "name": "SMUC Meeting Pod 4-1",
@@ -278,6 +395,474 @@
       "name": "SMUC Meeting Pod 4-7",
       "building": "School of Economics/School of Computing & Information Systems 2",
       "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOA Meeting Pod 3-1",
+      "name": "SOA Meeting Pod 3-1",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOA Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOA Meeting Pod 3-2",
+      "name": "SOA Meeting Pod 3-2",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOA Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOE/SCIS2 Meeting Pod 3-1",
+      "name": "SOE/SCIS2 Meeting Pod 3-1",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOE/SCIS2 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOE/SCIS2 Meeting Pod 3-2",
+      "name": "SOE/SCIS2 Meeting Pod 3-2",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOE/SCIS2 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOE/SCIS2 Meeting Pod 3-3",
+      "name": "SOE/SCIS2 Meeting Pod 3-3",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOE/SCIS2 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOE/SCIS2 Meeting Pod 3-4",
+      "name": "SOE/SCIS2 Meeting Pod 3-4",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOE/SCIS2 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOSS/CIS Meeting Pod B1-1",
+      "name": "SOSS/CIS Meeting Pod B1-1",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOSS/CIS Meeting Pod B1",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOSS/CIS Meeting Pod B1-2",
+      "name": "SOSS/CIS Meeting Pod B1-2",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOSS/CIS Meeting Pod B1",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOSS/CIS Meeting Pod B1-3",
+      "name": "SOSS/CIS Meeting Pod B1-3",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOSS/CIS Meeting Pod B1",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOSS/CIS Meeting Pod B1-4",
+      "name": "SOSS/CIS Meeting Pod B1-4",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOSS/CIS Meeting Pod B1",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOSS/CIS Meeting Pod B1-5",
+      "name": "SOSS/CIS Meeting Pod B1-5",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOSS/CIS Meeting Pod B1",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "YPHSL Meeting Pod B1-01",
+      "name": "YPHSL Meeting Pod B1-01",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "YPHSL Meeting Pod B1",
       "floor": "Unknown",
       "facility_type": "Meeting Pod",
       "equipment": [],
