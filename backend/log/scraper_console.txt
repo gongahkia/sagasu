@@ -1,2 +1,110 @@
 Sagasu scraper console log
-(Not generated yet — will be overwritten on next scraper run.)
+Started: 2025-12-24T01:12:04.729Z
+============================================================
+
+
+============================================================
+ORCHESTRATOR: Starting scraping workflows
+============================================================
+
+============================================================
+ORCHESTRATOR: Starting Room Availability Scraper (scraper-prod.js)...
+============================================================
+
+[dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 encrypt with dotenvx: https://dotenvx.com)
+LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
+LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7YsfkQSyCROFQJNqikvbQS%2BUYByw5NvU6ffz7BtIHvdCzx9%2FszO4EeKsPbNb5vbmXL50EH7y32gA7PZSoc4ZZDgqY4a0E5gXbzG5WjEaEHZz1VliNghmAdF5ZM7cGula6jXSvSsiH%2B1WJ9t4fgGHc1BAp4x030kfQdpHcdhHs8Gav6tpq6fcRgMVHPMXru02FgkU%2FjzL8SP7laLtTJmqVcBZs463RyshI2BaLYszzQvAw5QUPk7yIQ06TUdiQjDfbLE%2ByZIuPwSgKlosSPTd0TLjMaTpuajpqyCirSTaiSZpzUmSi7mUAnVwa8Nz4ElFC0zCmIU0qErOYsDR%2BQsH6q4crZbbK7C6XVg8iYNdVtQ6HmI%2FSwSliL0DTyXFCdjJ2Z8u4jOXfG0DT%2F%2FqGn74n%2BMxq8D2w2569XKytVuIjmGlt3%2BZOci9LFCM8Hb78vZjpJw%3D%3D&RelayState=ss%3Amem%3Aba566ac9fd656a5738860ca0d804733e8e7c81a37f73ff7357d16cd38ce68e40
+LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
+Redirect took too long, clicking #redirectToIdpLink...
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=7b2a0cf0-d3a8-4078-aadd-74e071ebb686&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA_aNRQAIdfen-qpdW24K7gdHrJS17yXhIo9K5eLWjwzoink7z38nKX3iXXy8u1_hmF0rFboZMognQSBwUnEafiUHFThFIXrYM3ONzoTeImCL_f-sH3TQG31M6yNelqWsikGiVZShORqTIeqCIYqLKlyXbEWK8rsnY6PzU7nC49ePbx7uLel-yw_-Pl5p7i_Avg_wGoUvY0v-JdNbT6Nf_GW-XcndCwIRXEsOyQGSiECDOIkWFahEIHc3agKN8U5dNEwadx19jNXZbSjUXsMmphTLkTBtjC1CLItjHkFAY2NAlCwhaE2zpFJCQoHN8igY55gGwusC1M-CJ3njs2JQ6nZYs6tGwSRy9Tw0TlEGI6xhITm8FR7myLsjQSXbWXtFQDGmhR8kj-5XeQnz7OT8ATo7zyuDAu9PV76dUv9nn5ycPh-zObj8B-QQs9boj6JVnrLFcbIqqyVZ20B7iZUHOjEjfQ7aVO0jTvZferrQXL1beLM_tFMCwqW5NgdxK8Pvn_id_MgNGpo3c7T3c-bP9cOT598UKneivt11BvtXml5l1f128SiNKG14w8v15ZX3HYmpctJRuwX1t4PgsOx5sDozmwNQ9-Aw2&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Filled in password
+LOG: Clicked submit button
+LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home and saved screenshot
+LOG: Content frame bottom loaded
+LOG: Core content frame loaded
+LOG: Initial date already 24-Dec-2025, clicking forward and backward once to refresh
+LOG: Date picker set to desired date: 24-Dec-2025
+LOG: Set start and end time dropdowns to 08:00 and 22:00
+LOG: Forcing a timeout of 3000ms to allow the page to update
+LOG: Clicked OK button in building selection
+LOG: Set building(s) to School of Economics/School of Computing & Information Systems 2,School of Computing & Information Systems 1,School of Accountancy,Yong Pung How School of Law/Kwa Geok Choo Law Library,School of Social Sciences/College of Integrative Studies,SMU Connexion
+LOG: Forcing a timeout of 3000ms to allow the page to update
+LOG: Clicked OK button in floor selection
+LOG: Set floor(s) to Basement 1,Level 3,Level 4
+LOG: Forcing a timeout of 3000ms to allow the page to update
+LOG: Clicked OK button in facility type selection
+LOG: Set facility type(s) to Meeting Pod
+LOG: Forcing a timeout of 3000ms to allow the page to update
+LOG: Set room capacity to From6To10Pax
+LOG: Forcing a timeout of 3000ms to allow the page to update
+LOG: Set equipment to 
+LOG: Forcing a timeout of 3000ms to allow the page to update
+LOG: Matched 7 rooms (SMUC Meeting Pod 4-1,SMUC Meeting Pod 4-2,SMUC Meeting Pod 4-3,SMUC Meeting Pod 4-4,SMUC Meeting Pod 4-5,SMUC Meeting Pod 4-6,SMUC Meeting Pod 4-7)
+LOG: Clicked "Check Availability" button
+LOG: Forcing a timeout of 10000ms to allow the page to update
+LOG: Found 14 timeslots ((00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available))
+LOG: Mapped rooms to timeslots
+✅ Scraping complete. Data written to: ./log/scraped_log.json
+
+============================================================
+ORCHESTRATOR: Room Availability Scraper (scraper-prod.js) completed successfully in 60.66s
+============================================================
+
+
+============================================================
+ORCHESTRATOR: Starting User Bookings Scraper (scraper-bookings.js)...
+============================================================
+
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] })
+LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
+LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR74tgEQiyCROFQJNqiQnvopXKcDVhybOp1%2Bvj3JdDnpT17%2FM3O7E5QtuYgZl3Y21t46gBD9Noai%2BL0UJLOW%2BEkahRWtoAiKLGZXa0ET1Jx8C445QyJZojgg3Z27ix2LfgN%2BGet4O52VZJ9CAcUlDYVJtoGLy2EBNsugbpLcEc3e11VzkDYJ4iO9nhO1zebLYkWx3m0lT35m2PcTtuk1co7dE1w1mgLiXItVcVY5oWS8VAWMs7ygsWSZ4O4SUeyqUd5Nspq2gfjJFouSvII44KN63QMucoGkA1GFWdFUxe5YjKVdS9D7GBpMUgbSsJTPowZj3m2TZlgTAzZA4nWHz1caFtru%2Fu7tOosQnG53a7jc8x78HiKeBSQ6aSfUJyM%2FY9l%2FI2Vnxsg0%2F%2F6xq%2B%2BJ%2FSH1dn3IK6P7OVi7YxWb9HMGPcy9yADlIQROj1%2F%2BX0x03c%3D&RelayState=ss%3Amem%3A9959db20792ae210ef83ce05274644751782537d46f263350dec85e27a26031c
+LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
+LOG: Redirected to SMU SSO
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=7b2a0cf0-d3a8-4078-aadd-74e071ebb686&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAndA_aNRQAMfxpPenWqy2BcFRwUm85P1LXl6goLY9_7TXVtP2iiDy8t7LXWqSa-_l9NwcOnQsbnazk4iIVHBwEt06VUcncZJbFBy8OlkXcSsUfvMHft8hw7_QzPNV7dt2FGorzvI2z1Ru6bRjKdmxdMPWzTgMW4nKm-2xoRHxqPua33lWe_xiPf7U4-Fzkx0GBP8AS-uWHVyuzSB7fi5YeG-eu6s8Bj0JPEUFwYpgN0SQRZJRATngEu2Z5jfT_DxQCniaoK3CVa39VKU-Yw6TIQKUIa4QBCrysFDAQZS4hFAHUg85mEriRsjF2AFSCc9RiHLkAgzFTuG8YB6nTPCKwxmvEMpghSOCKxFweSTdv5D8Wjjb4GE7VonVyhoWAghf0iLW__3bK57oFQfAsX7R3C4dFPpVOX1m58321FOczu4768ZuyfbYSvJgYnm-C2fiSbm4wEWQdbt1kTvNbG2qeu9hfoPKtbk4WyXjrg83y8O7ZeNH2dwYNLYGjbfHj5743bDRP_n75c8PTz5ufr_WO3Xx9i0mk2k4O6mmr9Aq6UzcXw6XdE2JerSyhOu8puViFeHWTXh9_NWI8eVgo0Z_1NgYM_4A0&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Filled in password
+LOG: Clicked submit button
+LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home
+LOG: Navigating to home page
+LOG: Successfully loaded home page
+LOG: Frame bottom loaded
+LOG: Looking for div#MyBookingsTab in frameBottom
+LOG: Clicked on My Bookings tab
+LOG: Waiting 15 seconds for content to load
+LOG: Content frame loaded
+LOG: Found div#GridViewBooking_content
+LOG: Found 1 booking rows in table
+✅ Bookings scraping complete. Data written to: ./log/scraped_bookings.json
+
+============================================================
+ORCHESTRATOR: User Bookings Scraper (scraper-bookings.js) completed successfully in 32.42s
+============================================================
+
+
+============================================================
+ORCHESTRATOR: Starting User Tasks Scraper (scraper-tasks.js)...
+============================================================
+
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' })
+LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
+LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR74sTEgVgEicKhSLSNCu2hl8pxHLDk2KnX6ePfl0Af9ELPHn%2BzM7tT4K3u2Lz3e3MvX3oJPnhvtQF2fChQ7wyzHBQww1sJzAu2md%2BsGYli1jnrrbAaBXMA6byyZmEN9K10G%2BlelZAP9%2BsC7b3vgGHcVBAp4x030kfQ9pGs%2Bwh2eLNXVWW19PsIwOIBT3B5t9miYHmYRxk%2BkH852u6UiVolnAXbeGu0MjIStsUin%2FBxLnhIec7DdJwnISfpKGzijDd1Nk6ztMZDMIKC1bJAz5TSiaBN3giS1A0lFadUkjodZQ1N63yQAfRyZcBz4wtEYkLDhIQk3cYJSwgj6RMKyq8erpSpldldLq06iYBdb7dleIr5KB0cIx4EaDYdJmRHY3e2jMtY%2Fr0BNPuvb%2Fjpe4rPrE6%2BHbs9sFfL0molPoK51vZt4ST3skAJwrPTl78XM%2FsE&RelayState=ss%3Amem%3A2127e7387b8817e07fe88545e642741ce4fe62a79d8ee2746787a7143bf9ac8f
+LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
+LOG: Redirected to SMU SSO
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=7b2a0cf0-d3a8-4078-aadd-74e071ebb686&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA9aBRBAIVncz_RYDS5ylLByvP2Z3ZmZ3YhYi5_6t7p6YnRIyCzuzN7y93emZtdT9LYBgsJYnUWghaijWIhGCzEJpAqYmchYqVptLzSrcROCLzqPd4H700B53Q7SW5LR9OEJ9WolwxYjyeqjFOVB6kqQ022I8_rd3nSHpSmZn6WXjx8VhsuP37yYOdVaB9_qdj_AzT_AlQp-1pzvl6DWuNy89pH5eQtjDH1sbCFD41AYOgxjDkMkGkJjAIb7inKD0X5MlFosrgLR7kVKZ2Yxw40IOHEpMSj1CBcJ4JTihHmFoIEGT5HgluQETugnGeORShhxECmJ2zmU_Emd8q3aZb7rIKZzSqI2EaFQWRWhG4xEVhZBwXfcydC5g0i3lX7vVCFOjTPST-S_-zbyx_Zz0_oh8Z55Wkhe0h5u3Mf3ltbfOc9P7tdS8BuQSvfnI8aEnfqLtZbCW017tywL5ptPkzcS3J9veobSx1_tepeWQ7nDMfYKk7vFsHvorI5CUaTYPvwwS_-MA3GRz8_ev919Gnr1_n9Y2fK6cpSzPBC6NarVquMrnvsahjdZenixoLhuRtRNQ06pq9dGNbnXs-Ab5lmwXgWbJbAHw2&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Filled in password
+LOG: Clicked submit button
+LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home
+LOG: Navigating to home page
+LOG: Successfully loaded home page
+LOG: Frame bottom loaded
+LOG: Looking for div#TaskListTab in frameBottom
+LOG: Clicked on Task List tab
+LOG: Waiting 15 seconds for content to load
+LOG: Content frame loaded
+LOG: Found div#GridViewTask
+LOG: Found 1 task rows in table
+✅ Task list scraping complete. Data written to: ./log/scraped_tasks.json
+
+============================================================

@@ -1,8 +1,8 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2025-12-24T00:05:08.724Z",
-    "scrape_duration_ms": 65861,
+    "scraped_at": "2025-12-24T01:13:05.336Z",
+    "scrape_duration_ms": 60346,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
@@ -34,7 +34,7 @@
   },
   "statistics": {
     "total_rooms": 7,
-    "available_rooms": 0,
+    "available_rooms": 7,
     "booked_rooms": 0,
     "partially_available_rooms": 7
   },
@@ -72,8 +72,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2025-12-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -111,8 +111,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2025-12-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -150,8 +150,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2025-12-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -189,8 +189,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2025-12-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -228,8 +228,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2025-12-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -267,8 +267,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2025-12-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -306,8 +306,8 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2025-12-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
