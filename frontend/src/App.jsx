@@ -6,9 +6,10 @@ import RoomCard from './components/RoomCard';
 import BookingCard from './components/BookingCard';
 import MyBookings from './components/MyBookings';
 import MyTasks from './components/MyTasks';
+import ScraperLogs from './components/ScraperLogs';
 import MobileBottomNav from './components/MobileBottomNav';
 import CalendarView from './components/CalendarView';
-import { useRoomData, useBookingData, useTaskData } from './hooks/useRoomData';
+import { useRoomData, useBookingData, useTaskData, useScraperConsoleLog } from './hooks/useRoomData';
 import { useFavorites } from './hooks/useFavorites';
 import { filterRooms, getUniqueValues, sortRooms } from './utils/filters';
 import { checkSystemStatus } from './utils/envCheck';
@@ -18,6 +19,7 @@ function App() {
   const { data, loading, error, refetch } = useRoomData(false);
   const { data: bookingsData, loading: bookingsLoading } = useBookingData();
   const { data: tasksData, loading: tasksLoading } = useTaskData();
+  const { text: scraperLogText, loading: scraperLogLoading, error: scraperLogError, refetch: refetchScraperLog } = useScraperConsoleLog();
   const { favorites, toggleFavorite, isFavorite } = useFavorites();
 
   const [filters, setFilters] = useState({
@@ -175,6 +177,22 @@ function App() {
               )}
             </div>
           </button>
+
+          <button
+            onClick={() => setActiveTab('logs')}
+            className={`px-6 py-3 font-medium transition-colors border-b-2 whitespace-nowrap ${
+              activeTab === 'logs'
+                ? 'border-spacemacs-light-accent text-spacemacs-light-accent'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h6l4 4v12a2 2 0 01-2 2z" />
+              </svg>
+              <span>Logs</span>
+            </div>
+          </button>
         </div>
 
         {/* Rooms Tab Content */}
@@ -322,6 +340,16 @@ function App() {
               <MyTasks tasksData={tasksData} />
             )}
           </>
+        )}
+
+        {/* Logs Tab Content */}
+        {activeTab === 'logs' && (
+          <ScraperLogs
+            text={scraperLogText}
+            loading={scraperLogLoading}
+            error={scraperLogError}
+            onRefresh={refetchScraperLog}
+          />
         )}
 
         {/* Footer */}

@@ -1,10 +1,11 @@
-import { Home, Calendar, CheckSquare } from 'lucide-react';
+import { Home, Calendar, CheckSquare, FileText } from 'lucide-react';
 
 export default function MobileBottomNav({ activeTab, onTabChange }) {
   const tabs = [
     { id: 'rooms', label: 'Available Rooms', icon: Home },
     { id: 'bookings', label: 'My Bookings', icon: Calendar },
-    { id: 'tasks', label: 'My Tasks', icon: CheckSquare }
+    { id: 'tasks', label: 'My Tasks', icon: CheckSquare },
+    { id: 'logs', label: 'Logs', icon: FileText }
   ];
 
   return (

@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "sync:data": "mkdir -p public/data && cp ../backend/log/*.json public/data/"
+    "sync:data": "mkdir -p public/data && cp ../backend/log/*.json public/data/ && ([ -f ../backend/log/scraper_console.txt ] && cp ../backend/log/scraper_console.txt public/data/ || true)"
   },
   "dependencies": {
     "lucide-react": "^0.553.0",

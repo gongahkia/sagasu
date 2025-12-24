@@ -16,6 +16,10 @@ const TASKS_URL = isDev
   ? '/data/scraped_tasks.json'
   : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_tasks.json';
 
+const SCRAPER_CONSOLE_URL = isDev
+  ? '/data/scraper_console.txt'
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraper_console.txt';
+
 export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -150,4 +154,46 @@ export const useTaskData = (autoRefresh = false, intervalMs = 30000) => {
   }, [autoRefresh, intervalMs]);
 
   return { data, loading, error, refetch: fetchTasks };
+};
+
+export const useScraperConsoleLog = (autoRefresh = false, intervalMs = 30000) => {
+  const [text, setText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchLog = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await fetch(SCRAPER_CONSOLE_URL + '?t=' + Date.now());
+      if (!response.ok) {
+        if (response.status === 404) {
+          setText('');
+          return;
+        }
+        throw new Error(`Failed to fetch log: ${response.statusText}`);
+      }
+
+      const logText = await response.text();
+      setText(logText);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error fetching scraper log:', err);
+      setText('');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLog();
+
+    if (autoRefresh) {
+      const interval = setInterval(fetchLog, intervalMs);
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh, intervalMs]);
+
+  return { text, loading, error, refetch: fetchLog };
 };
