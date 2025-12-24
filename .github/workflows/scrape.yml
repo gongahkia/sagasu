@@ -52,7 +52,7 @@ jobs:
       - name: Check if data changed
         id: check_changes
         run: |
-          if git diff --quiet backend/log/scraped_log.json backend/log/scraped_bookings.json backend/log/scraped_tasks.json; then
+          if git diff --quiet backend/log/scraped_log.json backend/log/scraped_bookings.json backend/log/scraped_tasks.json backend/log/scraper_console.txt; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -63,8 +63,8 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add backend/log/scraped_log.json backend/log/scraped_bookings.json backend/log/scraped_tasks.json
-          git commit -m "chore: update scraped data (rooms, bookings, tasks) [skip ci]"
+          git add backend/log/scraped_log.json backend/log/scraped_bookings.json backend/log/scraped_tasks.json backend/log/scraper_console.txt
+          git commit -m "chore: update scraped data (rooms, bookings, tasks, console) [skip ci]"
           git push
 
       - name: Upload artifacts on failure

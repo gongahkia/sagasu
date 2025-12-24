@@ -8,6 +8,33 @@
 const { spawn } = require('child_process');
 const fs = require('fs');
 
+const LOG_FILE_PATH = './log/scraper_console.txt';
+
+function ensureLogDirExists() {
+  try {
+    fs.mkdirSync('./log', { recursive: true });
+  } catch {
+    // ignore
+  }
+}
+
+function createLogStream() {
+  ensureLogDirExists();
+  const stream = fs.createWriteStream(LOG_FILE_PATH, { flags: 'w' });
+  stream.write(`Sagasu scraper console log\n`);
+  stream.write(`Started: ${new Date().toISOString()}\n`);
+  stream.write(`${'='.repeat(60)}\n\n`);
+  return stream;
+}
+
+function teeWrite(stream, chunk) {
+  try {
+    stream.write(chunk);
+  } catch {
+    // ignore
+  }
+}
+
 //
 // --- HELPER FUNCTIONS ---
 //
@@ -20,8 +47,16 @@ function runScript(scriptPath, scriptName) {
 
     const startTime = Date.now();
     const child = spawn('node', [scriptPath], {
-      stdio: 'inherit',
+      stdio: ['ignore', 'pipe', 'pipe'],
       cwd: __dirname
+    });
+
+    child.stdout.on('data', (chunk) => {
+      process.stdout.write(chunk);
+    });
+
+    child.stderr.on('data', (chunk) => {
+      process.stderr.write(chunk);
     });
 
     child.on('close', (code) => {
@@ -53,6 +88,29 @@ function runScript(scriptPath, scriptName) {
 //
 
 (async () => {
+  const logStream = createLogStream();
+
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = (chunk, encoding, cb) => {
+    teeWrite(logStream, chunk);
+    return originalStdoutWrite(chunk, encoding, cb);
+  };
+
+  process.stderr.write = (chunk, encoding, cb) => {
+    teeWrite(logStream, chunk);
+    return originalStderrWrite(chunk, encoding, cb);
+  };
+
+  const closeLog = () => {
+    try {
+      logStream.end(`\nFinished: ${new Date().toISOString()}\n`);
+    } catch {
+      // ignore
+    }
+  };
+
   const orchestrationStartTime = Date.now();
   const results = [];
 
@@ -141,6 +199,7 @@ function runScript(scriptPath, scriptName) {
       console.log('\nNote: Could not load scraped data for summary');
     }
 
+    closeLog();
     process.exit(0);
 
   } catch (error) {
@@ -154,6 +213,7 @@ function runScript(scriptPath, scriptName) {
     console.error(`Total duration: ${totalDuration}s`);
     console.error('='.repeat(60) + '\n');
 
+    closeLog();
     process.exit(1);
   }
 })();
