@@ -1,0 +1,2 @@
+Sagasu scraper console log
+(Not generated yet — will be overwritten on next scraper run.)
