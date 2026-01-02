@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2026-01-01T00:05:45.637Z",
-    "scrape_duration_ms": 62780,
+    "scraped_at": "2026-01-02T00:04:43.901Z",
+    "scrape_duration_ms": 62207,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "01-Jan-2026",
+    "date": "02-Jan-2026",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
