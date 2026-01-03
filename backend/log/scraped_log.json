@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2026-01-02T00:04:43.901Z",
-    "scrape_duration_ms": 62207,
+    "scraped_at": "2026-01-03T00:04:38.967Z",
+    "scrape_duration_ms": 59821,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "02-Jan-2026",
+    "date": "03-Jan-2026",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -34,7 +34,7 @@
   },
   "statistics": {
     "total_rooms": 22,
-    "available_rooms": 22,
+    "available_rooms": 0,
     "booked_rooms": 0,
     "partially_available_rooms": 22
   },
@@ -50,21 +50,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -78,21 +89,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -106,21 +128,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -134,21 +167,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -162,21 +206,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -190,21 +245,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -218,21 +284,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -246,21 +323,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -274,21 +362,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -302,21 +401,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -330,21 +440,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -358,21 +479,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -386,21 +518,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -414,21 +557,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -442,21 +596,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -470,21 +635,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -498,21 +674,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -526,21 +713,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -554,21 +752,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -582,21 +791,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -610,21 +830,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     },
     {
@@ -638,21 +869,32 @@
       "timeslots": [
         {
           "start": "00:00",
-          "end": "00:00",
+          "end": "08:30",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "00:00",
+          "start": "08:30",
+          "end": "17:00",
+          "status": "free"
+        },
+        {
+          "start": "17:00",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": true,
-        "next_available_at": null,
-        "free_slots_count": 1,
-        "free_duration_minutes": 1440
+        "is_available_now": false,
+        "next_available_at": "2026-01-03T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 511
       }
     }
   ]
