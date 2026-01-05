@@ -1,5 +1,5 @@
 Sagasu scraper console log
-Started: 2026-01-04T00:04:28.306Z
+Started: 2026-01-05T00:04:03.397Z
 ============================================================
 
 
@@ -11,20 +11,20 @@ ORCHESTRATOR: Starting scraping workflows
 ORCHESTRATOR: Starting Room Availability Scraper (scraper-prod.js)...
 ============================================================
 
-[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] })
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  override existing env vars with { override: true })
 LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
 LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
-LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLT8MwEIT%2FSuR7YjcxCbGaSqU9UKlARQsHLshxNq0lxy5eh8e%2Fpw8e5VLOHn%2BzM7tDlJ3ZinEfNvYeXnrAEL13xqI4PFSk91Y4iRqFlR2gCEosxzdzkSZMbL0LTjlDojEi%2BKCdnTiLfQd%2BCf5VK3i4n1dkE8IWBaVtjYm2wUsLIcGuT6DpE1zT5UbXtTMQNgmio3t8Shd3yxWJprt5tJV78i%2FHuLW2SaeVd%2Bja4KzRFhLlOqrKS1mUSsYXspQxL8pBLFOexS3LZdvkBc95Q%2FfBUhLNphV5LvICGl7mStV5zRtV8iwrWZExaHnWNmonQ%2BxhZjFIGyqSsjSP2SBmfMWYYJkYsCcSLb56uNK20XZ9vrT6KEJxvVot4mPMR%2FB4iLgTkNFwP6E4GPuTZZzHyu8NkNF%2FfeNP30N6YnX03YrbHXs2XTij1Uc0Nsa9TTzIABUZEDo6fvl7MaNP&RelayState=ss%3Amem%3Aea771156d187ff5da81d8c71c8274c7570cc301326393761545fa2c4502ae88a
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb9swEIT%2FisC7REqWrZCwDLjxIQbSxoidHnIpVtTKJkCRDpdqk38fP%2FJwL8mZw292ZndK0Nu9mg9x5%2B7xaUCKyXNvHanTQ82G4JQHMqQc9EgqarWe%2F7xVRSbUPvjotbcsmRNhiMa7a%2B9o6DGsMfw1Gh%2Fub2u2i3FPivOuocy4GMBhzKgfMmyHjLZ8vTNN4y3GXUbk%2BRFf8NXdesOSxWEe4%2BBI%2FuRYvzUu640OnnwXvbPGYaZ9z7W8gkpqSMcgIS0rmadQlKO0ExPo2klVTsqWH4MVLFkuavZHloCQj1opm6qtiqosOjmSTXtVIYwrnR9kRAMuHUVwsWaFKCapyFMx3gihxEiNxSNLVm89%2FDCuNW77dWnNWUTqZrNZpeeYvzHQKeJBwGbT44TqZBwulvE1Ft43wGbf9U0ffU%2F5hdXZd69%2BHdjLxcpbo1%2BSubX%2B33VAiFiznPHZ%2Bcv%2FFzN7BQ%3D%3D&RelayState=ss%3Amem%3A964870a17ae16bd3547699dda5ce2885cf60c0e93ff44a359f2627b2e758be0b
 LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
 Redirect took too long, clicking #redirectToIdpLink...
-LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=67e661f2-5275-473a-9f45-c9e7b880c04a&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA9aNRQAICT3k-1WG27dlFwsl5-3nvJywsW7NWYclzx6HlSb5GXl7wkvfxc7-WqDoKL0MFB3OwiOnapCII6FTcrQmcnUVHpojjdpp3ETSh88wffNyHZ56Ki6AtbVbknlDgrBjQLCkWkQyXwh4oIVRHFnpcnQRENZiamftGv4XDFdh87b7-9vLvb2JbJ_wTtvwJFiFxtLyw3gdq60r76Rj5zA5s48BExGfNMD_mMIAiJhqEWcAS5z_Zl-bssfxirtGmagK2SK4SdBqkdUIx13TB93cKcGz61dN9iWGcWwIhhA2uMQU2HwIQEYlM3kMEpYMjQAA0siz4vnWXEopgwWjMooTWEiV6jAMEa10zKfRMjE_mfSqdD6g3iIFHyLFSABuBFwWLxT99--cRBeUw7NirLTyuHh1617j35_KLTvL8ze-eCsSPvVVS2JlZbVrCYXY-cjX5YT3vu5Ra5VSyvd_NLq7zfjFYcEGtL3WvhPLH1B9XJvar0sypvjktb49Lr40dfvDspjU7-fvdo-_2Xhz-WDk6dtxyru1G_ndS9tLuQdSJej8B6jlgv6t2cQ07DTRtrYC6hi25n_tmU9PGQaWk0LW3OSH8A0&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=c037e4ca-e43c-458f-bed0-87a83e189987&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA9axRBAEB3cx8xwWgSEFIqpFJvP2Zmd3YWI9kYudOcMdzGnNjIzM7M3eHubbKzIfoHTDpFsDCChZVYiQhCColWctVVFjZqSCFpkvIawVRiJwivfvDeqOafb-f5qvJNUzJldLp5RrsiN1Sybgi-bqiWqdodxtJY5O1scnS8t493L-0_uvqhv_nq8tSzzdc6-Zcg_CMwlErNMLhRB-bSzXD5k37uLkFUUBtyQhjmGGAEJIGEcQ8L6uDI7uv6T13_OlQKaRKD7UJVKT8RiU9c5GGL2pgK22UcOgi7hHBOnUgAz3Mi6VqRJQiUEiEKHSKBCzADAjseExZ7W5iOiEcxiWjFoYRWECZ2hQIEK9JyqeQuRi7ie4WzLcqyjoiNtNsygAXgrIo66q--fvHkQXHIOjEo6i9Lx4fevzjz8TmfvvZu7sfhl9JTvVcy5xIYrD6oiqx2YXFj_vZ81b1zBQU4R81boTLrQZYpGDcWWLCQzmDfflwe65W1o7K-NaxtD2s7I_-_eHdMG5za2fv88NuvJ4e1g9MXl0zUXGvcD1bqdRE6zWVew-nKPZ5JW8jrYSyFuRGxKlxsBOnMm3Ht-zET2mBC25rUfgM1&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
 LOG: Filled in password
 LOG: Clicked submit button
 LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home and saved screenshot
 LOG: Content frame bottom loaded
 LOG: Core content frame loaded
-LOG: Initial date already 04-Jan-2026, clicking forward and backward once to refresh
-LOG: Date picker set to desired date: 04-Jan-2026
+LOG: Initial date already 05-Jan-2026, clicking forward and backward once to refresh
+LOG: Date picker set to desired date: 05-Jan-2026
 LOG: Set start and end time dropdowns to 08:00 and 22:00
 LOG: Forcing a timeout of 3000ms to allow the page to update
 LOG: Clicked OK button in building selection
@@ -43,12 +43,12 @@ LOG: Forcing a timeout of 3000ms to allow the page to update
 LOG: Matched 22 rooms (KGC Meeting Pod 3-01,SCIS1 Meeting Pod 3-1,SCIS1 Meeting Pod 3-2,SMUC Meeting Pod 4-1,SMUC Meeting Pod 4-2,SMUC Meeting Pod 4-3,SMUC Meeting Pod 4-4,SMUC Meeting Pod 4-5,SMUC Meeting Pod 4-6,SMUC Meeting Pod 4-7,SOA Meeting Pod 3-1,SOA Meeting Pod 3-2,SOE/SCIS2 Meeting Pod 3-1,SOE/SCIS2 Meeting Pod 3-2,SOE/SCIS2 Meeting Pod 3-3,SOE/SCIS2 Meeting Pod 3-4,SOSS/CIS Meeting Pod B1-1,SOSS/CIS Meeting Pod B1-2,SOSS/CIS Meeting Pod B1-3,SOSS/CIS Meeting Pod B1-4,SOSS/CIS Meeting Pod B1-5,YPHSL Meeting Pod B1-01)
 LOG: Clicked "Check Availability" button
 LOG: Forcing a timeout of 10000ms to allow the page to update
-LOG: Found 22 timeslots ((00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available),(00:00-00:00) (not available))
+LOG: Found 44 timeslots ((00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available))
 LOG: Mapped rooms to timeslots
 ✅ Scraping complete. Data written to: ./log/scraped_log.json
 
 ============================================================
-ORCHESTRATOR: Room Availability Scraper (scraper-prod.js) completed successfully in 66.27s
+ORCHESTRATOR: Room Availability Scraper (scraper-prod.js) completed successfully in 62.17s
 ============================================================
 
 
@@ -56,13 +56,13 @@ ORCHESTRATOR: Room Availability Scraper (scraper-prod.js) completed successfully
 ORCHESTRATOR: Starting User Bookings Scraper (scraper-bookings.js)...
 ============================================================
 
-[dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit)
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' })
 LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
 LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
-LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7YieYQCyCROFQJNqiQnvopXKcDVhybOp1%2Bvj35dEHvdCzx9%2FszO4IZWt2YtKFrb2Hlw4wRO%2BtsSiODyXpvBVOokZhZQsoghKryc1CZAkTO%2B%2BCU86QaIIIPmhnp85i14JfgX%2FVCh7uFyXZhrBDQWlTYaJt8NJCSLDtEqi7BDd0tdVV5QyEbYLo6AGf0eXdak2i2X4ebeWB%2FMsxbqNt0mrlHbomOGu0hUS5lqpiKAeFknFfFjLmgyKNZcZ7ccNy2dT5gOe8podgGYnms5I8V4w1jeTDHu8rqPOiKCCHQZqqimcq52ovQ%2BxgbjFIG0qSsSyPWRozvmZMMC7S%2FIlEy68errSttd1cLq06iVBcr9fL%2BBTzETweI%2B4FZDw6TCiOxv5sGZex8nsDZPxf3%2FjT94ieWZ18d%2BJ2z57Pls5o9RFNjHFvUw8yQElSQsenL38vZvwJ&RelayState=ss%3Amem%3A6766ce16d3a700a8e7227ee38f36c3c0ec48b2f364e199f00c111c1dbedfc3b9
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hVLLbsIwEPyVyPfEJuRBLIJE4VAk2qJCe%2BilcpINWHLs1Ov08fcNpA96oXvd2Zmd2Z2iaFTL55076Ht46QCd994ojfzUyElnNTcCJXItGkDuSr6d36x5GDDeWuNMaRTx5ohgnTR6YTR2Ddgt2FdZwsP9OicH51rklNYFBlI7KzS4AJsugKoLcE%2B3B1kURoE7BIiGHulDurnb7oi37PeRWhyZf3mU2UsdNLK0Bk3tjFZSQ1CahpbZRKRZKfxYZMKP0mzkizAa%2BzVLRF0laZREFT0aC4m3WubkOU7SGOp0DFEt%2BtGiSvqaVKNqEsUFA9HDEDtYaXRCu5yELEx8NvJZvGOMs4jH4RPxNl85XEldSb2%2FHFoxgJBf73Ybf7D5CBZPFnsAmU2PG%2FKTsD07xmVa8X0BMvsvb%2FzJe0rPpAbdlt%2F23KvlxihZfnhzpczbwoJwkJMRobNh5O%2FHzD4B&RelayState=ss%3Amem%3A5a562b233ecbb398e09c5fbb409a76ba8db4ba282b5bb4cba8c95ee55f10bd59
 LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
 LOG: Redirected to SMU SSO
-LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=67e661f2-5275-473a-9f45-c9e7b880c04a&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZBNaxNBAIZ381UtRtv4BxT0Ys3uzOxkZmehognaxpga2IikFGR2djYbssmmmU1p_AU9SsFLDyIexYPoTTz4cevFQm-CIFJBctFDD_GkOYk3QXgv7-WB55nXnEthkgyUY5qBp4xOPxnyvkwM1RsZ0h8Zqm2qsON5cSSTcFiYXzj-mX39EOdXX04fb2wc178-1dm_AO4fgKFUbLrX6reQ2bjtNt_p5-95AAQBx7aFS0L6hDEmiaQQCg8jQbA40PVvuv4xlXV5L0J76RWlnJ7sOYQSIiQkvsUpANyWFCEqpWUHFhGWAFJg20OzgyVkLABAwBkU-p70A2F57EX6gmA2p0zwYokzXsSUwSJH2CoGgPDAJxQT7H9Jn2tzb9iRkRH32wYCyLqqREf95XeQOTXJpMCJaUZ_kp0V-nQ29ejwytvruwXz4uGvSN_PmiMV17a24dLmuLxlgWqpTO8Oq7QCumsNNG5UKLszXqndD5dasL5MHPggl9_PaT9y-s6ctjenvTr5_4nf5LXp6cn7Z0cfjna_r07OXPZr635A12A4SGS3W47cTRyHVQQH263G-s0mv1FzBXJppdnCy88XtM-zLWrTRW2noP0G0&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=c037e4ca-e43c-458f-bed0-87a83e189987&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA_aNRQHMeT3p9qsdp261ahk-0luSTvJS9QsOe1V67XsxiLVxd5v7yXy7XJXcnL9dDZ4UZRBO0i6CIFQYqTk-ggdirYqaCok9yi4y0FM4mb0C_f6Tt8vny_Y5JzJUiSHeGoqg9CabWTmLZ5ooioq3DWVURTFUELoBPyJIinxia-ljLzL74clPqny7OPd--TfZn8D-D-BShCdFR3ca2mq-vX3Zvv5ct3ELYQ9y2Dmz61qQUMp7JZkdkmAo3TI1n-KcsnIzmXRqG-l6kI4UQ8chBFWAfdMLgHYBCba8RDPoCpEWphoDYDE6hu64DS0EsDjyDOEfKLGjBEDjKzHkkLiUcLiBJaMC1SLFDdNAq-hqnPsGVik_3IzDQpxC0eKp12U9E13bgqvJb4Z99R9sIgO6KdG2bl57n0oc_PXg6mn94uvfnw6PhjuSsf5tQIhXawOtejdBvqlbVetLTVa1SpD9u8EVeSJTsM68vxKgNXLCCn-CA_fpiXfufl_qi0Nyq9PX_2i9-NS8OLTz7tv_p--vDXyuDSPDY3GV5R725W13ehbHPeTW7QraA8Z7VrBq5d27FuNTagXr1X3lh4PSF9Sz0pDSel_pT0Bw2&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
 LOG: Filled in password
 LOG: Clicked submit button
 LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home
@@ -78,7 +78,7 @@ LOG: Found 1 booking rows in table
 ✅ Bookings scraping complete. Data written to: ./log/scraped_bookings.json
 
 ============================================================
-ORCHESTRATOR: User Bookings Scraper (scraper-bookings.js) completed successfully in 33.45s
+ORCHESTRATOR: User Bookings Scraper (scraper-bookings.js) completed successfully in 32.60s
 ============================================================
 
 
@@ -86,13 +86,13 @@ ORCHESTRATOR: User Bookings Scraper (scraper-bookings.js) completed successfully
 ORCHESTRATOR: Starting User Tasks Scraper (scraper-tasks.js)...
 ============================================================
 
-[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  suppress all logs with { quiet: true })
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' })
 LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
 LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
-LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7Yic1JLEIEi2HItEWFdpDL5XjLGDJsanX6ePfN0Af9EJvljz%2BZmfWI5St2YlJF7b2Hl46wBC9t8aiOFxUpPNWOIkahZUtoAhKLCc3c5ElTOy8C045Q6IJIvignb1yFrsW%2FBL8q1bwcD%2BvyDaEHQpK1zUm2gYvLYQE2y6BpktwQ5dbXdfOQNgmiI7u8Rld3C1XJJr282gr9%2BRfjnEbbZNWK%2B%2FQrYOzRltIlGupKguZl0rGA1nKmOdlGsuMX8RrNpTrZpjzIW%2FoPlhGotm0Is9cQdGkOU8bVRdpWef9QV6k0PCiHhQF72WIHcwsBmlDRTKWDWOWxoyvGBOMiwF7ItHiq4dLbRttN%2BdLq48iFNer1SI%2BxnwEj4eIvYCMR%2FsJxcHYnyzjPFZ%2Bb4CM%2F%2Bsbf%2Foe0ROro%2B9O3Pbs2XThjFYf0cQY93blQQaoSEro%2BPjk748ZfwI%3D&RelayState=ss%3Amem%3A3abc56719fe423d7886d7e82f705ef72226f6cda24c7865ad741dc90c9218b88
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7YickJLFIJAqHItEWNbSHXionbMCSY1Ov08e%2Fb4A%2B6IWePfvNzqwnKDq159Pe7fQ9vPSAznvvlEZ%2BfChIbzU3AiVyLTpA7hpeTW%2BWPAoY31vjTGMU8aaIYJ00emY09h3YCuyrbODhflmQnXN75JS2NQZSOys0uAC7PoBNH%2BCWVjtZ10aB2wWIhh7wEV3dVWvizYd9pBYH8i9Hma3UQScba9C0zmglNQSN6WiTZyLNG%2BEnIhd%2BnOahL6J45LdsLNrNOI3H8YYegkXEW8wL8pxlaS5aSMJhkI1YNsrbJIzDNIsSEcdQDzLEHhYandCuIBGLxj4LfZasGeMs4VH8RLzVVw9XUm%2Bk3l4urT6JkF%2Bv1yv%2FFPMRLB4jDgJSTg4b8qOxPTvGZaz4vgAp%2F%2Bsbf%2Fqe0DOrk%2B%2Be3w7sxXxllGw%2BvKlS5m1mQTgoSEhoeRr5%2B2PKTw%3D%3D&RelayState=ss%3Amem%3Af624774703b76f690b39596bd758f806e461800057d0262f14cb9818604194b7
 LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
 LOG: Redirected to SMU SSO
-LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=67e661f2-5275-473a-9f45-c9e7b880c04a&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA_aNRQAMaT3p9qsdoWultxUi9_Xl7yXgJFa62nbc_q5a70XMr7l1zay0XykpPbHW5RxEXo6OggIg5SB8WxU0Vw6FSkgnTRRbjRw0HcBOEbvuHj9_F9E4p3oZ1l96Sn6wGVWtTNUtIVmSbjXBM812Soy3ZEadIRWTudmZjaBS_mPi8c3nr4FfCfzUcbz1X3XwD_D0CTMtH9hdoq0G-v-Y0P6twmZAJzE0GTM4pNl6KRIZYpOMTUxhjuq-o3VT0YK_kk7oCdQlVKLxaxZxHKbAeZbiAgsDjC2OFIYBAgwxYBAgA4gcM4AZAh7NiE_65wDeYCE1OMXxXOMxcT5DJSsYlLKhC5ZmUUtyqB4ZCAOwg6kH8pnA0JTSPR0ZJuqAEDWFcki-Rf-_aLp46LY8aJYVF9Vho9dO5g9o0vPtVeJ0dvL2uRulfSF03Hb26h1kpj7c56fq2XVGkS6xc7y_28f9NKe00Go6uRw5e22Dz2zMflyb2y8qOsDsaVnXFl9-T_X_x-UhmeHrx7-uDj0ZPvN47PXKrH-UbK5fb2cq3XrEegUa0Fdbi-cp8umcndfqu1mIfX3VXYS8P5l1PK4UjTynBaGcwovwA1&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=c037e4ca-e43c-458f-bed0-87a83e189987&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZC_a9RQAMeT3o9qsbXtP6CCk-clLy8v70fgwAbRQ9te25SrTvJeLsmlvSR395IWHAWhbp6CYBEHJxEHFRzUQXEqnQpuukgXpYsdb1DwJnEThO_8-fL5TCj2uXaWdaWt64GQWpRkfZ74mSbjXPNbuSZDXbYjIdKOn7X7sxPTg09d9ujUHed9cnt98K529Exl_wK4fwCalKnuzi3MQ32p4a5-VM_coJQwHviWwSgHJqAmCywDGYRCiyPki31V_a6qn8dKLo87cKdwWUo79mM7wBARgggwBcEBZkCYzGJYtIhFAwqwj7BBAQAWaQGIYWAgTzBqUAyQwZAgrwpnvdElYR6vWpzxKiLMqHKIzGoAMA9amCCMWgeF0yEX_cjvaGkSahBA84L0IvmX337xxGFxDBwbFtUnpVGh9Ong4es3L537j289n_r2QNkr6d6V0FnZWrHCS7KRO8tUJDd7-sb81bWe5KC5Fm82-aLMDehUvBq2jbvlyb2yclRWt8eVnXHl7fH_T_xhUhlOffm5u3vw696P-uHJ82QpEPVGGvVXr5HrNF934UZF6Gk8ly6DhYtblfqi7LabcY9v0tqLaeXraDPKcEbZnlV-Aw2&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
 LOG: Filled in password
 LOG: Clicked submit button
 LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home
