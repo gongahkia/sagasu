@@ -25,7 +25,10 @@ See [this](https://github.com/gongahkia/sagasu#rationale), [this](https://github
 
 ## Screenshots
 
-...
+![](./asset/reference/1.png)  
+![](./asset/reference/2.png)  
+![](./asset/reference/3.png)  
+![](./asset/reference/4.png)  
 
 ## Usage
 
