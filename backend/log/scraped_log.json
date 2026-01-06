@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2026-01-05T00:05:05.522Z",
-    "scrape_duration_ms": 61865,
+    "scraped_at": "2026-01-06T00:05:14.300Z",
+    "scrape_duration_ms": 61994,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "05-Jan-2026",
+    "date": "06-Jan-2026",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -73,7 +73,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -112,7 +112,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -151,7 +151,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -190,7 +190,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -229,7 +229,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -268,7 +268,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -307,7 +307,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -346,7 +346,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -385,7 +385,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -424,7 +424,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -463,7 +463,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -502,7 +502,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -541,7 +541,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -580,7 +580,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -619,7 +619,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -658,7 +658,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -697,7 +697,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -736,7 +736,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -775,7 +775,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -814,7 +814,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -853,7 +853,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -892,7 +892,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-05T00:30:00.000Z",
+        "next_available_at": "2026-01-06T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
