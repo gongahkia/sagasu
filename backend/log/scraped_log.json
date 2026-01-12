@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2026-01-08T00:04:49.389Z",
-    "scrape_duration_ms": 61710,
+    "scraped_at": "2026-01-12T00:04:44.039Z",
+    "scrape_duration_ms": 59272,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "08-Jan-2026",
+    "date": "12-Jan-2026",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -56,6 +56,25 @@
         },
         {
           "start": "08:30",
+          "end": "16:00",
+          "status": "free"
+        },
+        {
+          "start": "16:00",
+          "end": "18:00",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20260112-000022",
+            "status": "Pending Confirmation",
+            "booker_name": "YEO HSIN YING",
+            "booker_email": "hsinyingyeo.2024@accountancy.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: hsinyingyeo.2024@accountancy.smu.edu.sg",
+            "purpose": "csp zoom",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "18:00",
           "end": "22:30",
           "status": "free"
         },
@@ -73,9 +92,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 841
+        "next_available_at": "2026-01-12T00:30:00.000Z",
+        "free_slots_count": 3,
+        "free_duration_minutes": 721
       }
     },
     {
@@ -112,7 +131,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -151,7 +170,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -190,7 +209,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -229,7 +248,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -268,7 +287,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -307,7 +326,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -346,7 +365,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -385,7 +404,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -424,7 +443,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -447,7 +466,16 @@
         {
           "start": "08:30",
           "end": "22:30",
-          "status": "free"
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20260108-000617",
+            "status": "Confirmed",
+            "booker_name": "Nazreen Anne COUPLAND",
+            "booker_email": "ncoupland@smu.edu.sg",
+            "booker_org": "Institute of Innovation and Entrepreneurship",
+            "purpose": "Meeting",
+            "use_type": "AdHoc"
+          }
         },
         {
           "start": "22:30",
@@ -463,9 +491,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 841
+        "next_available_at": "2026-01-12T15:59:00.000Z",
+        "free_slots_count": 1,
+        "free_duration_minutes": 1
       }
     },
     {
@@ -502,7 +530,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -541,7 +569,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -563,25 +591,6 @@
         },
         {
           "start": "08:30",
-          "end": "16:00",
-          "status": "free"
-        },
-        {
-          "start": "16:00",
-          "end": "17:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260107-000533",
-            "status": "Confirmed",
-            "booker_name": "VU MINH DANG",
-            "booker_email": "minhdang.vu.2025@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: minhdang.vu.2025@computing.smu.edu.sg",
-            "purpose": "Meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "17:00",
           "end": "22:30",
           "status": "free"
         },
@@ -599,9 +608,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 781
+        "next_available_at": "2026-01-12T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -621,6 +630,25 @@
         },
         {
           "start": "08:30",
+          "end": "13:30",
+          "status": "free"
+        },
+        {
+          "start": "13:30",
+          "end": "15:30",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20260111-000309",
+            "status": "Pending Confirmation",
+            "booker_name": "SEAH CHI HAO",
+            "booker_email": "chihao.seah.2022@scis.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: chihao.seah.2022@scis.smu.edu.sg",
+            "purpose": "meeting",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "15:30",
           "end": "22:30",
           "status": "free"
         },
@@ -638,9 +666,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 841
+        "next_available_at": "2026-01-12T00:30:00.000Z",
+        "free_slots_count": 3,
+        "free_duration_minutes": 721
       }
     },
     {
@@ -677,7 +705,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -716,7 +744,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -755,7 +783,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -794,7 +822,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -833,7 +861,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -872,7 +900,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
+        "next_available_at": "2026-01-12T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -894,6 +922,25 @@
         },
         {
           "start": "08:30",
+          "end": "12:30",
+          "status": "free"
+        },
+        {
+          "start": "12:30",
+          "end": "14:30",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20260111-000264",
+            "status": "Pending Confirmation",
+            "booker_name": "AMANDA NG SEOK YIN",
+            "booker_email": "seokyin.ng.2023@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: seokyin.ng.2023@business.smu.edu.sg",
+            "purpose": "study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "14:30",
           "end": "22:30",
           "status": "free"
         },
@@ -911,9 +958,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-08T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 841
+        "next_available_at": "2026-01-12T00:30:00.000Z",
+        "free_slots_count": 3,
+        "free_duration_minutes": 721
       }
     }
   ]
