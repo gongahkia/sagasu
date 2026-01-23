@@ -1,14 +1,14 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2026-01-22T00:05:13.298Z",
-    "scrape_duration_ms": 57873,
+    "scraped_at": "2026-01-23T00:05:21.512Z",
+    "scrape_duration_ms": 62483,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "22-Jan-2026",
+    "date": "23-Jan-2026",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
@@ -56,58 +56,6 @@
         },
         {
           "start": "08:30",
-          "end": "10:00",
-          "status": "free"
-        },
-        {
-          "start": "10:00",
-          "end": "12:00",
-          "status": "booked",
-          "booking": {
-            "reference": "MBK-20260121-000031",
-            "status": "Confirmed",
-            "booker_name": "VU MINH DANG",
-            "booker_email": "minhdang.vu.2025@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: minhdang.vu.2025@computing.smu.edu.sg",
-            "purpose": "Meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "12:00",
-          "end": "14:00",
-          "status": "free"
-        },
-        {
-          "start": "14:00",
-          "end": "16:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260121-000279",
-            "status": "Confirmed",
-            "booker_name": "TRISHA TAN SHAY",
-            "booker_email": "trisha.tan.2024@socsc.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: trisha.tan.2024@socsc.smu.edu.sg",
-            "purpose": "Study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "16:00",
-          "end": "18:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260120-000664",
-            "status": "Confirmed",
-            "booker_name": "ERNEST NG CHEN YI",
-            "booker_email": "ernest.ng.2024@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: ernest.ng.2024@computing.smu.edu.sg",
-            "purpose": "Meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "18:00",
           "end": "22:30",
           "status": "free"
         },
@@ -125,9 +73,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 4,
-        "free_duration_minutes": 481
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -147,25 +95,6 @@
         },
         {
           "start": "08:30",
-          "end": "14:00",
-          "status": "free"
-        },
-        {
-          "start": "14:00",
-          "end": "15:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260122-000044",
-            "status": "Confirmed",
-            "booker_name": "MAGBITANG CALLISTA YSABELLE ACUNA",
-            "booker_email": "c.magbitang.2025@socsc.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: c.magbitang.2025@socsc.smu.edu.sg",
-            "purpose": "meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "15:30",
           "end": "22:30",
           "status": "free"
         },
@@ -183,9 +112,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 751
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -222,7 +151,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -261,7 +190,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -283,44 +212,6 @@
         },
         {
           "start": "08:30",
-          "end": "14:00",
-          "status": "free"
-        },
-        {
-          "start": "14:00",
-          "end": "16:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260121-000398",
-            "status": "Confirmed",
-            "booker_name": "ROSHINI BATRA",
-            "booker_email": "roshini.b.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: roshini.b.2023@business.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "16:00",
-          "end": "18:30",
-          "status": "free"
-        },
-        {
-          "start": "18:30",
-          "end": "19:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260120-000308",
-            "status": "Confirmed",
-            "booker_name": "Valence SIM",
-            "booker_email": "valencesim@smu.edu.sg",
-            "booker_org": "Institute of Innovation and Entrepreneurship",
-            "purpose": "1:1 Meeting for panel discussion for Tech Collider",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "19:30",
           "end": "22:30",
           "status": "free"
         },
@@ -338,9 +229,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 4,
-        "free_duration_minutes": 661
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -360,44 +251,6 @@
         },
         {
           "start": "08:30",
-          "end": "13:30",
-          "status": "free"
-        },
-        {
-          "start": "13:30",
-          "end": "15:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260122-000048",
-            "status": "Confirmed",
-            "booker_name": "NATHANIEL GILES LEE WEIJIE",
-            "booker_email": "nathaniel.l.2025@economics.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: nathaniel.l.2025@economics.smu.edu.sg",
-            "purpose": "Meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "15:30",
-          "end": "18:30",
-          "status": "free"
-        },
-        {
-          "start": "18:30",
-          "end": "19:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260120-000309",
-            "status": "Confirmed",
-            "booker_name": "Valence SIM",
-            "booker_email": "valencesim@smu.edu.sg",
-            "booker_org": "Institute of Innovation and Entrepreneurship",
-            "purpose": "1:1 Meeting for panel discussion for Tech Collider",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "19:30",
           "end": "22:30",
           "status": "free"
         },
@@ -415,9 +268,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 4,
-        "free_duration_minutes": 661
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -437,25 +290,84 @@
         },
         {
           "start": "08:30",
-          "end": "12:30",
+          "end": "22:30",
           "status": "free"
         },
         {
-          "start": "12:30",
-          "end": "14:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260121-001062",
-            "status": "Confirmed",
-            "booker_name": "SAW JUN HAN",
-            "booker_email": "junhan.saw.2025@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: junhan.saw.2025@computing.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
         },
         {
-          "start": "14:30",
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": false,
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SMUC Meeting Pod 4-5",
+      "name": "SMUC Meeting Pod 4-5",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": false,
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SMUC Meeting Pod 4-6",
+      "name": "SMUC Meeting Pod 4-6",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SMUC Meeting Pod 4",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
           "end": "18:30",
           "status": "free"
         },
@@ -464,12 +376,12 @@
           "end": "20:30",
           "status": "booked",
           "booking": {
-            "reference": "BK-20260119-001295",
+            "reference": "BK-20260121-000878",
             "status": "Confirmed",
-            "booker_name": "ZEPHAN CHIN JING HERN",
-            "booker_email": "zephan.chin.2023@scis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: zephan.chin.2023@scis.smu.edu.sg",
-            "purpose": "study",
+            "booker_name": "LIM YIN PHNG",
+            "booker_email": "yinphng.lim.2022@accountancy.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: yinphng.lim.2022@accountancy.smu.edu.sg",
+            "purpose": "Meeting",
             "use_type": "AdHoc"
           }
         },
@@ -492,153 +404,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 4,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "SMUC Meeting Pod 4-5",
-      "name": "SMUC Meeting Pod 4-5",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "18:30",
-          "status": "free"
-        },
-        {
-          "start": "18:30",
-          "end": "19:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260120-000310",
-            "status": "Confirmed",
-            "booker_name": "Valence SIM",
-            "booker_email": "valencesim@smu.edu.sg",
-            "booker_org": "Institute of Innovation and Entrepreneurship",
-            "purpose": "1:1 Meeting for panel discussion for Tech Collider",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "19:30",
-          "end": "22:30",
-          "status": "free"
-        },
-        {
-          "start": "22:30",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 3,
-        "free_duration_minutes": 781
-      }
-    },
-    {
-      "id": "SMUC Meeting Pod 4-6",
-      "name": "SMUC Meeting Pod 4-6",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "12:00",
-          "status": "free"
-        },
-        {
-          "start": "12:00",
-          "end": "14:00",
-          "status": "booked",
-          "booking": {
-            "reference": "MBK-20260120-000097",
-            "status": "Confirmed",
-            "booker_name": "SIM YINGYI, TABITHA",
-            "booker_email": "tabitha.sim.2023@scis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: tabitha.sim.2023@scis.smu.edu.sg",
-            "purpose": "cry",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "14:00",
-          "end": "16:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260120-001306",
-            "status": "Confirmed",
-            "booker_name": "BAY KAI FEN, KYLIE",
-            "booker_email": "kylie.bay.2023@scis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: kylie.bay.2023@scis.smu.edu.sg",
-            "purpose": "weeeeee",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "16:00",
-          "end": "18:00",
-          "status": "booked",
-          "booking": {
-            "reference": "MBK-20260121-000091",
-            "status": "Confirmed",
-            "booker_name": "ANG JIN TENG",
-            "booker_email": "jinteng.ang.2022@scis.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: jinteng.ang.2022@scis.smu.edu.sg",
-            "purpose": "Tabs",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "18:00",
-          "end": "22:30",
-          "status": "free"
-        },
-        {
-          "start": "22:30",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 481
+        "free_duration_minutes": 721
       }
     },
     {
@@ -675,7 +443,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -697,39 +465,6 @@
         },
         {
           "start": "08:30",
-          "end": "15:00",
-          "status": "free"
-        },
-        {
-          "start": "15:00",
-          "end": "17:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260121-000990",
-            "status": "Confirmed",
-            "booker_name": "LI, QIWEN",
-            "booker_email": "qiwen.li.2025@mm.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: qiwen.li.2025@mm.smu.edu.sg",
-            "purpose": "Study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "17:00",
-          "end": "19:00",
-          "status": "booked",
-          "booking": {
-            "reference": "MBK-20260121-000082",
-            "status": "Confirmed",
-            "booker_name": "CAO, ANJIE",
-            "booker_email": "anjie.cao.2025@mm.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: anjie.cao.2025@mm.smu.edu.sg",
-            "purpose": "study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "19:00",
           "end": "22:30",
           "status": "free"
         },
@@ -747,9 +482,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 601
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -769,34 +504,117 @@
         },
         {
           "start": "08:30",
-          "end": "10:00",
+          "end": "11:00",
           "status": "free"
         },
         {
-          "start": "10:00",
-          "end": "12:00",
+          "start": "11:00",
+          "end": "13:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20260120-001218",
+            "reference": "MBK-20260122-000100",
             "status": "Confirmed",
-            "booker_name": "VUTH DALIANA",
-            "booker_email": "dalianavuth.2022@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: dalianavuth.2022@business.smu.edu.sg",
+            "booker_name": "CHENG PING ZHI",
+            "booker_email": "pzcheng.2021@socsc.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: pzcheng.2021@socsc.smu.edu.sg",
             "purpose": "interview",
             "use_type": "AdHoc"
           }
+        },
+        {
+          "start": "13:00",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": false,
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 3,
+        "free_duration_minutes": 721
+      }
+    },
+    {
+      "id": "SOE/SCIS2 Meeting Pod 3-1",
+      "name": "SOE/SCIS2 Meeting Pod 3-1",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOE/SCIS2 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "22:30",
+          "status": "free"
+        },
+        {
+          "start": "22:30",
+          "end": "23:59",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "23:59",
+          "end": "24:00",
+          "status": "free"
+        }
+      ],
+      "availability_summary": {
+        "is_available_now": false,
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
+      }
+    },
+    {
+      "id": "SOE/SCIS2 Meeting Pod 3-2",
+      "name": "SOE/SCIS2 Meeting Pod 3-2",
+      "building": "School of Economics/School of Computing & Information Systems 2",
+      "building_code": "SOE/SCIS2 Meeting Pod 3",
+      "floor": "Unknown",
+      "facility_type": "Meeting Pod",
+      "equipment": [],
+      "timeslots": [
+        {
+          "start": "00:00",
+          "end": "08:30",
+          "status": "unavailable",
+          "reason": "Outside scrape window"
+        },
+        {
+          "start": "08:30",
+          "end": "12:00",
+          "status": "free"
         },
         {
           "start": "12:00",
           "end": "14:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20260121-000457",
+            "reference": "BK-20260122-001093",
             "status": "Confirmed",
-            "booker_name": "BENJAMIN LEE WEI NAN",
-            "booker_email": "wnlee.2022@law.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: wnlee.2022@law.smu.edu.sg",
-            "purpose": "SMU",
+            "booker_name": "LIM ZHI AN ARIEL",
+            "booker_email": "ariel.lim.2024@economics.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: ariel.lim.2024@economics.smu.edu.sg",
+            "purpose": "study",
             "use_type": "AdHoc"
           }
         },
@@ -819,139 +637,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 3,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "SOE/SCIS2 Meeting Pod 3-1",
-      "name": "SOE/SCIS2 Meeting Pod 3-1",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOE/SCIS2 Meeting Pod 3",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "10:30",
-          "status": "free"
-        },
-        {
-          "start": "10:30",
-          "end": "12:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260121-000913",
-            "status": "Confirmed",
-            "booker_name": "AASHMIIN KAUR",
-            "booker_email": "aashmiin.k.2025@accountancy.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: aashmiin.k.2025@accountancy.smu.edu.sg",
-            "purpose": "WORK",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "12:30",
-          "end": "14:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260119-001167",
-            "status": "Confirmed",
-            "booker_name": "CHERIE SNG QIAN YING",
-            "booker_email": "cherie.sng.2025@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: cherie.sng.2025@business.smu.edu.sg",
-            "purpose": "self study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "14:30",
-          "end": "22:30",
-          "status": "free"
-        },
-        {
-          "start": "22:30",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 601
-      }
-    },
-    {
-      "id": "SOE/SCIS2 Meeting Pod 3-2",
-      "name": "SOE/SCIS2 Meeting Pod 3-2",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOE/SCIS2 Meeting Pod 3",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "10:00",
-          "status": "free"
-        },
-        {
-          "start": "10:00",
-          "end": "11:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260120-000362",
-            "status": "Pending Confirmation",
-            "booker_name": "LIAW SHAO YI",
-            "booker_email": "shaoyi.liaw.2022@phdcs.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: shaoyi.liaw.2022@phdcs.smu.edu.sg",
-            "purpose": "meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "11:00",
-          "end": "22:30",
-          "status": "free"
-        },
-        {
-          "start": "22:30",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 781
+        "free_duration_minutes": 721
       }
     },
     {
@@ -971,25 +659,25 @@
         },
         {
           "start": "08:30",
-          "end": "12:30",
+          "end": "15:00",
           "status": "free"
         },
         {
-          "start": "12:30",
-          "end": "13:30",
+          "start": "15:00",
+          "end": "17:00",
           "status": "booked",
           "booking": {
-            "reference": "BK-20260118-000193",
+            "reference": "BK-20260123-000018",
             "status": "Confirmed",
-            "booker_name": "LIM KIAN CHUN, MATTHEW",
-            "booker_email": "matthewlim.2022@economics.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: matthewlim.2022@economics.smu.edu.sg",
-            "purpose": "Study?",
+            "booker_name": "LEOW ZI YI, CLARIS",
+            "booker_email": "claris.leow.2023@scis.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: claris.leow.2023@scis.smu.edu.sg",
+            "purpose": "workaholic sia what in the meeting helly",
             "use_type": "AdHoc"
           }
         },
         {
-          "start": "13:30",
+          "start": "17:00",
           "end": "22:30",
           "status": "free"
         },
@@ -1007,9 +695,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 3,
-        "free_duration_minutes": 781
+        "free_duration_minutes": 721
       }
     },
     {
@@ -1029,25 +717,6 @@
         },
         {
           "start": "08:30",
-          "end": "12:30",
-          "status": "free"
-        },
-        {
-          "start": "12:30",
-          "end": "14:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260122-000035",
-            "status": "Confirmed",
-            "booker_name": "LIM SHER MIN",
-            "booker_email": "shermin.lim.2025@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: shermin.lim.2025@business.smu.edu.sg",
-            "purpose": "meeting",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "14:30",
           "end": "22:30",
           "status": "free"
         },
@@ -1065,9 +734,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 721
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -1087,25 +756,6 @@
         },
         {
           "start": "08:30",
-          "end": "13:30",
-          "status": "free"
-        },
-        {
-          "start": "13:30",
-          "end": "15:30",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260121-000282",
-            "status": "Confirmed",
-            "booker_name": "PHANG KAH YENG",
-            "booker_email": "ky.phang.2025@computing.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: ky.phang.2025@computing.smu.edu.sg",
-            "purpose": "Study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "15:30",
           "end": "22:30",
           "status": "free"
         },
@@ -1123,9 +773,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 721
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 2,
+        "free_duration_minutes": 841
       }
     },
     {
@@ -1145,6 +795,25 @@
         },
         {
           "start": "08:30",
+          "end": "09:30",
+          "status": "free"
+        },
+        {
+          "start": "09:30",
+          "end": "11:30",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20260122-000991",
+            "status": "Pending Confirmation",
+            "booker_name": "CHAN KAI YI",
+            "booker_email": "kaiyi.chan.2022@economics.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: kaiyi.chan.2022@economics.smu.edu.sg",
+            "purpose": "Study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "11:30",
           "end": "22:30",
           "status": "free"
         },
@@ -1162,9 +831,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 841
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 3,
+        "free_duration_minutes": 721
       }
     },
     {
@@ -1201,7 +870,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -1223,6 +892,25 @@
         },
         {
           "start": "08:30",
+          "end": "13:00",
+          "status": "free"
+        },
+        {
+          "start": "13:00",
+          "end": "15:00",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20260122-000740",
+            "status": "Confirmed",
+            "booker_name": "HUI HON YEUNG SHAWN",
+            "booker_email": "shawn.hui.2025@computing.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: shawn.hui.2025@computing.smu.edu.sg",
+            "purpose": "study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "15:00",
           "end": "22:30",
           "status": "free"
         },
@@ -1240,9 +928,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 841
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 3,
+        "free_duration_minutes": 721
       }
     },
     {
@@ -1279,7 +967,7 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
+        "next_available_at": "2026-01-23T00:30:00.000Z",
         "free_slots_count": 2,
         "free_duration_minutes": 841
       }
@@ -1301,6 +989,44 @@
         },
         {
           "start": "08:30",
+          "end": "12:00",
+          "status": "free"
+        },
+        {
+          "start": "12:00",
+          "end": "14:00",
+          "status": "booked",
+          "booking": {
+            "reference": "MBK-20260122-000040",
+            "status": "Confirmed",
+            "booker_name": "TAN WENG KIAT JERVYN",
+            "booker_email": "jervyn.tan.2023@business.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: jervyn.tan.2023@business.smu.edu.sg",
+            "purpose": "Study",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "14:00",
+          "end": "15:00",
+          "status": "free"
+        },
+        {
+          "start": "15:00",
+          "end": "17:00",
+          "status": "booked",
+          "booking": {
+            "reference": "BK-20260122-001071",
+            "status": "Confirmed",
+            "booker_name": "LEE JING YUAN",
+            "booker_email": "jylee.2023@accountancy.smu.edu.sg",
+            "booker_org": "Booked for User Email Address: jylee.2023@accountancy.smu.edu.sg",
+            "purpose": "idk",
+            "use_type": "AdHoc"
+          }
+        },
+        {
+          "start": "17:00",
           "end": "22:30",
           "status": "free"
         },
@@ -1318,9 +1044,9 @@
       ],
       "availability_summary": {
         "is_available_now": false,
-        "next_available_at": "2026-01-22T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 841
+        "next_available_at": "2026-01-23T00:30:00.000Z",
+        "free_slots_count": 4,
+        "free_duration_minutes": 601
       }
     }
   ]
