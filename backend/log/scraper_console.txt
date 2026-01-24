@@ -1,5 +1,5 @@
 Sagasu scraper console log
-Started: 2026-01-23T00:04:18.775Z
+Started: 2026-01-24T00:03:44.746Z
 ============================================================
 
 
@@ -11,20 +11,20 @@ ORCHESTRATOR: Starting scraping workflows
 ORCHESTRATOR: Starting Room Availability Scraper (scraper-prod.js)...
 ============================================================
 
-[dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 encrypt with dotenvx: https://dotenvx.com)
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  enable debug logging with { debug: true })
 LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
 LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
-LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7YmNC0lgEicKhSLRFQHvopXKcDVhybOp1%2Bvj35dEHvdCzx9%2FszO4QZWt2YtyFrV3CSwcYovfWWBTHh5J03gonUaOwsgUUQYnV%2BHYueMLEzrvglDMkGiOCD9rZibPYteBX4F%2B1goflvCTbEHYoKG0qTLQNXloICbZdAnWX4IautrqqnIGwTRAdPeA5Xdyv1iSa7ufRVh7IvxzjNtomrVbeoWuCs0ZbSJRrqSquZF4oGQ9kIeM0L3qx5Gk%2FblgmmzrL0yyt6SEYJ9FsWpLnvmpYxVhRqSxj0LB%2BnheDTPIe8JTVabqXIXYwsxikDSXhjGcx68W8v2ZMMC4G6ROJFl89XGtba7u5XFp1EqG4Wa8X8SnmI3g8RtwLyGh4mFAcjf3ZMi5j5fcGyOi%2FvvGn7yE9szr57sTdnj2bLpzR6iMaG%2BPeJh5kgJL0CB2dvvy9mNEn&RelayState=ss%3Amem%3A452bc194f3173e73efc9aa424c50635b9097f6223e4633f18b252bee7253d355
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7YseEQCyCROFQJNqiQnvopdo4DlhybOp1%2Bvj35dEHvdCzx9%2FszO4IoTU7MenC1t6rl05hiN5bY1EcH0rSeSscoEZhoVUoghSryc1C8ISJnXfBSWdINEFUPmhnp85i1yq%2FUv5VS%2FVwvyjJNoQdCkqbChNtgwerQoJtl6i6S3BDV1tdVc6osE0QHT3gOV3erdYkmu3n0RYO5F%2BOcRttk1ZL79A1wVmjrUqka6kshjAoJMR9KCDOBkUaA896ccNyaOp8kOVZTQ%2FBOInms5I892XDh8O8qGqZ1k2TFgwUsHRY9Xp9kEV%2FL0Ps1NxiABtKwhnPY5bGPFszJhgXafFEouVXD1fa1tpuLpdWnUQortfrZXyK%2Bag8HiPuBWQ8Okwojsb%2BbBmXsfC9ATL%2Br2%2F86XtEz6xOvjtxu2fPZ0tntPyIJsa4t6lXEFRJUkLHpy9%2FL2b8CQ%3D%3D&RelayState=ss%3Amem%3A9ba39a269c7261f611a5a98c2becff25cbd677a7bfd46b01aefed130e7d196b3
 LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
 Redirect took too long, clicking #redirectToIdpLink...
-LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=4ce797f4-9301-43bd-b418-c2c3b18ff620&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAA42Kw0sooKSkottLXT0sq1svMKylKzEst0SvOLdVLTSnVK07XL87ITErKz0ktySgS4hL4Mv25D-Pkvc5bJA4d3tj_TWEVoyUhA4LhBugVF-frBzv6-hjpB_gHhxxiVIw3Tk4zSDIwsExKNjMzSE0zMDY3tzQ1SzQyTDUyMUgxMbnAyPiCkfEWE2twYm6O0Sxm9-Jiq9zUXCsTU6OkZENLkzRjQ3PjVCBKS7ZMTDQxMkk2NTAzNk2yNLA0TzMzMjJONTEzNk4ztEgyAupITTU3MjVOMTY13cSskmxpkWhumZyoa5pomahrYm5pqJtoZGKsm2ZglpiWYmZuYmaS8ohZIT0xqSgzNUcvPy9dz8jAyNihODmzGMl_F1h4XrEwGXD8YGFcxAoMocUPl3w9GWLus-XuL4k7E90ZTrHqh7ibeISa6ed7OOUkV5SWVKZHhmk7BXpFFSWae7sU-nuGFBTpG5bke3n7BtqaWhlOYOM9xcbwgY2xg51hFjvDLk7yg_gAL8MPvpWtW1evPzTtvccrfh1L47Bwn6DsSvfy5MgQp0Lt_BxH71zzsizDFP1Qz5KK8JQM_ZAoA99CE0tf2w0CDA-ASJDhhyBDhxADAA2&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=032ee7ef-5b9b-4e19-8868-0167ac87dbb0&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZC9axNhHMfvmpdqabUtiLgpOGlzd89zb3kCFWtbomI07VWTtFD5PW_JNS_X5rnU4j9gFsFBOtRNN3EojkKhOBaHzhZEXJQi1KFDRm8SN0H4rp8PfL4jWuFaI47XVcE0JVVG2Im70BGxodo9Q_CeoeqmaoSURi0RN7qTI-Mn343Uq5VL9_sNvf7u2dHuW538SxD8ERhKRWYwU7qHzfKDYOmjfuWxyyTO5z1COUNcSkQsEGChPLVtFxhxD3X9h65_HsoE0G7hnVRRqUJbtAuEgk0Ae4T52EPSQwhcIHmGqWBSYpdR7vk--FRyx6MWAiEFR7YlfI6IR-33qauM5MEnDHIJCDnHJygH2LFz0vJAJrTjOfxb6nIdaDcULSPq1A1sYfumYqH6q-8wPXqcHrLODNL660zy0PMLU6ef9npz2xffrN44HdUOMma1ElXKsuzAUlQO79RKbb64sN68u_ZQFKE1w5NYubXI5_ECcqbdAnqRHTvIar-yen9Y2xnWPpz9_4v3x7TBuZc_977sH22f3D4-PzW3BgGLn8B151ZtY6O0XJmdL3Zmn25ubTaDbi0sLZNHVZDVoNFpTu-Oa1-TTWiDCa0_qf0G0&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
 LOG: Filled in password
 LOG: Clicked submit button
 LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home and saved screenshot
 LOG: Content frame bottom loaded
 LOG: Core content frame loaded
-LOG: Initial date already 23-Jan-2026, clicking forward and backward once to refresh
-LOG: Date picker set to desired date: 23-Jan-2026
+LOG: Initial date already 24-Jan-2026, clicking forward and backward once to refresh
+LOG: Date picker set to desired date: 24-Jan-2026
 LOG: Set start and end time dropdowns to 08:00 and 22:00
 LOG: Forcing a timeout of 3000ms to allow the page to update
 LOG: Clicked OK button in building selection
@@ -43,68 +43,26 @@ LOG: Forcing a timeout of 3000ms to allow the page to update
 LOG: Matched 22 rooms (KGC Meeting Pod 3-01,SCIS1 Meeting Pod 3-1,SCIS1 Meeting Pod 3-2,SMUC Meeting Pod 4-1,SMUC Meeting Pod 4-2,SMUC Meeting Pod 4-3,SMUC Meeting Pod 4-4,SMUC Meeting Pod 4-5,SMUC Meeting Pod 4-6,SMUC Meeting Pod 4-7,SOA Meeting Pod 3-1,SOA Meeting Pod 3-2,SOE/SCIS2 Meeting Pod 3-1,SOE/SCIS2 Meeting Pod 3-2,SOE/SCIS2 Meeting Pod 3-3,SOE/SCIS2 Meeting Pod 3-4,SOSS/CIS Meeting Pod B1-1,SOSS/CIS Meeting Pod B1-2,SOSS/CIS Meeting Pod B1-3,SOSS/CIS Meeting Pod B1-4,SOSS/CIS Meeting Pod B1-5,YPHSL Meeting Pod B1-01)
 LOG: Clicked "Check Availability" button
 LOG: Forcing a timeout of 10000ms to allow the page to update
-LOG: Found 52 timeslots ((00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),Booking Time: 18:30-20:30
+LOG: Found 46 timeslots ((00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),(17:00-23:59) (not available),(00:00-08:30) (not available),Booking Time: 12:00-14:00
 Booking Status: Confirmed
-Booking Reference Number: BK-20260121-000878
-Booked for User Name: LIM YIN PHNG
-Booked for User Org Unit: 
-Booked for User Email Address: yinphng.lim.2022@accountancy.smu.edu.sg
-Use Type: AdHoc
-Purpose of Booking: Meeting,(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),Booking Time: 11:00-13:00
-Booking Status: Confirmed
-Booking Reference Number: MBK-20260122-000100
-Booked for User Name: CHENG PING ZHI
-Booked for User Org Unit: 
-Booked for User Email Address: pzcheng.2021@socsc.smu.edu.sg
-Use Type: AdHoc
-Purpose of Booking: interview,(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),Booking Time: 12:00-14:00
-Booking Status: Confirmed
-Booking Reference Number: BK-20260122-001093
-Booked for User Name: LIM ZHI AN ARIEL
-Booked for User Org Unit: 
-Booked for User Email Address: ariel.lim.2024@economics.smu.edu.sg
-Use Type: AdHoc
-Purpose of Booking: study,(22:30-23:59) (not available),(00:00-08:30) (not available),Booking Time: 15:00-17:00
-Booking Status: Confirmed
-Booking Reference Number: BK-20260123-000018
-Booked for User Name: LEOW ZI YI, CLARIS
-Booked for User Org Unit: 
-Booked for User Email Address: claris.leow.2023@scis.smu.edu.sg
-Use Type: AdHoc
-Purpose of Booking: workaholic sia what in the meeting helly,(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),Booking Time: 09:30-11:30
-Booking Status: Pending Confirmation
-Booking Reference Number: BK-20260122-000991
-Booked for User Name: CHAN KAI YI
-Booked for User Org Unit: 
-Booked for User Email Address: kaiyi.chan.2022@economics.smu.edu.sg
-Use Type: AdHoc
-Purpose of Booking: Study,(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),Booking Time: 13:00-15:00
-Booking Status: Confirmed
-Booking Reference Number: BK-20260122-000740
-Booked for User Name: HUI HON YEUNG SHAWN
-Booked for User Org Unit: 
-Booked for User Email Address: shawn.hui.2025@computing.smu.edu.sg
-Use Type: AdHoc
-Purpose of Booking: study,(22:30-23:59) (not available),(00:00-08:30) (not available),(22:30-23:59) (not available),(00:00-08:30) (not available),Booking Time: 12:00-14:00
-Booking Status: Confirmed
-Booking Reference Number: MBK-20260122-000040
+Booking Reference Number: MBK-20260122-000041
 Booked for User Name: TAN WENG KIAT JERVYN
 Booked for User Org Unit: 
 Booked for User Email Address: jervyn.tan.2023@business.smu.edu.sg
 Use Type: AdHoc
 Purpose of Booking: Study,Booking Time: 15:00-17:00
 Booking Status: Confirmed
-Booking Reference Number: BK-20260122-001071
+Booking Reference Number: BK-20260122-001072
 Booked for User Name: LEE JING YUAN
 Booked for User Org Unit: 
 Booked for User Email Address: jylee.2023@accountancy.smu.edu.sg
 Use Type: AdHoc
-Purpose of Booking: idk,(22:30-23:59) (not available))
+Purpose of Booking: idk,(17:00-23:59) (not available))
 LOG: Mapped rooms to timeslots
 ✅ Scraping complete. Data written to: ./log/scraped_log.json
 
 ============================================================
-ORCHESTRATOR: Room Availability Scraper (scraper-prod.js) completed successfully in 62.78s
+ORCHESTRATOR: Room Availability Scraper (scraper-prod.js) completed successfully in 61.51s
 ============================================================
 
 
@@ -112,13 +70,13 @@ ORCHESTRATOR: Room Availability Scraper (scraper-prod.js) completed successfully
 ORCHESTRATOR: Starting User Bookings Scraper (scraper-bookings.js)...
 ============================================================
 
-[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  write to custom object with { processEnv: myObject })
+[dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit)
 LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
 LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
-LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7YucJsQgShUORaIsK7aGXysQbsOTY1Ov08e8boA96oWfPfrMz6xGKVu%2F5pPM7cw8vHaAP3lttkB8fKtI5w61AhdyIFpD7mq8mNwueRIzvnfW2tpoEE0RwXlkztQa7FtwK3Kuq4eF%2BUZGd93vklDYbjJTxThjwEbZdBLKLcEtXO7XZWA1%2BFyFaesAndHm3WpNg1u%2BjjDiQfznabpWJWlU7i7bx1mhlIKptS%2BtyKAZlLcJclCLMBmUciiRLw4YVopHFICsySQ%2FBEhLMZxV5ziQrcimTRsb9CLAyS7M8S0HmQ4ghL3oZYgdzg14YX5GEJUXI4jBJ14xxlvK8eCLB8quHK2WkMtvLpW1OIuTX6%2FUyPMV8BIfHiL2AjEeHDfnR2J0d4zJWfF%2BAjP%2FrG3%2F6HtEzq5Pvnt%2F27PlsabWqP4KJ1vZt6kB4qEhM6Pg08vfHjD8B&RelayState=ss%3Amem%3Aaf3f6bc2edc27c6f809b7c8393c016f17f167bda436ec27fdad7b9b729e2b9eb
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR7YuOkgVgEiZZDkWiLgPbQS%2BU4G7Dk2NTr9PHvG6APemmv9vibnVmPUbZmL6Zd2NkVPHeAIXprjUVxvChJ561wEjUKK1tAEZRYT28WgidM7L0LTjlDoiki%2BKCdvXIWuxb8GvyLVnC%2FWpRkF8IeBaVNhYm2wUsLIcG2S6DuEtzS9U5XlTMQdgmiowc8p8u79YZEs34ebeWB%2FMMxbqtt0mrlHbomOGu0hUS5lqpiJIeFkvGFLGScDYtBLHmWxg3LZVPnwyzPanoIxkk0n5XkqehPi4w1imfDwSiVKeNVyqDOWQ3FiMtehtjB3GKQNpSEM57HbBDzbMOYYKng7JFEy88eLrWttd3%2BXVp1EqG43myW8SnmA3g8RuwFZDI%2BTCiOxv5sGX9j5dcGyOS%2FvvG77zE9szr57sVtz57Pls5o9R5NjXGvVx5kgJIMCJ2cnvz%2BMZMP&RelayState=ss%3Amem%3A627714fa400c5ba502427a0cd2443cf13ebf83a355ecdf98188409ab2510abff
 LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
 LOG: Redirected to SMU SSO
-LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=4ce797f4-9301-43bd-b418-c2c3b18ff620&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA7aBRRAEXfZD_R6GqSXjAgFuLO7735vIGAq4m7Ky6zOppsIYT3nR2zM5vsm4C_QhAlpZVosBLSaKOWoiApU6Wx0UZSSRq12zJTiZ0g3PJwL_dMgeBcP8_XVGAYkio9yfIRyUSuq3RDF3xDV7Gh-gmlw4HI-6PZqWlw9iM4VX7YfPFmpXbr5aP7rzX8r4LoT4Gu1NCIGp2rttENoxs72twK4qbrcG5LbjkECxMjiBwEBXd8YQnH3dO0H5r2daISkXRgb5WaSgWpSAMioXQpswVntsdc6ZuYesyHGDLTcqXlScv1KCcIuqIgJCfcowViY2FTLOj70hmGfeJhRurFMKkjD1t1YiNYl6ZLJHc95CK-XzodEzpKxEAfZrFumza8oFii_vq3Vz5-UJ4wj4zL2qtKYSgL5rZ7z7-1n3z6fexBdBnsVowOiZLmapvh7rUwbmWZv9xNrB7scTogxkWaELgc5-ymt7qg5v3Aelqt7VbBr6q2OQm2JsGHo_-v-HMNjE_sbz_-8m7n2c_WwcnzoRleajNj_d7ClcZiepuQdL2TtIy719courPU8DtkJPESDB25OP92GnwvMgPGM2BzFhwC0&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=032ee7ef-5b9b-4e19-8868-0167ac87dbb0&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZC7b9NAAIft5lGo6FP9A0BiAmLfnc-Ps1SJh0MgCgTkQKMs6GyfX9iOm3NaBSGBmIpYmBDqyMgCYmAABtQxC11YqJAqxIC6wJgNwoLYkJB-86ff980J5qmwKHJuyrLvcCnKigHNWCHxdCgxbyjxQOZh5Dj9hBXhYGVuqf5o4cHX3sfzL-7dfb06yjrPRfIvgP0HIHHel-1zV1pIvta2O7viiVvE9zSCge8irENDoQpAjgKYpwGPEQPRPVH8JoqfZio2TRO0U2pwbqYsNTWk6xD7FAPgqg5VAcJIp8D1EMaK60OFOf5vnKoy1_OJAQ0DA0IdpEJAHd9_VTrpEoPqxKU1lRJawzqBNYqwUvOBRqevdKxh70vpeECdQcQSqZ8FEgJIOcvdiP_lt1c-dlieAUcmZfFZZVrow4V0df_tu_bD--jzYqckjCsyt25GubExNDJjVE-tjU14o2tvXm7HtK-pLdpbj5WkmzRHJN9awyZ8XJ0fV4UfVXF7VtiZFd4c_f_E7-eFycLTg_HP3f0n3y8dLp65ypr1dXi72e1o1-3GxbxxpxWT03nM4l64ZYVWNMwCaPFm0OJrL5eEg-mWhcmysL0i_AI1&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
 LOG: Filled in password
 LOG: Clicked submit button
 LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home
@@ -134,7 +92,7 @@ LOG: Found 1 booking rows in table
 ✅ Bookings scraping complete. Data written to: ./log/scraped_bookings.json
 
 ============================================================
-ORCHESTRATOR: User Bookings Scraper (scraper-bookings.js) completed successfully in 33.13s
+ORCHESTRATOR: User Bookings Scraper (scraper-bookings.js) completed successfully in 32.45s
 ============================================================
 
 
@@ -142,13 +100,13 @@ ORCHESTRATOR: User Bookings Scraper (scraper-bookings.js) completed successfully
 ORCHESTRATOR: Starting User Tasks Scraper (scraper-tasks.js)...
 ============================================================
 
-[dotenv@17.2.0] injecting env (0) from .env (tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild)
+[dotenv@17.2.0] injecting env (0) from .env (tip: ⚙️  write to custom object with { processEnv: myObject })
 LOG: Navigating to https://www.smubondue.com/facility-booking-system-fbs
 LOG: Successfully loaded https://www.smubondue.com/facility-booking-system-fbs
-LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb4MwEIT%2FCvIdbAyBYIVINDk0UtpGTdpDL5UhJlgyNvWaPv59SegjvaRnz36zM%2BsZ8FZ1rOhdo%2B%2FFSy%2FAee%2Bt0sBODznqrWaGgwSmeSuAuYpti5s1owFhnTXOVEYhrwAQ1kmjF0ZD3wq7FfZVVuLhfp2jxrkOGMZ1CYHUznItXABtH4h9H8ABbxtZlkYJ1wQABh%2FxFG%2FutjvkLYd9pOZH8i9HmYPUQSsra8DUzmgltQgq0%2BIqm%2FI0q7g%2F4Rn34zQLfU7jyK9Jwut9ksZJvMfHYBR5q2WOnuNwMo3JpK7LMMxoSiNCeZRSEk9JNgxGgwygFysNjmuXI0po4pPQp9GOEEZiRrMn5G2%2BeriSei%2F14XJp5SgCdr3bbfwx5qOwcIo4CNB8dtyQnYzt2TEuY%2Fn3BdD8v77hp%2B8ZPrMafTt2O7BXy41RsvrwCqXM28IK7kSOQoTn48jfHzP%2FBA%3D%3D&RelayState=ss%3Amem%3A1b2b39cf3903179a39e13da4cdeaf35e4910e2f1a024446193451fe9f8b9e265
+LOG: Navigating to https://login.microsoftonline.com/c98a79ca-5a9a-4791-a243-f06afd67464d/saml2?SAMLRequest=hZJLb8IwEIT%2FSuR74sQxCVgEicKhSLRFhfbQS%2BU4G7Dk2NTr9PHvy6PPS3v2%2BJud2R2j7MxeTPuws7fw1AOG6LUzFsXpoSK9t8JJ1Cis7ABFUGI9vVoKlqRi711wyhkSTRHBB%2B3szFnsO%2FBr8M9awd3tsiK7EPYoKG1rTLQNXloICXZ9Ak2f4Jaud7qunYGwSxAdPeIZXd2sNySaH%2BbRVh7J3xzjttomnVbeoWuDs0ZbSJTrqBoNZTlSMh7IkYx5OcpiyXget2kh26YoecEbegzGSLSYV%2BSR5zKrs5KrppVlwRkMIG94WrcsH%2BZtMzzIEHtYWAzShoqwlBVxmsWMb9JUpLkY5A8kWn30cKFto%2B3279LqswjF5Wazis8x78HjKeJBQCbj44TiZOx%2FLONvrPzcAJn81zd%2B9T2mP6zOvntxfWAv5itntHqLpsa4l5kHGaAiGaGT85ffFzN5Bw%3D%3D&RelayState=ss%3Amem%3Abaad1ef04e36037ac6ac0d40cdff38a2dc553cc85c2ede396384635447b28ab9
 LOG: Filled in email gabriel.ong.2023@scis.smu.edu.sg and clicked next
 LOG: Redirected to SMU SSO
-LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=4ce797f4-9301-43bd-b418-c2c3b18ff620&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZA9aBNhAIbvmp9qsdp2ExwUHMSYu_t-7uc7KHgUk1AbvXptsCLod3ff5aJ3SbjvzhAnx0AGnUQKdnB0UTo6SRahWQpuilCcpAQUp7iZSdwE4Z2fl-dZEMzLYZp2uSnLgculVjtNaJulEo8zifmZxJsyD1uu24lYGiYrC0uT4fjc4Oyb-t6Lp8PJ3t3xa5H8C-D8AUicd2THqm9A2b7pbI3EC_cwUA2sqEHgAkCgDpECKdKhgg2FQIzQoSh-E8VPcwWHxhHczVU5N2MWm8CFLiJegIiCgE4oIgwgn2LPZzRAKsMEKAwGgCoQY6wBgrAKAkYCwyUMaup-7qJHDKoTj5ZVSmgZ6wSU6eyyHCgaDXxNxxr2v-bON6mbtFgkddpNCSoQXeVei__ld5g_dZyfU05M8-KrwqzQpS9D6-jz_cqTl40Po18V4aAg76Awrt7uG2uZ0b4TVmvbvUZJfWDbm0l0_fFW3fdJuC1nzcju4FVkgmfFxYOi8KMoDuaF3Xnh3cn_T_x-UZieHn-c_NwfPf9eOz5zxaa0L_d4l8WlG8k1dmtdY7XGQ2JtWOv9rlUp-Tt-9sjZ1PFab_XtknA027IwXRYGK8Jv0&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
+LOG: Navigated to https://login2.smu.edu.sg/adfs/ls/?client-request-id=032ee7ef-5b9b-4e19-8868-0167ac87dbb0&wa=wsignin1.0&wtrealm=urn%3afederation%3aMicrosoftOnline&wctx=LoginOptions%3D3%26estsredirect%3d2%26estsrequest%3drQQIARAAnZC7axRBAIdnc49o8DRJZ6WCVXSfM_uESEIMJ8sl0dz5uBTKzOzM7uZ275KdvZP4F6S0UjhBUKzSGCJpbBQRi1RpbJSAWIWAaBM4rLxK7ITAr_198H1jwJuK8nxNeKrKiVDidp7hNssVkXYVFnQVEaoiignpJCyPssmx8e25Z4f8YNV_d1_-_OP3td0tyf0foP4XoAjRUeuzCzVDvblUb3yQLj1AEOtEtxENOLYtZDCTwQBphBvQgTxw9iXpUJK-jJTqOE2MfqEqhJey1CMYBzrjGmLQ0qCNqYWpNjwOORw62AioaUJKHZMaLGDQtaCDLGgiZBPDwcTdKVymroNtl2LZxC6Wke3qMjYQlLlmYR5YNrJQ8L1wMcQki1midNqhYmgGnBE0Fv_47RfPHBVHtFODovSyNCx08OrClH1-d-bp8-MXWzsVsFdS7yIdPdK61V5MWnAj8udDYaLcT1rLtUUtu_0wjxx2J1Vr2YKYtj39cbmyVwa_ytLmKOiPgrenT574fQUMzr759Lr_8euTnzeOzl3t3Zubne-t-eutZrLI_cYVcynKV9YbvtXsbKzUqu4tEl6H7XS515zeHgffhpsAgwmwOQn-AA2&cbcxt=&username=gabriel.ong.2023%40scis.smu.edu.sg&mkt=&lc=
 LOG: Filled in password
 LOG: Clicked submit button
 LOG: Arrived at dashboard at url https://fbs.intranet.smu.edu.sg/home

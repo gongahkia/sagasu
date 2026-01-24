@@ -1,8 +1,8 @@
 {
   "metadata": {
     "version": "1.0.0",
-    "scraped_at": "2026-01-23T00:05:54.644Z",
-    "scrape_duration_ms": 32831,
+    "scraped_at": "2026-01-24T00:05:18.664Z",
+    "scrape_duration_ms": 32149,
     "success": true,
     "error": null,
     "scraper_version": "bookings-v1.0.0"
