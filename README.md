@@ -1,11 +1,11 @@
-[![](https://img.shields.io/badge/sagasu_4.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-4/releases/tag/1.0.0)
-![](https://github.com/gongahkia/sagasu-4/actions/workflows/scrape.yml/badge.svg)
-![Vercel Deploy](https://deploy-badge.vercel.app/vercel/sagasu-4)
+[![](https://img.shields.io/badge/sagasu_2.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-2/releases/tag/1.0.0)
+![](https://github.com/gongahkia/sagasu-2/actions/workflows/scrape.yml/badge.svg)
+![Vercel Deploy](https://deploy-badge.vercel.app/vercel/sagasu-2)
 
 > [!WARNING]  
-> [`Sagasu 4`](https://github.com/gongahkia/sagasu-4)'s Vercel deployment is inactive as of 24 January 2026.  
+> [`Sagasu 2`](https://github.com/gongahkia/sagasu-2)'s Vercel deployment is inactive as of 24 January 2026.  
 
-# `Sagasu 4`
+# `Sagasu 2`
 
 <p align="center">
     <img src="./asset/logo/logo-four.png" width=55% height=55%>
@@ -35,15 +35,15 @@ See [this](https://github.com/gongahkia/sagasu#rationale), [this](https://github
 
 ## Usage
 
-`Sagasu 4` was primarily made for my own use.
+`Sagasu 2` was primarily made for my own use.
 
-The easiest way to view `Sagasu 4` is via the ***Live Web App*** at [sagasu-4.pages.dev](https://sagasu-4.pages.dev/).
+The easiest way to view `Sagasu 2` is via the ***Live Web App*** at [sagasu-2.pages.dev](https://sagasu-2.pages.dev/).
 
 It's also the only way to access it. 
 
 ## Configuration
 
-For those interested, `Sagasu 4` is configured with the below environment variables locally in an `.env` file for dev and [Github Secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) for prod.
+For those interested, `Sagasu 2` is configured with the below environment variables locally in an `.env` file for dev and [Github Secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) for prod.
 
 ### Auth
 
@@ -142,8 +142,4 @@ Available equipment options:
 
 ## Other notes
 
-`Sagasu 4` is where it is today because of the below projects. 
-
-* [Sagasu](https://github.com/gongahkia/sagasu)
-* [Sagasu 2](https://github.com/gongahkia/sagasu-2)
-* [Sagasu 3](https://github.com/gongahkia/sagasu-3)
+`Sagasu 2` is where it is today because of its progenitor [Sagasu](https://github.com/gongahkia/sagasu).

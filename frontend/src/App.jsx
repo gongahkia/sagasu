@@ -365,7 +365,7 @@ function App() {
               </a>
           </p>
           <p className="mt-2 text-xs">
-            Disclaimer: Sagasu 4 is not affiliated with SMU or SMU FBS
+            Disclaimer: Sagasu 2 is not affiliated with SMU or SMU FBS
           </p>
         </footer>
       </main>

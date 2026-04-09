@@ -7,12 +7,12 @@ from diagrams.generic.blank import Blank
 from diagrams.custom import Custom
 from diagrams.generic.blank import Blank
 
-# Sagasu 4: Data flow from scraper to static frontend, and how users consume it
+# Sagasu 2: Data flow from scraper to static frontend, and how users consume it
 with Diagram(
-    "Sagasu 4 - Data Flow & Deployment",
+    "Sagasu 2 - Data Flow & Deployment",
     direction="LR",
     show=False,
-    filename="architecture_sagasu4",
+    filename="architecture_sagasu2",
     outformat="png",
 ):
     # Main actor

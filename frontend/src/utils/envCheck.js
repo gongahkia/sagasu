@@ -89,7 +89,7 @@ export const getEnvConfigUrl = () => {
   if (isDevelopment) {
     return null; // Local backend/.env file, no URL
   }
-  return 'https://github.com/gongahkia/sagasu-4/settings/secrets/actions';
+  return 'https://github.com/gongahkia/sagasu-2/settings/secrets/actions';
 };
 
 /**

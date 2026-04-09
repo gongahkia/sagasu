@@ -6,19 +6,19 @@ const isDev = import.meta.env.DEV;
 // Use local files in development, GitHub raw URLs in production
 const GITHUB_RAW_URL = isDev
   ? '/data/scraped_log.json'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_log.json';
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraped_log.json';
 
 const BOOKINGS_URL = isDev
   ? '/data/scraped_bookings.json'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_bookings.json';
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraped_bookings.json';
 
 const TASKS_URL = isDev
   ? '/data/scraped_tasks.json'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraped_tasks.json';
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraped_tasks.json';
 
 const SCRAPER_CONSOLE_URL = isDev
   ? '/data/scraper_console.txt'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-4/main/backend/log/scraper_console.txt';
+  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraper_console.txt';
 
 export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
   const [data, setData] = useState(null);

@@ -6,7 +6,7 @@ const Header = ({ lastUpdated }) => {
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold text-spacemacs-light-accent">
-            Sagasu 4
+            Sagasu 2
           </h1>
           <div className="flex items-center gap-2">
             <span className="relative flex h-3 w-3">
@@ -34,7 +34,7 @@ const Header = ({ lastUpdated }) => {
           )}
 
           <a
-            href="https://github.com/gongahkia/sagasu-4"
+            href="https://github.com/gongahkia/sagasu-2"
             target="_blank"
             rel="noopener noreferrer"
             className="p-2 rounded-md hover:bg-gray-100 transition-colors"
