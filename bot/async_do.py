@@ -242,6 +242,22 @@ def fill_missing_timeslots(room_schedule):
     return new_schedule
 
 
+class ScrapeError(Exception):
+    """base scraper failure"""
+
+
+class AuthFailedError(ScrapeError):
+    """login rejected — wrong creds or MFA"""
+
+
+class NetworkError(ScrapeError):
+    """FBS unreachable or unexpected navigation state"""
+
+
+class FBSLayoutError(ScrapeError):
+    """FBS DOM changed — selectors missing"""
+
+
 async def _noop_progress(stage):
     pass
 
@@ -412,10 +428,16 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
             try:
                 # ---------- LOGIN CREDENTIALS ----------
                 await progress("logging in to FBS")
-                await page.goto(base_url)
-                await page.wait_for_selector("input#userNameInput")
-                await page.wait_for_selector("input#passwordInput")
-                await page.wait_for_selector("span#submitButton")
+                try:
+                    await page.goto(base_url, timeout=30000)
+                except Exception as e:
+                    raise NetworkError(f"cannot reach FBS at {base_url}: {e}") from e
+                try:
+                    await page.wait_for_selector("input#userNameInput", timeout=15000)
+                    await page.wait_for_selector("input#passwordInput")
+                    await page.wait_for_selector("span#submitButton")
+                except Exception as e:
+                    raise FBSLayoutError(f"login page did not load as expected: {e}") from e
 
                 print(f"navigating to {base_url}")
 
@@ -426,11 +448,14 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
                 await page.wait_for_timeout(1000)
                 await page.wait_for_load_state("networkidle")
 
+                if await page.query_selector("#errorText, #error, .error_msg"):
+                    raise AuthFailedError("SMU login was rejected — check email and password")
+
                 await progress("navigating to target date")
                 # ---------- NAVIGATE TO GIVEN DATE ----------
                 frame = page.frame(name="frameBottom")
                 if not frame:
-                    errors.append("Frame bottom could not be found.")
+                    raise AuthFailedError("login did not reach FBS dashboard (likely wrong credentials)")
                 else:
                     frame = page.frame(name="frameContent")
                     while True:

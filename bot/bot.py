@@ -15,6 +15,7 @@ from telegram.ext import (
 )
 from async_do import scrape_smu_fbs
 from async_do import fill_missing_timeslots
+from async_do import AuthFailedError, NetworkError, FBSLayoutError, ScrapeError
 
 def read_token_env():
     """
@@ -134,6 +135,24 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                     summary, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(buttons)
                 )
 
+    except AuthFailedError as e:
+        print(f"Auth failed: {e}")
+        await callback_query.message.reply_text(
+            "🔐 Login rejected. Check your SMU email and password via /settings."
+        )
+    except NetworkError as e:
+        print(f"Network error: {e}")
+        await callback_query.message.reply_text(
+            "🌐 Couldn't reach FBS. Check your connection — if it persists, FBS may be down."
+        )
+    except FBSLayoutError as e:
+        print(f"FBS layout changed: {e}")
+        await callback_query.message.reply_text(
+            "🧩 FBS page structure changed — the scraper needs an update. Report @gongahkia."
+        )
+    except ScrapeError as e:
+        print(f"Scrape error: {e}")
+        await callback_query.message.reply_text(f"⚠️ Scrape failed: {e}")
     except Exception as e:
         print(f"Error during scraping: {e}")
         await callback_query.message.reply_text(
