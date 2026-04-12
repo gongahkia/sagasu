@@ -18,6 +18,7 @@ Run it back *(but as a web app)*.
 
 * *Frontend*: [React](https://react.dev/), [Vite](https://vite.dev/), [Vercel](https://vercel.com/)
 * *Backend*: [Playwright](https://github.com/microsoft/playwright), [Node.js](https://nodejs.org/en), [Github Actions](https://docs.github.com/en/actions), [Cron](https://www.ibm.com/docs/en/db2/11.5.x?topic=task-unix-cron-format)
+* *CI/CD*: [Github Actions](https://github.com/features/actions)
 
 ## Rationale
 
