@@ -1,4 +1,4 @@
-[![](https://img.shields.io/badge/sagasu_2.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-2/releases/tag/1.0.0)
+[![](https://img.shields.io/badge/sagasu_2.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-2/releases/tag/2.0.0)
 ![](https://github.com/gongahkia/sagasu-2/actions/workflows/scrape.yml/badge.svg)
 ![](https://github.com/gongahkia/sagasu-2/actions/workflows/test.yml/badge.svg)
 ![Vercel Deploy](https://deploy-badge.vercel.app/vercel/sagasu-2)
