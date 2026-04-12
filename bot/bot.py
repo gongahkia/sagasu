@@ -186,7 +186,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"Failed to edit message: {edit_error}")
     elif query.data == "view_help":
         await query.edit_message_text(
-            "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your configurations",
+            "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your configurations\nType /logout to wipe stored credentials",
             parse_mode=ParseMode.HTML,
         )
     elif query.data == "settings":
@@ -240,9 +240,23 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Please enter your SMU email address 📧")
 
 
+async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    wiped = []
+    for key in ("email", "password", "settings_state"):
+        if key in context.user_data:
+            context.user_data.pop(key, None)
+            wiped.append(key)
+    if wiped:
+        await update.message.reply_text(
+            "All your stored credentials have been wiped clean 🧹\nType /settings to re-enter them."
+        )
+    else:
+        await update.message.reply_text("Nothing to wipe — no credentials were stored 👻")
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your configurations",
+        "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your configurations\nType /logout to wipe stored credentials",
         parse_mode=ParseMode.HTML,
     )
 
@@ -256,6 +270,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("settings", settings_command))
+    app.add_handler(CommandHandler("logout", logout_command))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
     print("Bot is polling...")
