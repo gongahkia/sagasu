@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -67,15 +68,26 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     #     return
 
     try:
-        status_msg = await callback_query.message.reply_text("⏳ Starting scrape…")
+        cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Cancel", callback_data="scrape_cancel")]])
+        status_msg = await callback_query.message.reply_text("⏳ Starting scrape…", reply_markup=cancel_kb)
 
         async def progress(stage):
             try:
-                await status_msg.edit_text(f"⏳ {stage}…")
+                await status_msg.edit_text(f"⏳ {stage}…", reply_markup=cancel_kb)
             except Exception as e:
                 print(f"progress edit failed: {e}")
 
-        result = await scrape_smu_fbs(TARGET_URL, USER_EMAIL, USER_PASSWORD, context.user_data.get("scrape_config"), progress)
+        scrape_task = asyncio.create_task(
+            scrape_smu_fbs(TARGET_URL, USER_EMAIL, USER_PASSWORD, context.user_data.get("scrape_config"), progress)
+        )
+        context.user_data["scrape_task"] = scrape_task
+        try:
+            result = await scrape_task
+        except asyncio.CancelledError:
+            await status_msg.edit_text("🛑 Scrape cancelled.")
+            return
+        finally:
+            context.user_data.pop("scrape_task", None)
 
         result_errors = result[0]
         result_final_booking_log = result[1]
@@ -462,6 +474,20 @@ async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await query.message.reply_text(text[i:i+max_len], parse_mode=ParseMode.HTML)
 
 
+async def scrape_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    task = context.user_data.get("scrape_task")
+    if task and not task.done():
+        task.cancel()
+        try:
+            await query.edit_message_text("🛑 Cancelling scrape…")
+        except Exception:
+            pass
+    else:
+        await query.answer("No active scrape", show_alert=True)
+
+
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.pop("settings_state", None)
     if state:
@@ -506,6 +532,7 @@ def main():
     app.add_handler(CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):"))
     app.add_handler(CallbackQueryHandler(settings_edit_callback, pattern=r"^settings:"))
     app.add_handler(CallbackQueryHandler(room_details_callback, pattern=r"^room:"))
+    app.add_handler(CallbackQueryHandler(scrape_cancel_callback, pattern=r"^scrape_cancel$"))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
     print("Bot is polling...")
