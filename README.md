@@ -11,7 +11,7 @@
     <img src="./asset/logo/logo-two.png" width=55% height=55%>
 </p>
 
-[Fourth](#other-notes) time's the charm.
+Run it back *(but as a web app)*.
 
 ## Stack
 
