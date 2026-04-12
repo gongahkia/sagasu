@@ -208,7 +208,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"Failed to edit message: {edit_error}")
     elif query.data == "view_help":
         await query.edit_message_text(
-            "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /cancel to abort an input flow\nType /logout to wipe stored credentials",
+            "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /status to view current settings\nType /cancel to abort an input flow\nType /logout to wipe stored credentials",
             parse_mode=ParseMode.HTML,
         )
     elif query.data == "settings":
@@ -494,9 +494,30 @@ async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Nothing to wipe — no credentials were stored 👻")
 
 
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    email = context.user_data.get("email")
+    has_password = bool(context.user_data.get("password"))
+    cfg = context.user_data.get("scrape_config") or {}
+
+    lines = ["<b>🧾 Current status</b>"]
+    lines.append(f"<i>Email:</i> {_mask_email(email) if email else '— not set'}")
+    lines.append(f"<i>Password:</i> {'set ✅' if has_password else '— not set'}")
+    lines.append("")
+    lines.append("<b>Scrape params</b> (unset = default)")
+    lines.append(f"<i>Date:</i> {cfg.get('date_raw', 'today (default)')}")
+    lines.append(f"<i>Start time:</i> {cfg.get('start_time', '11:00 (default)')}")
+    lines.append(f"<i>Duration:</i> {cfg.get('duration_hrs', '2.5h (default)')}h" if 'duration_hrs' in cfg else "<i>Duration:</i> 2.5h (default)")
+    lines.append(f"<i>Capacity:</i> {cfg.get('room_capacity') or 'any (default)'}")
+    lines.append(f"<i>Buildings:</i> {', '.join(cfg.get('buildings') or []) or '(default)'}")
+    lines.append(f"<i>Floors:</i> {', '.join(cfg.get('floors') or []) or '(default)'}")
+    lines.append(f"<i>Facility types:</i> {', '.join(cfg.get('facility_types') or []) or '(default)'}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /cancel to abort an input flow\nType /logout to wipe stored credentials",
+        "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /status to view current settings\nType /cancel to abort an input flow\nType /logout to wipe stored credentials",
         parse_mode=ParseMode.HTML,
     )
 
@@ -513,6 +534,7 @@ def main():
     app.add_handler(CommandHandler("logout", logout_command))
     app.add_handler(CommandHandler("config", scrape_config_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
+    app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):"))
     app.add_handler(CallbackQueryHandler(settings_edit_callback, pattern=r"^settings:"))
     app.add_handler(CallbackQueryHandler(room_details_callback, pattern=r"^room:"))
