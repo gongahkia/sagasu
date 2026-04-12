@@ -1,4 +1,4 @@
-name: Tests
+name: Sagasu 2 CI/CD on push
 on:
   push:
     branches: [main]

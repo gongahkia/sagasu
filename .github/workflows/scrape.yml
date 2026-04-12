@@ -1,4 +1,4 @@
-name: Daily Room Scraper
+name: Sagasu 2 Daily Room Scraper
 
 on:
   workflow_dispatch: # Allow manual trigger
