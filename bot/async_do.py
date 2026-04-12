@@ -242,7 +242,12 @@ def fill_missing_timeslots(room_schedule):
     return new_schedule
 
 
-async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None):
+async def _noop_progress(stage):
+    pass
+
+
+async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None, progress_cb=None):
+    progress = progress_cb or _noop_progress
     """
     Handle automated login to SMU FBS based on
     personal credentials.json and scrapes all booked
@@ -397,6 +402,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
     errors = []
 
     try:
+        await progress("launching browser")
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=False, slow_mo=1000
@@ -405,6 +411,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
 
             try:
                 # ---------- LOGIN CREDENTIALS ----------
+                await progress("logging in to FBS")
                 await page.goto(base_url)
                 await page.wait_for_selector("input#userNameInput")
                 await page.wait_for_selector("input#passwordInput")
@@ -419,6 +426,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
                 await page.wait_for_timeout(1000)
                 await page.wait_for_load_state("networkidle")
 
+                await progress("navigating to target date")
                 # ---------- NAVIGATE TO GIVEN DATE ----------
                 frame = page.frame(name="frameBottom")
                 if not frame:
@@ -466,6 +474,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
 
                 await page.wait_for_timeout(1000)
 
+                await progress("applying filters")
                 # ----- SELECT BUILDINGS -----
                 if BUILDING_ARRAY:
                     if await frame.is_visible("#DropMultiBuildingList_c1_textItem"):
@@ -518,6 +527,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
                     print("Select element for room capacity not found")
                 await page.wait_for_timeout(1000)
 
+                await progress("searching matching rooms")
                 # ----- ROOM EXTRACTION -----
                 await frame.wait_for_selector("table#GridResults_gv")
                 matching_rooms = []
@@ -561,6 +571,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
                     for room in matching_rooms:
                         print(f"-{room}")
 
+                    await progress("loading availability grid")
                     # ----- SEARCH AVAILABILITY -----
                     await frame.click("a#CheckAvailability")
                     print("Submitting search availability request...")
@@ -652,6 +663,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
                     }
 
                     print("finished scraping")
+                    await progress("finished")
 
             except Exception as e:
                 errors.append(f"Error occurred during scraping process: {e}")

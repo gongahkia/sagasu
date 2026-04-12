@@ -66,8 +66,15 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     #     return
 
     try:
+        status_msg = await callback_query.message.reply_text("⏳ Starting scrape…")
 
-        result = await scrape_smu_fbs(TARGET_URL, USER_EMAIL, USER_PASSWORD, context.user_data.get("scrape_config"))
+        async def progress(stage):
+            try:
+                await status_msg.edit_text(f"⏳ {stage}…")
+            except Exception as e:
+                print(f"progress edit failed: {e}")
+
+        result = await scrape_smu_fbs(TARGET_URL, USER_EMAIL, USER_PASSWORD, context.user_data.get("scrape_config"), progress)
 
         result_errors = result[0]
         result_final_booking_log = result[1]
