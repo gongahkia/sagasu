@@ -35,7 +35,6 @@ See [this](https://github.com/gongahkia/sagasu#rationale).
 ![](./asset/reference/4.png)  
 ![](./asset/reference/5.png)  
 ![](./asset/reference/6.png)  
-![](./asset/reference/7.png)  
 
 ## Usage
 
