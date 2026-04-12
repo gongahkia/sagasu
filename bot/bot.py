@@ -171,11 +171,6 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
             "An error occurred during the scraping process. Report the issue @gongahkia."
         )
 
-    finally:
-        if context.bot_data.get("browser"):
-            await context.bot_data["browser"].close()
-            print("Browser closed.")
-
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
