@@ -1,4 +1,4 @@
-name: CI
+name: Sagasu CI/CD on push
 
 on:
   push:
