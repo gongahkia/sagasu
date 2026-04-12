@@ -197,7 +197,7 @@ async def handle_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("settings_state") == "awaiting_email":
         context.user_data["email"] = update.message.text
         await update.message.reply_text(
-            "SMU email saved!\nPlease enter your password 🔑"
+            "SMU email saved!\nPlease enter your password 🔑\n\n⚠️ Your password message will be deleted immediately after I read it to protect your chat history."
         )
         context.user_data["settings_state"] = "awaiting_password"
         # print("Email received:", context.user_data['email'])
@@ -210,9 +210,12 @@ async def handle_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("settings_state") == "awaiting_password":
         context.user_data["password"] = update.message.text
-        await update.message.reply_text("Password saved!\nSettings updated ☑️")
+        try:
+            await update.message.delete()  # purge plaintext password from chat history
+        except Exception as e:
+            print(f"Could not delete password message: {e}")
+        await update.message.chat.send_message("Password saved and your message was deleted for safety!\nSettings updated ☑️")
         context.user_data["settings_state"] = None
-        # print("Password received:", context.user_data['password'])
     else:
         await update.message.reply_text(
             "Don't cut queue lah you.\nType /settings to enter your password 🐻."
