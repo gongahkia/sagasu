@@ -20,7 +20,7 @@
 
 ## Rationale
 
-See [this](https://github.com/gongahkia/sagasu#rationale), [this](https://github.com/gongahkia/sagasu-2#rationale) and [this](https://github.com/gongahkia/sagasu-3#rationale).
+See [this](https://github.com/gongahkia/sagasu#rationale).
 
 ## Architecture
 
