@@ -12,7 +12,7 @@
     <img src="./asset/logo/logo-two.png" width=55% height=55%>
 </p>
 
-[Fourth](#other-notes) time's the charm.
+Run it back *(but as a web app)*.
 
 ## Stack
 
@@ -21,7 +21,7 @@
 
 ## Rationale
 
-See [this](https://github.com/gongahkia/sagasu#rationale), [this](https://github.com/gongahkia/sagasu-2#rationale) and [this](https://github.com/gongahkia/sagasu-3#rationale).
+See [this](https://github.com/gongahkia/sagasu#rationale).
 
 ## Architecture
 
