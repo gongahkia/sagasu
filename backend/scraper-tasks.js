@@ -5,6 +5,8 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 require('dotenv').config();
+const { withRetry } = require('./retry');
+const { logger } = require('./logger');
 
 //
 // --- HELPER FUNCTIONS ---
@@ -34,17 +36,18 @@ const outputLog = './log/scraped_tasks.json';
   let browser;
 
   try {
+    await withRetry(async () => { // retry wrapper with exponential backoff
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
     const page = await context.newPage();
 
     // 1. Go to the initial site
-    console.log(`LOG: Navigating to ${url}`);
+    logger.info(`LOG: Navigating to ${url}`);
     await page.goto(url, {
       waitUntil: 'domcontentloaded',
       timeout: 60000
     });
-    console.log(`LOG: Successfully loaded ${url}`);
+    logger.info(`LOG: Successfully loaded ${url}`);
 
     // 2. Open Microsoft login in new tab
     const [newPage] = await Promise.all([
@@ -55,7 +58,7 @@ const outputLog = './log/scraped_tasks.json';
     // 3. Wait for Microsoft login URL to appear
     await newPage.waitForURL(/login\.microsoftonline\.com/, { timeout: 30000 });
     await newPage.waitForSelector('input[type="email"], #i0116', { timeout: 30000 });
-    console.log(`LOG: Navigating to ${newPage.url()}`);
+    logger.info(`LOG: Navigating to ${newPage.url()}`);
 
     // 4. Fill email and proceed
     let emailInput = await newPage.$('input[type="email"]') || await newPage.$('#i0116');
@@ -67,32 +70,32 @@ const outputLog = './log/scraped_tasks.json';
       nextButton.click(),
       newPage.waitForLoadState('networkidle'),
     ]);
-    console.log(`LOG: Filled in email ${EMAIL} and clicked next`);
+    logger.info(`LOG: Filled in email ${EMAIL} and clicked next`);
 
     // 5. Wait for SMU redirect or click fallback
     try {
       await newPage.waitForURL(/login2\.smu\.edu\.sg/, { timeout: 10000 });
-      console.log('LOG: Redirected to SMU SSO');
+      logger.info('LOG: Redirected to SMU SSO');
     } catch (e) {
       const redirectLink = await newPage.$('a#redirectToIdpLink');
       if (redirectLink) {
-        console.log('Redirect took too long, clicking #redirectToIdpLink...');
+        logger.info('Redirect took too long, clicking #redirectToIdpLink...');
         await Promise.all([
           redirectLink.click(),
         ]);
       } else {
-        console.log('Redirect delay detected, but #redirectToIdpLink not found.');
+        logger.info('Redirect delay detected, but #redirectToIdpLink not found.');
       }
       await newPage.waitForURL(/login2\.smu\.edu\.sg/, { timeout: 30000 });
     }
-    console.log(`LOG: Navigated to ${newPage.url()}`);
+    logger.info(`LOG: Navigated to ${newPage.url()}`);
 
     // 6. Wait for password input, fill in password
     await newPage.waitForSelector('input#passwordInput', { timeout: 30000 });
     const passwordInput = await newPage.$('input#passwordInput');
     if (!passwordInput) throw new Error('ERROR: Password input not found');
     await passwordInput.fill(PASSWORD);
-    console.log(`LOG: Filled in password`);
+    logger.info(`LOG: Filled in password`);
 
     // 7. Find and click the submit button
     await newPage.waitForSelector('div#submissionArea span#submitButton', { timeout: 30000 });
@@ -102,24 +105,24 @@ const outputLog = './log/scraped_tasks.json';
       submitButton.click(),
       newPage.waitForLoadState('networkidle')
     ]);
-    console.log(`LOG: Clicked submit button`);
+    logger.info(`LOG: Clicked submit button`);
 
     // 8. Wait for dashboard and validate correct site
     await newPage.waitForURL(/https:\/\/fbs\.intranet\.smu\.edu\.sg\//, { timeout: 30000 });
 
     const finalUrl = newPage.url();
     const fbsPage = newPage;
-    console.log(`LOG: Arrived at dashboard at url ${finalUrl}`);
+    logger.info(`LOG: Arrived at dashboard at url ${finalUrl}`);
 
     // ---- NAVIGATE TO TASK LIST ---- //
 
     // 1. Navigate to home first
-    console.log(`LOG: Navigating to home page`);
+    logger.info(`LOG: Navigating to home page`);
     await fbsPage.goto('https://fbs.intranet.smu.edu.sg/home', {
       waitUntil: 'domcontentloaded',
       timeout: 60000
     });
-    console.log(`LOG: Successfully loaded home page`);
+    logger.info(`LOG: Successfully loaded home page`);
 
     // 2. Wait for frameBottom to load
     await fbsPage.waitForSelector('iframe#frameBottom', { timeout: 20000 });
@@ -127,16 +130,16 @@ const outputLog = './log/scraped_tasks.json';
     if (!frameBottomElement) throw new Error('iframe#frameBottom not found');
     const frameBottom = await frameBottomElement.contentFrame();
     if (!frameBottom) throw new Error('Frame object for frameBottom not available');
-    console.log(`LOG: Frame bottom loaded`);
+    logger.info(`LOG: Frame bottom loaded`);
 
     // 3. Click on Task List Tab inside frameBottom
-    console.log(`LOG: Looking for div#TaskListTab in frameBottom`);
+    logger.info(`LOG: Looking for div#TaskListTab in frameBottom`);
     await frameBottom.waitForSelector('div#TaskListTab', { timeout: 30000 });
     await frameBottom.click('div#TaskListTab');
-    console.log(`LOG: Clicked on Task List tab`);
+    logger.info(`LOG: Clicked on Task List tab`);
 
     // 4. Wait for a long period to allow content to load (10-15 seconds)
-    console.log(`LOG: Waiting 15 seconds for content to load`);
+    logger.info(`LOG: Waiting 15 seconds for content to load`);
     await fbsPage.waitForTimeout(15000);
 
     // 5. Switch to frameContent inside frameBottom
@@ -145,16 +148,16 @@ const outputLog = './log/scraped_tasks.json';
     if (!frameContentElement) throw new Error('iframe#frameContent not found');
     const frameContent = await frameContentElement.contentFrame();
     if (!frameContent) throw new Error('Frame object for frameContent not available');
-    console.log(`LOG: Content frame loaded`);
+    logger.info(`LOG: Content frame loaded`);
 
     // 6. Wait for the tasks table
     await frameContent.waitForSelector('div#GridViewTask', { timeout: 20000 });
-    console.log(`LOG: Found div#GridViewTask`);
+    logger.info(`LOG: Found div#GridViewTask`);
 
     // 7. Parse the table
     const tasks = [];
     const rows = await frameContent.locator('div#GridViewTask table tbody tr.row').all();
-    console.log(`LOG: Found ${rows.length} task rows in table`);
+    logger.info(`LOG: Found ${rows.length} task rows in table`);
 
     for (const row of rows) {
       const cells = await row.locator('td').all();
@@ -201,7 +204,7 @@ const outputLog = './log/scraped_tasks.json';
         };
 
         tasks.push(task);
-        console.log(`LOG: Parsed task: ${referenceNumber} - ${taskType} - ${roomName} on ${date} ${startTime}-${endTime}`);
+        logger.info(`LOG: Parsed task: ${referenceNumber} - ${taskType} - ${roomName} on ${date} ${startTime}-${endTime}`);
       }
     }
 
@@ -231,13 +234,14 @@ const outputLog = './log/scraped_tasks.json';
     };
 
     fs.writeFileSync(outputLog, JSON.stringify(logData, null, 2));
-    console.log('✅ Task list scraping complete. Data written to:', outputLog);
+    logger.info('✅ Task list scraping complete. Data written to:', outputLog);
 
     if (browser) await browser.close();
+    }); // end withRetry
 
   } catch (error) {
     const scrapeEndTime = Date.now();
-    console.error('❌ Task list scraping failed:', error.message);
+    logger.error('❌ Task list scraping failed:', error.message);
 
     // Write error log
     const errorLogData = {
@@ -259,7 +263,7 @@ const outputLog = './log/scraped_tasks.json';
     };
 
     fs.writeFileSync(outputLog, JSON.stringify(errorLogData, null, 2));
-    console.log('Error log written to:', outputLog);
+    logger.info('Error log written to:', outputLog);
 
     if (browser) await browser.close();
     process.exit(1);

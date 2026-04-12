@@ -1,51 +1,46 @@
 {
   "metadata": {
     "version": "4.0.0",
-    "scraped_at": "2026-01-24T00:04:46.207Z",
-    "scrape_duration_ms": 61195,
+    "scraped_at": "2026-04-12T04:19:22.849Z",
+    "scrape_duration_ms": 37258,
     "success": true,
     "error": null,
     "scraper_version": "prod-v1.0.0"
   },
   "config": {
-    "date": "24-Jan-2026",
+    "date": "12-Apr-2026",
     "start_time": "08:00",
     "end_time": "22:00",
     "filters": {
       "buildings": [
-        "School of Economics/School of Computing & Information Systems 2",
-        "School of Computing & Information Systems 1",
-        "School of Accountancy",
-        "Yong Pung How School of Law/Kwa Geok Choo Law Library",
-        "School of Social Sciences/College of Integrative Studies",
-        "SMU Connexion"
+        "School of Computing & Information Systems 1"
       ],
       "floors": [
-        "Basement 1",
+        "Level 2",
         "Level 3",
         "Level 4"
       ],
       "facility_types": [
-        "Meeting Pod"
+        "Group Study Room"
       ],
       "equipment": [],
       "capacity": ""
     }
   },
   "statistics": {
-    "total_rooms": 22,
-    "available_rooms": 0,
+    "total_rooms": 13,
+    "available_rooms": 13,
     "booked_rooms": 0,
-    "partially_available_rooms": 22
+    "partially_available_rooms": 13
   },
   "rooms": [
     {
-      "id": "KGC Meeting Pod 3-01",
-      "name": "KGC Meeting Pod 3-01",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "KGC Meeting Pod 3",
+      "id": "SCIS1 GSR 2-1",
+      "name": "SCIS1 GSR 2-1",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 2",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
@@ -72,19 +67,19 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 511
       }
     },
     {
-      "id": "SCIS1 Meeting Pod 3-1",
-      "name": "SCIS1 Meeting Pod 3-1",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SCIS1 Meeting Pod 3",
+      "id": "SCIS1 GSR 2-2",
+      "name": "SCIS1 GSR 2-2",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 2",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
@@ -111,19 +106,19 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 511
       }
     },
     {
-      "id": "SCIS1 Meeting Pod 3-2",
-      "name": "SCIS1 Meeting Pod 3-2",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SCIS1 Meeting Pod 3",
+      "id": "SCIS1 GSR 2-3",
+      "name": "SCIS1 GSR 2-3",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 2",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
@@ -150,19 +145,19 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 511
       }
     },
     {
-      "id": "SMUC Meeting Pod 4-1",
-      "name": "SMUC Meeting Pod 4-1",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
+      "id": "SCIS1 GSR 2-4",
+      "name": "SCIS1 GSR 2-4",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 2",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
@@ -189,19 +184,19 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 511
       }
     },
     {
-      "id": "SMUC Meeting Pod 4-2",
-      "name": "SMUC Meeting Pod 4-2",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
+      "id": "SCIS1 GSR 2-5",
+      "name": "SCIS1 GSR 2-5",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 2",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
@@ -228,19 +223,19 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 511
       }
     },
     {
-      "id": "SMUC Meeting Pod 4-3",
-      "name": "SMUC Meeting Pod 4-3",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
+      "id": "SCIS1 GSR 2-6",
+      "name": "SCIS1 GSR 2-6",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 2",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
@@ -267,19 +262,19 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 511
       }
     },
     {
-      "id": "SMUC Meeting Pod 4-4",
-      "name": "SMUC Meeting Pod 4-4",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
+      "id": "SCIS1 GSR 2-7",
+      "name": "SCIS1 GSR 2-7",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 2",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
@@ -306,628 +301,178 @@
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
+        "is_available_now": true,
+        "next_available_at": null,
         "free_slots_count": 2,
         "free_duration_minutes": 511
       }
     },
     {
-      "id": "SMUC Meeting Pod 4-5",
-      "name": "SMUC Meeting Pod 4-5",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
+      "id": "SCIS1 GSR 3-1",
+      "name": "SCIS1 GSR 3-1",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 3",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:30",
+          "end": "00:00",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
+          "start": "00:00",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 1,
+        "free_duration_minutes": 1440
       }
     },
     {
-      "id": "SMUC Meeting Pod 4-6",
-      "name": "SMUC Meeting Pod 4-6",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
+      "id": "SCIS1 GSR 3-2",
+      "name": "SCIS1 GSR 3-2",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 3",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:30",
+          "end": "00:00",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
+          "start": "00:00",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 1,
+        "free_duration_minutes": 1440
       }
     },
     {
-      "id": "SMUC Meeting Pod 4-7",
-      "name": "SMUC Meeting Pod 4-7",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SMUC Meeting Pod 4",
+      "id": "SCIS1 GSR 3-3",
+      "name": "SCIS1 GSR 3-3",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 3",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:30",
+          "end": "00:00",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
+          "start": "00:00",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 1,
+        "free_duration_minutes": 1440
       }
     },
     {
-      "id": "SOA Meeting Pod 3-1",
-      "name": "SOA Meeting Pod 3-1",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOA Meeting Pod 3",
+      "id": "SCIS1 GSR 3-4",
+      "name": "SCIS1 GSR 3-4",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 3",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:30",
+          "end": "00:00",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
+          "start": "00:00",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 1,
+        "free_duration_minutes": 1440
       }
     },
     {
-      "id": "SOA Meeting Pod 3-2",
-      "name": "SOA Meeting Pod 3-2",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOA Meeting Pod 3",
+      "id": "SCIS1 GSR 3-5",
+      "name": "SCIS1 GSR 3-5",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 3",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:30",
+          "end": "00:00",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
+          "start": "00:00",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 1,
+        "free_duration_minutes": 1440
       }
     },
     {
-      "id": "SOE/SCIS2 Meeting Pod 3-1",
-      "name": "SOE/SCIS2 Meeting Pod 3-1",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOE/SCIS2 Meeting Pod 3",
+      "id": "SCIS1 GSR 3-6",
+      "name": "SCIS1 GSR 3-6",
+      "building": "School of Computing & Information Systems 1",
+      "building_code": "SCIS1 GSR 3",
       "floor": "Unknown",
-      "facility_type": "Meeting Pod",
+      "facility_type": "Group Study Room",
       "equipment": [],
       "timeslots": [
         {
           "start": "00:00",
-          "end": "08:30",
+          "end": "00:00",
           "status": "unavailable",
           "reason": "Outside scrape window"
         },
         {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
+          "start": "00:00",
           "end": "24:00",
           "status": "free"
         }
       ],
       "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOE/SCIS2 Meeting Pod 3-2",
-      "name": "SOE/SCIS2 Meeting Pod 3-2",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOE/SCIS2 Meeting Pod 3",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOE/SCIS2 Meeting Pod 3-3",
-      "name": "SOE/SCIS2 Meeting Pod 3-3",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOE/SCIS2 Meeting Pod 3",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOE/SCIS2 Meeting Pod 3-4",
-      "name": "SOE/SCIS2 Meeting Pod 3-4",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOE/SCIS2 Meeting Pod 3",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOSS/CIS Meeting Pod B1-1",
-      "name": "SOSS/CIS Meeting Pod B1-1",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOSS/CIS Meeting Pod B1",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOSS/CIS Meeting Pod B1-2",
-      "name": "SOSS/CIS Meeting Pod B1-2",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOSS/CIS Meeting Pod B1",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOSS/CIS Meeting Pod B1-3",
-      "name": "SOSS/CIS Meeting Pod B1-3",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOSS/CIS Meeting Pod B1",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOSS/CIS Meeting Pod B1-4",
-      "name": "SOSS/CIS Meeting Pod B1-4",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOSS/CIS Meeting Pod B1",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "SOSS/CIS Meeting Pod B1-5",
-      "name": "SOSS/CIS Meeting Pod B1-5",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "SOSS/CIS Meeting Pod B1",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "17:00",
-          "status": "free"
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 2,
-        "free_duration_minutes": 511
-      }
-    },
-    {
-      "id": "YPHSL Meeting Pod B1-01",
-      "name": "YPHSL Meeting Pod B1-01",
-      "building": "School of Economics/School of Computing & Information Systems 2",
-      "building_code": "YPHSL Meeting Pod B1",
-      "floor": "Unknown",
-      "facility_type": "Meeting Pod",
-      "equipment": [],
-      "timeslots": [
-        {
-          "start": "00:00",
-          "end": "08:30",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "08:30",
-          "end": "12:00",
-          "status": "free"
-        },
-        {
-          "start": "12:00",
-          "end": "14:00",
-          "status": "booked",
-          "booking": {
-            "reference": "MBK-20260122-000041",
-            "status": "Confirmed",
-            "booker_name": "TAN WENG KIAT JERVYN",
-            "booker_email": "jervyn.tan.2023@business.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: jervyn.tan.2023@business.smu.edu.sg",
-            "purpose": "Study",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "14:00",
-          "end": "15:00",
-          "status": "free"
-        },
-        {
-          "start": "15:00",
-          "end": "17:00",
-          "status": "booked",
-          "booking": {
-            "reference": "BK-20260122-001072",
-            "status": "Confirmed",
-            "booker_name": "LEE JING YUAN",
-            "booker_email": "jylee.2023@accountancy.smu.edu.sg",
-            "booker_org": "Booked for User Email Address: jylee.2023@accountancy.smu.edu.sg",
-            "purpose": "idk",
-            "use_type": "AdHoc"
-          }
-        },
-        {
-          "start": "17:00",
-          "end": "23:59",
-          "status": "unavailable",
-          "reason": "Outside scrape window"
-        },
-        {
-          "start": "23:59",
-          "end": "24:00",
-          "status": "free"
-        }
-      ],
-      "availability_summary": {
-        "is_available_now": false,
-        "next_available_at": "2026-01-24T00:30:00.000Z",
-        "free_slots_count": 3,
-        "free_duration_minutes": 271
+        "is_available_now": true,
+        "next_available_at": null,
+        "free_slots_count": 1,
+        "free_duration_minutes": 1440
       }
     }
   ]

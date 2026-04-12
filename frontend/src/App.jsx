@@ -16,7 +16,7 @@ import { checkSystemStatus } from './utils/envCheck';
 import { EnvStatusCard } from './components/EnvOverlay';
 
 function App() {
-  const { data, loading, error, refetch } = useRoomData(false);
+  const { data, loading, error, isStale, hoursAgo, refetch } = useRoomData(false);
   const { data: bookingsData, loading: bookingsLoading } = useBookingData();
   const { data: tasksData, loading: tasksLoading } = useTaskData();
   const { text: scraperLogText, loading: scraperLogLoading, error: scraperLogError, refetch: refetchScraperLog } = useScraperConsoleLog();
@@ -118,6 +118,12 @@ function App() {
       <Header
         lastUpdated={data.metadata.scraped_at}
       />
+
+      {isStale && (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 px-4 py-3 text-sm" role="alert">
+          Data last updated {hoursAgo} hours ago. Room availability may be outdated.
+        </div>
+      )}
 
       <main className="container mx-auto px-4 py-8 pb-24 md:pb-8 space-y-6">
         {/* Tab Navigation - Hidden on mobile, shown on desktop */}

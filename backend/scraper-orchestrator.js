@@ -7,6 +7,7 @@
 
 const { spawn } = require('child_process');
 const fs = require('fs');
+const { logger } = require('./logger');
 
 const LOG_FILE_PATH = './log/scraper_console.txt';
 
@@ -41,9 +42,9 @@ function teeWrite(stream, chunk) {
 
 function runScript(scriptPath, scriptName) {
   return new Promise((resolve, reject) => {
-    console.log(`\n${'='.repeat(60)}`);
-    console.log(`ORCHESTRATOR: Starting ${scriptName}...`);
-    console.log(`${'='.repeat(60)}\n`);
+    logger.info(`\n${'='.repeat(60)}`);
+    logger.info(`ORCHESTRATOR: Starting ${scriptName}...`);
+    logger.info(`${'='.repeat(60)}\n`);
 
     const startTime = Date.now();
     const child = spawn('node', [scriptPath], {
@@ -64,20 +65,20 @@ function runScript(scriptPath, scriptName) {
       const duration = ((endTime - startTime) / 1000).toFixed(2);
 
       if (code === 0) {
-        console.log(`\n${'='.repeat(60)}`);
-        console.log(`ORCHESTRATOR: ${scriptName} completed successfully in ${duration}s`);
-        console.log(`${'='.repeat(60)}\n`);
+        logger.info(`\n${'='.repeat(60)}`);
+        logger.info(`ORCHESTRATOR: ${scriptName} completed successfully in ${duration}s`);
+        logger.info(`${'='.repeat(60)}\n`);
         resolve({ success: true, scriptName, duration });
       } else {
-        console.error(`\n${'='.repeat(60)}`);
-        console.error(`ORCHESTRATOR: ${scriptName} failed with exit code ${code}`);
-        console.error(`${'='.repeat(60)}\n`);
+        logger.error(`\n${'='.repeat(60)}`);
+        logger.error(`ORCHESTRATOR: ${scriptName} failed with exit code ${code}`);
+        logger.error(`${'='.repeat(60)}\n`);
         reject({ success: false, scriptName, exitCode: code, duration });
       }
     });
 
     child.on('error', (error) => {
-      console.error(`\nORCHESTRATOR: Failed to start ${scriptName}:`, error.message);
+      logger.error(`\nORCHESTRATOR: Failed to start ${scriptName}:`, error.message);
       reject({ success: false, scriptName, error: error.message });
     });
   });
@@ -114,9 +115,9 @@ function runScript(scriptPath, scriptName) {
   const orchestrationStartTime = Date.now();
   const results = [];
 
-  console.log('\n' + '='.repeat(60));
-  console.log('ORCHESTRATOR: Starting scraping workflows');
-  console.log('='.repeat(60));
+  logger.info('\n' + '='.repeat(60));
+  logger.info('ORCHESTRATOR: Starting scraping workflows');
+  logger.info('='.repeat(60));
 
   try {
     // 1. Run the main scraper (available timeslots)
@@ -144,15 +145,15 @@ function runScript(scriptPath, scriptName) {
     const orchestrationEndTime = Date.now();
     const totalDuration = ((orchestrationEndTime - orchestrationStartTime) / 1000).toFixed(2);
 
-    console.log('\n' + '='.repeat(60));
-    console.log('ORCHESTRATOR: All workflows completed successfully!');
-    console.log('='.repeat(60));
-    console.log(`Total duration: ${totalDuration}s`);
-    console.log('\nResults summary:');
+    logger.info('\n' + '='.repeat(60));
+    logger.info('ORCHESTRATOR: All workflows completed successfully!');
+    logger.info('='.repeat(60));
+    logger.info(`Total duration: ${totalDuration}s`);
+    logger.info('\nResults summary:');
     results.forEach((result, index) => {
-      console.log(`  ${index + 1}. ${result.scriptName}: ${result.duration}s`);
+      logger.info(`  ${index + 1}. ${result.scriptName}: ${result.duration}s`);
     });
-    console.log('='.repeat(60) + '\n');
+    logger.info('='.repeat(60) + '\n');
 
     // 4. Load and display summary of scraped data
     try {
@@ -160,43 +161,43 @@ function runScript(scriptPath, scriptName) {
       const bookingsLog = JSON.parse(fs.readFileSync('./log/scraped_bookings.json', 'utf8'));
       const tasksLog = JSON.parse(fs.readFileSync('./log/scraped_tasks.json', 'utf8'));
 
-      console.log('\n' + '='.repeat(60));
-      console.log('DATA SUMMARY');
-      console.log('='.repeat(60));
+      logger.info('\n' + '='.repeat(60));
+      logger.info('DATA SUMMARY');
+      logger.info('='.repeat(60));
 
       if (roomsLog.metadata.success) {
-        console.log(`\nRoom Availability (${roomsLog.config.date}):`);
-        console.log(`  - Total rooms: ${roomsLog.statistics.total_rooms}`);
-        console.log(`  - Available now: ${roomsLog.statistics.available_rooms}`);
-        console.log(`  - Partially available: ${roomsLog.statistics.partially_available_rooms}`);
-        console.log(`  - Fully booked: ${roomsLog.statistics.booked_rooms}`);
+        logger.info(`\nRoom Availability (${roomsLog.config.date}):`);
+        logger.info(`  - Total rooms: ${roomsLog.statistics.total_rooms}`);
+        logger.info(`  - Available now: ${roomsLog.statistics.available_rooms}`);
+        logger.info(`  - Partially available: ${roomsLog.statistics.partially_available_rooms}`);
+        logger.info(`  - Fully booked: ${roomsLog.statistics.booked_rooms}`);
       } else {
-        console.log(`\nRoom Availability: FAILED - ${roomsLog.metadata.error}`);
+        logger.info(`\nRoom Availability: FAILED - ${roomsLog.metadata.error}`);
       }
 
       if (bookingsLog.metadata.success) {
-        console.log(`\nUser Bookings:`);
-        console.log(`  - Total bookings: ${bookingsLog.statistics.total_bookings}`);
-        console.log(`  - Confirmed: ${bookingsLog.statistics.confirmed_bookings}`);
-        console.log(`  - Pending: ${bookingsLog.statistics.pending_bookings}`);
-        console.log(`  - Total price: $${bookingsLog.statistics.total_price.toFixed(2)}`);
+        logger.info(`\nUser Bookings:`);
+        logger.info(`  - Total bookings: ${bookingsLog.statistics.total_bookings}`);
+        logger.info(`  - Confirmed: ${bookingsLog.statistics.confirmed_bookings}`);
+        logger.info(`  - Pending: ${bookingsLog.statistics.pending_bookings}`);
+        logger.info(`  - Total price: $${bookingsLog.statistics.total_price.toFixed(2)}`);
       } else {
-        console.log(`\nUser Bookings: FAILED - ${bookingsLog.metadata.error}`);
+        logger.info(`\nUser Bookings: FAILED - ${bookingsLog.metadata.error}`);
       }
 
       if (tasksLog.metadata.success) {
-        console.log(`\nUser Tasks:`);
-        console.log(`  - Total tasks: ${tasksLog.statistics.total_tasks}`);
-        console.log(`  - Pending: ${tasksLog.statistics.pending_tasks}`);
-        console.log(`  - Approved: ${tasksLog.statistics.approved_tasks}`);
-        console.log(`  - Rejected: ${tasksLog.statistics.rejected_tasks}`);
+        logger.info(`\nUser Tasks:`);
+        logger.info(`  - Total tasks: ${tasksLog.statistics.total_tasks}`);
+        logger.info(`  - Pending: ${tasksLog.statistics.pending_tasks}`);
+        logger.info(`  - Approved: ${tasksLog.statistics.approved_tasks}`);
+        logger.info(`  - Rejected: ${tasksLog.statistics.rejected_tasks}`);
       } else {
-        console.log(`\nUser Tasks: FAILED - ${tasksLog.metadata.error}`);
+        logger.info(`\nUser Tasks: FAILED - ${tasksLog.metadata.error}`);
       }
 
-      console.log('='.repeat(60) + '\n');
+      logger.info('='.repeat(60) + '\n');
     } catch (error) {
-      console.log('\nNote: Could not load scraped data for summary');
+      logger.info('\nNote: Could not load scraped data for summary');
     }
 
     closeLog();
@@ -206,12 +207,12 @@ function runScript(scriptPath, scriptName) {
     const orchestrationEndTime = Date.now();
     const totalDuration = ((orchestrationEndTime - orchestrationStartTime) / 1000).toFixed(2);
 
-    console.error('\n' + '='.repeat(60));
-    console.error('ORCHESTRATOR: Workflow failed!');
-    console.error('='.repeat(60));
-    console.error(`Failed workflow: ${error.scriptName || 'Unknown'}`);
-    console.error(`Total duration: ${totalDuration}s`);
-    console.error('='.repeat(60) + '\n');
+    logger.error('\n' + '='.repeat(60));
+    logger.error('ORCHESTRATOR: Workflow failed!');
+    logger.error('='.repeat(60));
+    logger.error(`Failed workflow: ${error.scriptName || 'Unknown'}`);
+    logger.error(`Total duration: ${totalDuration}s`);
+    logger.error('='.repeat(60) + '\n');
 
     closeLog();
     process.exit(1);

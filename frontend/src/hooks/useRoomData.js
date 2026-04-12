@@ -1,29 +1,28 @@
 import { useState, useEffect } from 'react';
+import {
+  ROOM_DATA_URL as GITHUB_RAW_URL,
+  BOOKINGS_URL,
+  TASKS_URL,
+  SCRAPER_CONSOLE_URL,
+} from '../config';
+import { RoomDataSchema, BookingsDataSchema, TasksDataSchema } from '../schemas';
+import { logger } from '../logger';
 
-// Determine if we're in development mode
-const isDev = import.meta.env.DEV;
+const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Use local files in development, GitHub raw URLs in production
-const GITHUB_RAW_URL = isDev
-  ? '/data/scraped_log.json'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraped_log.json';
-
-const BOOKINGS_URL = isDev
-  ? '/data/scraped_bookings.json'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraped_bookings.json';
-
-const TASKS_URL = isDev
-  ? '/data/scraped_tasks.json'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraped_tasks.json';
-
-const SCRAPER_CONSOLE_URL = isDev
-  ? '/data/scraper_console.txt'
-  : 'https://raw.githubusercontent.com/gongahkia/sagasu-2/main/backend/log/scraper_console.txt';
+function computeStaleness(jsonData) { // returns { isStale, hoursAgo }
+  if (!jsonData?.metadata?.scraped_at) return { isStale: false, hoursAgo: 0 };
+  const scrapedAt = new Date(jsonData.metadata.scraped_at);
+  const diff = Date.now() - scrapedAt.getTime();
+  return { isStale: diff > STALE_THRESHOLD_MS, hoursAgo: Math.floor(diff / (1000 * 60 * 60)) };
+}
 
 export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isStale, setIsStale] = useState(false);
+  const [hoursAgo, setHoursAgo] = useState(0);
 
   const fetchData = async () => {
     try {
@@ -37,10 +36,19 @@ export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
       }
 
       const jsonData = await response.json();
-      setData(jsonData);
+      const parsed = RoomDataSchema.safeParse(jsonData);
+      if (!parsed.success) {
+        logger.error('Room data schema validation failed', { issues: parsed.error.issues });
+        setError('Data format unavailable');
+        return;
+      }
+      setData(parsed.data);
+      const staleness = computeStaleness(parsed.data);
+      setIsStale(staleness.isStale);
+      setHoursAgo(staleness.hoursAgo);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching room data:', err);
+      logger.error('Error fetching room data', { error: err.message });
     } finally {
       setLoading(false);
     }
@@ -55,7 +63,7 @@ export const useRoomData = (autoRefresh = false, intervalMs = 30000) => {
     }
   }, [autoRefresh, intervalMs]);
 
-  return { data, loading, error, refetch: fetchData };
+  return { data, loading, error, isStale, hoursAgo, refetch: fetchData };
 };
 
 export const useBookingData = (autoRefresh = false, intervalMs = 30000) => {
@@ -80,10 +88,16 @@ export const useBookingData = (autoRefresh = false, intervalMs = 30000) => {
       }
 
       const jsonData = await response.json();
-      setData(jsonData);
+      const parsed = BookingsDataSchema.safeParse(jsonData);
+      if (!parsed.success) {
+        logger.error('Bookings data schema validation failed', { issues: parsed.error.issues });
+        setError('Data format unavailable');
+        return;
+      }
+      setData(parsed.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching bookings data:', err);
+      logger.error('Error fetching bookings data', { error: err.message });
       // File doesn't exist yet, use empty data
       setData({
         metadata: { success: false },
@@ -129,10 +143,16 @@ export const useTaskData = (autoRefresh = false, intervalMs = 30000) => {
       }
 
       const jsonData = await response.json();
-      setData(jsonData);
+      const parsed = TasksDataSchema.safeParse(jsonData);
+      if (!parsed.success) {
+        logger.error('Tasks data schema validation failed', { issues: parsed.error.issues });
+        setError('Data format unavailable');
+        return;
+      }
+      setData(parsed.data);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching tasks data:', err);
+      logger.error('Error fetching tasks data', { error: err.message });
       // File doesn't exist yet, use empty data
       setData({
         metadata: { success: false },
@@ -179,7 +199,7 @@ export const useScraperConsoleLog = (autoRefresh = false, intervalMs = 30000) =>
       setText(logText);
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching scraper log:', err);
+      logger.error('Error fetching scraper log', { error: err.message });
       setText('');
     } finally {
       setLoading(false);

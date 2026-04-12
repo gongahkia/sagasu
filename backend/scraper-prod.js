@@ -5,6 +5,14 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 require('dotenv').config();
+const {
+  toMinutes, minutesToTimeStr, timeslotStr, getTodayDate,
+  parseTimeRange, extractBookingTime, parseBookingDetails,
+  extractRoomMetadata, normalizeStatus, calculateAvailabilitySummary,
+  generateTimeslotsForRoom, mapTimeslotsToRooms,
+} = require('./utils');
+const { withRetry } = require('./retry');
+const { logger } = require('./logger');
 
 //
 // --- HELPER FUNCTIONS ---
@@ -13,258 +21,6 @@ require('dotenv').config();
 function requireEnv(key) {
   if (!process.env[key]) throw new Error(`Missing ${key} in .env`);
   return process.env[key];
-}
-
-function toMinutes(timeStr) {
-  const [h, m] = timeStr.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function minutesToTimeStr(minutes) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function timeslotStr(start, end) {
-  return `${minutesToTimeStr(start)}-${minutesToTimeStr(end)}`;
-}
-
-function getTodayDate() {
-  const today = new Date();
-  const day = String(today.getDate()).padStart(2, '0');
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = monthNames[today.getMonth()];
-  const year = today.getFullYear();
-  return `${day}-${month}-${year}`;
-}
-
-function parseTimeRange(timeRangeStr) {
-  const [startStr, endStr] = timeRangeStr.split("-");
-  return [toMinutes(startStr), toMinutes(endStr)];
-}
-
-function extractBookingTime(rawStr) {
-  const match = rawStr.match(/Booking Time: (\d{2}:\d{2}-\d{2}:\d{2})/);
-  return match ? match[1] : null;
-}
-
-function parseBookingDetails(detailsStr) {
-  if (!detailsStr || detailsStr === "") return null;
-
-  const extractField = (fieldName) => {
-    const regex = new RegExp(`${fieldName}:\\s*(.*)`, 'm');
-    const match = detailsStr.match(regex);
-    return match ? match[1].trim() : "";
-  };
-
-  return {
-    reference: extractField("Booking Reference Number"),
-    status: extractField("Booking Status"),
-    booker_name: extractField("Booked for User Name"),
-    booker_email: extractField("Booked for User Email Address"),
-    booker_org: extractField("Booked for User Org Unit"),
-    purpose: extractField("Purpose of Booking"),
-    use_type: extractField("Use Type")
-  };
-}
-
-function extractRoomMetadata(roomName, buildingFilter, floorFilter, facilityFilter, equipmentFilter) {
-  // Extract building code (e.g., "KGC" from "KGC-4.02-PR")
-  const buildingCode = roomName.split('-')[0] || "";
-
-  // Map building codes to full names (partial mapping, expand as needed)
-  const buildingMap = {
-    "KGC": "Kwa Geok Choo Law Library",
-    "YPHSL": "Yong Pung How School of Law",
-    "LKCSB": "Lee Kong Chian School of Business",
-    "SOA": "School of Accountancy",
-    "SCIS": "School of Computing & Information Systems",
-    "SOE": "School of Economics",
-    "SOSS": "School of Social Sciences",
-    "CIS": "College of Integrative Studies",
-    "LKSL": "Li Ka Shing Library",
-    "AB": "Administration Building",
-    "SMUC": "SMU Connexion"
-  };
-
-  // Extract floor from room name (e.g., "4" from "KGC-4.02-PR")
-  const floorMatch = roomName.match(/-(\d+|B\d+)\./i);
-  let floor = "Unknown";
-  if (floorMatch) {
-    const floorNum = floorMatch[1];
-    if (floorNum.startsWith('B')) {
-      floor = `Basement ${floorNum.substring(1)}`;
-    } else {
-      floor = `Level ${floorNum}`;
-    }
-  }
-
-  // Use filters as fallback if extraction fails
-  const building = buildingMap[buildingCode] || (buildingFilter.length > 0 ? buildingFilter[0] : "Unknown");
-
-  return {
-    building_code: buildingCode,
-    building: building,
-    floor: floor,
-    facility_type: facilityFilter.length > 0 ? facilityFilter[0] : "Unknown",
-    equipment: equipmentFilter
-  };
-}
-
-function normalizeStatus(status) {
-  if (status === "not available due to timeslot") return "unavailable";
-  if (status === "free") return "free";
-  if (status === "booked") return "booked";
-  return "unknown";
-}
-
-function calculateAvailabilitySummary(timeslots) {
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  let freeCount = 0;
-  let freeDuration = 0;
-  let isAvailableNow = false;
-  let nextAvailableAt = null;
-
-  for (const slot of timeslots) {
-    if (slot.status === "free") {
-      freeCount++;
-      const start = toMinutes(slot.start);
-      const end = toMinutes(slot.end);
-      const duration = end - start;
-      freeDuration += duration;
-
-      // Check if currently available
-      if (start <= currentMinutes && currentMinutes < end) {
-        isAvailableNow = true;
-      }
-
-      // Find next available slot
-      if (!isAvailableNow && start > currentMinutes && !nextAvailableAt) {
-        const nextDate = new Date(now);
-        nextDate.setHours(Math.floor(start / 60), start % 60, 0, 0);
-        nextAvailableAt = nextDate.toISOString();
-      }
-    }
-  }
-
-  return {
-    is_available_now: isAvailableNow,
-    next_available_at: nextAvailableAt,
-    free_slots_count: freeCount,
-    free_duration_minutes: freeDuration
-  };
-}
-
-function generateTimeslotsForRoom(rawTimeslotsForRoom) {
-  const DAY_START = 0;
-  const DAY_END = 24 * 60;
-  const slots = [];
-  for (const ts of rawTimeslotsForRoom) {
-    if (ts.includes("(not available)")) {
-      const match = ts.match(/\((\d{2}:\d{2}-\d{2}:\d{2})\) \(not available\)/);
-      if (!match) throw new Error(`Unexpected not available format: ${ts}`);
-      const timeRangeStr = match[1];
-      const [startMin, endMin] = parseTimeRange(timeRangeStr);
-      slots.push({
-        timeslot: timeRangeStr,
-        status: "not available due to timeslot",
-        details: "",
-        startMin,
-        endMin
-      });
-    } else if (ts.startsWith("Booking Time:")) {
-      const bookingTime = extractBookingTime(ts);
-      if (!bookingTime) throw new Error(`Cannot extract booking time from: ${ts}`);
-      const [startMin, endMin] = parseTimeRange(bookingTime);
-      slots.push({
-        timeslot: bookingTime,
-        status: "booked",
-        details: ts,
-        startMin,
-        endMin
-      });
-    } else {
-      throw new Error(`Unexpected raw_timeslot format: ${ts}`);
-    }
-  }
-  slots.sort((a, b) => a.startMin - b.startMin);
-  const fullSlots = [];
-  let cursor = DAY_START;
-  for (const slot of slots) {
-    if (slot.startMin > cursor) {
-      const [freeStart, freeEnd] = [minutesToTimeStr(cursor), minutesToTimeStr(slot.startMin)];
-      fullSlots.push({
-        start: freeStart,
-        end: freeEnd,
-        status: "free"
-      });
-    }
-
-    const [slotStart, slotEnd] = slot.timeslot.split("-");
-    const normalized = normalizeStatus(slot.status);
-    const timeslotObj = {
-      start: slotStart,
-      end: slotEnd,
-      status: normalized
-    };
-
-    if (normalized === "unavailable") {
-      timeslotObj.reason = "Outside scrape window";
-    } else if (normalized === "booked") {
-      const booking = parseBookingDetails(slot.details);
-      if (booking) {
-        timeslotObj.booking = booking;
-      }
-    }
-
-    fullSlots.push(timeslotObj);
-    cursor = slot.endMin;
-  }
-  if (cursor < DAY_END) {
-    fullSlots.push({
-      start: minutesToTimeStr(cursor),
-      end: minutesToTimeStr(DAY_END),
-      status: "free"
-    });
-  }
-  return fullSlots;
-}
-
-function mapTimeslotsToRooms(rawRooms, rawTimeslots) {
-  const result = {};
-  const roomCount = rawRooms.length;
-  const roomStartPattern = /^\(00:00-\d{2}:\d{2}\) \(not available\)$/;
-  let currentRoomIndex = 0;
-  let acc = [];
-  for (const ts of rawTimeslots) {
-  if (roomStartPattern.test(ts) && acc.length > 0) {
-      if (currentRoomIndex >= roomCount) {
-        throw new Error("More timeslot blocks than rooms");
-      }
-      result[rawRooms[currentRoomIndex]] = generateTimeslotsForRoom(acc);
-      currentRoomIndex++;
-      acc = [];
-    }
-    acc.push(ts);
-  }
-  if (acc.length > 0) {
-    if (currentRoomIndex >= roomCount) {
-      throw new Error("More timeslot blocks than rooms");
-    }
-    result[rawRooms[currentRoomIndex]] = generateTimeslotsForRoom(acc);
-  }
-  while (currentRoomIndex + 1 < roomCount) {
-    currentRoomIndex++;
-    result[rawRooms[currentRoomIndex]] = [{
-      timeslot: "00:00-24:00",
-      status: "free",
-      details: ""
-    }];
-  }
-  return result;
 }
 
 //
@@ -311,17 +67,18 @@ const outputLog = './log/scraped_log.json';
   let browser;
 
   try {
+    await withRetry(async () => { // retry wrapper with exponential backoff
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext();
     const page = await context.newPage();
 
     // 1. Go to the initial site
-    console.log(`LOG: Navigating to ${url}`);
+    logger.info(`LOG: Navigating to ${url}`);
     await page.goto(url, {
       waitUntil: 'domcontentloaded',  // Less strict than networkidle
       timeout: 60000  // 60 second timeout
     });
-    console.log(`LOG: Successfully loaded ${url}`);
+    logger.info(`LOG: Successfully loaded ${url}`);
 
   // 2. Open Microsoft login in new tab
   const [newPage] = await Promise.all([
@@ -332,7 +89,7 @@ const outputLog = './log/scraped_log.json';
   // 3. Wait for Microsoft login URL to appear
   await newPage.waitForURL(/login\.microsoftonline\.com/, { timeout: 30000 });
   await newPage.waitForSelector('input[type="email"], #i0116', { timeout: 30000 });
-  console.log(`LOG: Navigating to ${newPage.url()}`);
+  logger.info(`LOG: Navigating to ${newPage.url()}`);
 
   // 4. Fill email and proceed
   let emailInput = await newPage.$('input[type="email"]') || await newPage.$('#i0116');
@@ -344,32 +101,32 @@ const outputLog = './log/scraped_log.json';
     nextButton.click(),
     newPage.waitForLoadState('networkidle'),
   ]);
-  console.log(`LOG: Filled in email ${EMAIL} and clicked next`);
+  logger.info(`LOG: Filled in email ${EMAIL} and clicked next`);
 
   // 5. Wait for SMU redirect or click fallback
   try {
     await newPage.waitForURL(/login2\.smu\.edu\.sg/, { timeout: 10000 });
-    console.log('LOG: Redirected to SMU SSO');
+    logger.info('LOG: Redirected to SMU SSO');
   } catch (e) {
     const redirectLink = await newPage.$('a#redirectToIdpLink');
     if (redirectLink) {
-      console.log('Redirect took too long, clicking #redirectToIdpLink...');
+      logger.info('Redirect took too long, clicking #redirectToIdpLink...');
       await Promise.all([
         redirectLink.click(),
       ]);
     } else {
-      console.log('Redirect delay detected, but #redirectToIdpLink not found.');
+      logger.info('Redirect delay detected, but #redirectToIdpLink not found.');
     }
     await newPage.waitForURL(/login2\.smu\.edu\.sg/, { timeout: 30000 });
   }
-  console.log(`LOG: Navigated to ${newPage.url()}`);
+  logger.info(`LOG: Navigated to ${newPage.url()}`);
 
   // 6. Wait for password input, fill in password
   await newPage.waitForSelector('input#passwordInput', { timeout: 30000 });
   const passwordInput = await newPage.$('input#passwordInput');
   if (!passwordInput) throw new Error('ERROR: Password input not found');
   await passwordInput.fill(PASSWORD);
-  console.log(`LOG: Filled in password`);
+  logger.info(`LOG: Filled in password`);
 
   // 7. Find and click the submit button
   await newPage.waitForSelector('div#submissionArea span#submitButton', { timeout: 30000 });
@@ -379,14 +136,14 @@ const outputLog = './log/scraped_log.json';
     submitButton.click(),
     newPage.waitForLoadState('networkidle')
   ]);
-  console.log(`LOG: Clicked submit button`);
+  logger.info(`LOG: Clicked submit button`);
 
   // 8. Wait for dashboard and validate correct site
   await newPage.waitForURL(/https:\/\/fbs\.intranet\.smu\.edu\.sg\//, { timeout: 30000 });
 
   const finalUrl = newPage.url();
   const fbsPage = newPage;
-  console.log(`LOG: Arrived at dashboard at url ${finalUrl} and saved screenshot`);
+  logger.info(`LOG: Arrived at dashboard at url ${finalUrl} and saved screenshot`);
 
   // ---- SCRAPING & FILTERING ---- //
 
@@ -396,7 +153,7 @@ const outputLog = './log/scraped_log.json';
   if (!frameBottomElement) throw new Error('iframe#frameBottom not found');
   const frameBottom = await frameBottomElement.contentFrame();
   if (!frameBottom) throw new Error('Frame object for frameBottom not available');
-  console.log(`LOG: Content frame bottom loaded`);
+  logger.info(`LOG: Content frame bottom loaded`);
 
   // 2. Switch to core content frame
   await frameBottom.waitForSelector('iframe#frameContent', { timeout: 20000 });
@@ -404,7 +161,7 @@ const outputLog = './log/scraped_log.json';
   if (!frameContentElement) throw new Error('iframe#frameContent not found inside frameBottom');
   const frameContent = await frameContentElement.contentFrame();
   if (!frameContent) throw new Error('Frame object for frameContent not available');
-  console.log(`LOG: Core content frame loaded`);
+  logger.info(`LOG: Core content frame loaded`);
 
   // 3. Wait for and set the date picker
   await frameContent.waitForSelector('input#DateBookingFrom_c1_textDate', { timeout: 20000 });
@@ -415,7 +172,7 @@ const outputLog = './log/scraped_log.json';
     el => el.value
   );
   if (initialDate === desiredDate) {
-    console.log(`LOG: Initial date already ${desiredDate}, clicking forward and backward once to refresh`);
+    logger.info(`LOG: Initial date already ${desiredDate}, clicking forward and backward once to refresh`);
     await frameContent.click('a#BtnDpcNext');
     await frameContent.waitForTimeout(500);
     await frameContent.click('a#BtnDpcPrev');
@@ -427,10 +184,10 @@ const outputLog = './log/scraped_log.json';
       el => el.value
     );
     if (currentDate === desiredDate) {
-      console.log(`LOG: Date picker set to desired date: ${currentDate}`);
+      logger.info(`LOG: Date picker set to desired date: ${currentDate}`);
       break;
     }
-    console.log(`LOG: Date is ${currentDate} and desired date is ${desiredDate}. Clicking next to try to reach ${desiredDate}`);
+    logger.info(`LOG: Date is ${currentDate} and desired date is ${desiredDate}. Clicking next to try to reach ${desiredDate}`);
     await frameContent.click('a#BtnDpcNext');
     await frameContent.waitForTimeout(500);
   }
@@ -445,9 +202,9 @@ const outputLog = './log/scraped_log.json';
   // 4. Set start and end time dropdowns
   await frameContent.selectOption('select#TimeFrom_c1_ctl04', SCRAPE_CONFIG.startTime);
   await frameContent.selectOption('select#TimeTo_c1_ctl04', SCRAPE_CONFIG.endTime);
-  console.log(`LOG: Set start and end time dropdowns to ${SCRAPE_CONFIG.startTime} and ${SCRAPE_CONFIG.endTime}`);
+  logger.info(`LOG: Set start and end time dropdowns to ${SCRAPE_CONFIG.startTime} and ${SCRAPE_CONFIG.endTime}`);
   await frameContent.waitForTimeout(3000); 
-  console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
+  logger.info(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
   // 5. Set building(s)
   if (SCRAPE_CONFIG.buildingNames?.length) {
@@ -459,16 +216,16 @@ const outputLog = './log/scraped_log.json';
     await okButtonBuildingContainer.waitFor({ state: 'visible', timeout: 5000 });
     if (await okButtonBuildingContainer.count() > 0) {
       await okButtonBuildingContainer.click();
-      console.log('LOG: Clicked OK button in building selection');
+      logger.info('LOG: Clicked OK button in building selection');
     } else {
-      console.warn('ERROR: OK button not found in building selection, fallback to pressing Escape');
+      logger.warn('ERROR: OK button not found in building selection, fallback to pressing Escape');
       await fbsPage.keyboard.press('Escape');
     }
   }
-  console.log(`LOG: Set building(s) to ${SCRAPE_CONFIG.buildingNames}`);
+  logger.info(`LOG: Set building(s) to ${SCRAPE_CONFIG.buildingNames}`);
 
   await frameContent.waitForTimeout(3000); 
-  console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
+  logger.info(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
   // 6. Set floor(s)
   if (SCRAPE_CONFIG.floorNames?.length) {
@@ -479,16 +236,16 @@ const outputLog = './log/scraped_log.json';
     const okButtonFloorContainer = await frameContent.locator('#DropMultiFloorList_c1_panelContainer input[type="button"][value="OK"]');
     if (await okButtonFloorContainer.count() > 0) {
       await okButtonFloorContainer.click();
-      console.log('LOG: Clicked OK button in floor selection');
+      logger.info('LOG: Clicked OK button in floor selection');
     } else {
-      console.warn('ERROR: OK button not found in floor selection, fallback to pressing Escape');
+      logger.warn('ERROR: OK button not found in floor selection, fallback to pressing Escape');
       await fbsPage.keyboard.press('Escape');
     }
   }
-  console.log(`LOG: Set floor(s) to ${SCRAPE_CONFIG.floorNames}`);
+  logger.info(`LOG: Set floor(s) to ${SCRAPE_CONFIG.floorNames}`);
 
   await frameContent.waitForTimeout(3000); 
-  console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
+  logger.info(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
   // 7. Set facility type(s)
   if (SCRAPE_CONFIG.facilityTypes?.length) {
@@ -499,27 +256,27 @@ const outputLog = './log/scraped_log.json';
     const okButtonFacilityContainer = await frameContent.locator('#DropMultiFacilityTypeList_c1_panelContainer input[type="button"][value="OK"]');
     if (await okButtonFacilityContainer.count() > 0) {
       await okButtonFacilityContainer.click();
-      console.log('LOG: Clicked OK button in facility type selection');
+      logger.info('LOG: Clicked OK button in facility type selection');
     } else {
-      console.warn('ERROR: OK button not found in facility type selection, fallback to pressing Escape');
+      logger.warn('ERROR: OK button not found in facility type selection, fallback to pressing Escape');
       await fbsPage.keyboard.press('Escape');
     }
   }
-  console.log(`LOG: Set facility type(s) to ${SCRAPE_CONFIG.facilityTypes}`);
+  logger.info(`LOG: Set facility type(s) to ${SCRAPE_CONFIG.facilityTypes}`);
 
   await frameContent.waitForTimeout(3000); 
-  console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
+  logger.info(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
   // 8. Set room capacity (optional)
   if (SCRAPE_CONFIG.roomCapacity) {
     await frameContent.locator('select#DropCapacity_c1').selectOption({ value: SCRAPE_CONFIG.roomCapacity });
-    console.log(`LOG: Set room capacity to ${SCRAPE_CONFIG.roomCapacity}`);
+    logger.info(`LOG: Set room capacity to ${SCRAPE_CONFIG.roomCapacity}`);
   } else {
-    console.log(`LOG: Skipping room capacity filter (not specified)`);
+    logger.info(`LOG: Skipping room capacity filter (not specified)`);
   }
 
   await frameContent.waitForTimeout(3000);
-  console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
+  logger.info(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
   // 9. Set equipment (optional)
   if (SCRAPE_CONFIG.equipment?.length) {
@@ -530,16 +287,16 @@ const outputLog = './log/scraped_log.json';
     const okButtonEquipmentContainer= await frameContent.locator('#DropMultiEquipmentList_c1_panelContainer input[type="button"][value="OK"]');
     if (await okButtonEquipmentContainer.count() > 0) {
       await okButtonEquipmentContainer.click();
-      console.log('LOG: Clicked OK button in equipment selection');
+      logger.info('LOG: Clicked OK button in equipment selection');
     } else {
-      console.warn('ERROR: OK button not found in equipment selection, fallback to pressing Escape');
+      logger.warn('ERROR: OK button not found in equipment selection, fallback to pressing Escape');
       await fbsPage.keyboard.press('Escape');
     }
   }
-  console.log(`LOG: Set equipment to ${SCRAPE_CONFIG.equipment}`);
+  logger.info(`LOG: Set equipment to ${SCRAPE_CONFIG.equipment}`);
 
   await frameContent.waitForTimeout(3000); 
-  console.log(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
+  logger.info(`LOG: Forcing a timeout of 3000ms to allow the page to update`);
 
   // 10. Retrieve available rooms
   await frameContent.locator('table#GridResults_gv').waitFor({ timeout: 20000 });
@@ -553,20 +310,20 @@ const outputLog = './log/scraped_log.json';
     }
   }
   if (matchingRooms.length === 0) {
-    console.log('LOG: No rooms found.');
+    logger.info('LOG: No rooms found.');
     await browser.close();
     return;
   }
-  console.log(`LOG: Matched ${matchingRooms.length} rooms (${matchingRooms})`);
+  logger.info(`LOG: Matched ${matchingRooms.length} rooms (${matchingRooms})`);
 
   // 11. Click "Check Availability" 
   await frameContent.locator('a#CheckAvailability').click();
   await fbsPage.waitForLoadState('networkidle');
-  console.log(`LOG: Clicked "Check Availability" button`);
+  logger.info(`LOG: Clicked "Check Availability" button`);
 
   // 12. Navigate to results page
   await frameContent.waitForTimeout(10000); 
-  console.log(`LOG: Forcing a timeout of 10000ms to allow the page to update`);
+  logger.info(`LOG: Forcing a timeout of 10000ms to allow the page to update`);
 
   // 13. Scrape time slots (room and timeslot booking state)
   const eventDivs = await frameContent.locator('div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0').all();
@@ -574,14 +331,14 @@ const outputLog = './log/scraped_log.json';
   for (const slotDiv of eventDivs) {
     const timeslotInfo = await slotDiv.getAttribute('title');
     rawBookings.push(timeslotInfo);
-    // console.log(`LOG: Found raw timeslot info ${timeslotInfo}`);
+    // logger.info(`LOG: Found raw timeslot info ${timeslotInfo}`);
   }
-  console.log(`LOG: Found ${rawBookings.length} timeslots (${rawBookings})`);
+  logger.info(`LOG: Found ${rawBookings.length} timeslots (${rawBookings})`);
 
   // 14. Map rooms to timeslots
   const scrapeEndTime = Date.now();
   mapping = mapTimeslotsToRooms(matchingRooms, rawBookings);
-  console.log(`LOG: Mapped rooms to timeslots`);
+  logger.info(`LOG: Mapped rooms to timeslots`);
 
   // 15. Transform to enhanced format
   const rooms = [];
@@ -655,14 +412,15 @@ const outputLog = './log/scraped_log.json';
   };
 
     fs.writeFileSync(outputLog, JSON.stringify(logData, null, 2));
-    console.log('✅ Scraping complete. Data written to:', outputLog);
+    logger.info('✅ Scraping complete. Data written to:', outputLog);
 
     // await fbsPage.pause(); // debug pause for manual inspection
     if (browser) await browser.close();
+    }); // end withRetry
 
   } catch (error) {
     const scrapeEndTime = Date.now();
-    console.error('❌ Scraping failed:', error.message);
+    logger.error('❌ Scraping failed:', error.message);
 
     // Write error log
     const errorLogData = {
@@ -696,7 +454,7 @@ const outputLog = './log/scraped_log.json';
     };
 
     fs.writeFileSync(outputLog, JSON.stringify(errorLogData, null, 2));
-    console.log('Error log written to:', outputLog);
+    logger.info('Error log written to:', outputLog);
 
     if (browser) await browser.close();
     process.exit(1);
