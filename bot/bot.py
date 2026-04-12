@@ -54,18 +54,9 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     await callback_query.answer()
     print("Running the scraping script...")
     TARGET_URL = "https://fbs.intranet.smu.edu.sg/home"
-    # CREDENTIALS_FILEPATH = "credentials.json"
 
     USER_EMAIL = context.user_data.get("email")
     USER_PASSWORD = context.user_data.get("password")
-
-    # print(USER_EMAIL, USER_PASSWORD)
-    # if not USER_EMAIL:
-    #     await callback_query.message.reply_text("Email not provided lah! Go set it in settings. 💀")
-    #     return
-    # elif not USER_PASSWORD:
-    #     await callback_query.message.reply_text("Password is missing leh! Go set it in settings. 🤡")
-    #     return
 
     try:
         cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Cancel", callback_data="scrape_cancel")]])
@@ -179,8 +170,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         USER_EMAIL = context.user_data.get("email")
         USER_PASSWORD = context.user_data.get("password")
-
-        # print(USER_EMAIL, USER_PASSWORD)
 
         if not USER_EMAIL:
             await query.message.reply_text(
