@@ -1,7 +1,7 @@
 ![](https://img.shields.io/badge/sagasu_1.0.0-deprecated-red) 
 
 > [!WARNING]  
-> [`Sagasu`](https://github.com/gongahkia/akao)'s Telegram Bot deployment is inactive as of 22 January 2025.
+> [`Sagasu`](https://github.com/gongahkia/sagasu)'s Telegram Bot deployment is inactive as of 22 January 2025.
 >   
 > [`Sagasu-2`](https://github.com/gongahkia/sagasu-2) is actively being worked on.
 >
