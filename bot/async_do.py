@@ -262,7 +262,9 @@ async def _noop_progress(stage):
     pass
 
 
-async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None, progress_cb=None):
+async def scrape_smu_fbs(
+    base_url, user_email, user_password, scrape_config=None, progress_cb=None
+):
     progress = progress_cb or _noop_progress
     """
     Handle automated login to SMU FBS based on
@@ -403,13 +405,24 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
     DATE_FORMATTED = format_date(DATE_RAW)
     DURATION_HRS = cfg.get("duration_hrs", 2.5)
     START_TIME = cfg.get("start_time", "11:00")
-    END_TIME = cfg.get("end_time") or calculate_end_time(VALID_TIME, START_TIME, DURATION_HRS)[0]
-    ROOM_CAPACITY_FORMATTED = cfg.get("room_capacity") or convert_room_capacity(cfg.get("room_capacity_raw", 7))
+    END_TIME = (
+        cfg.get("end_time")
+        or calculate_end_time(VALID_TIME, START_TIME, DURATION_HRS)[0]
+    )
+    ROOM_CAPACITY_FORMATTED = cfg.get("room_capacity") or convert_room_capacity(
+        cfg.get("room_capacity_raw", 7)
+    )
     BUILDING_ARRAY = cfg.get("buildings") or [
         "Yong Pung How School of Law/Kwa Geok Choo Law Library",
         "School of Computing & Information Systems 1",
     ]
-    FLOOR_ARRAY = cfg.get("floors") or ["Basement 1", "Level 1", "Level 2", "Level 3", "Level 4"]
+    FLOOR_ARRAY = cfg.get("floors") or [
+        "Basement 1",
+        "Level 1",
+        "Level 2",
+        "Level 3",
+        "Level 4",
+    ]
     FACILITY_TYPE_ARRAY = cfg.get("facility_types") or ["Group Study Room"]
     EQUIPMENT_ARRAY = cfg.get("equipment") or []
     SCREENSHOT_FILEPATH = "./screenshot_log/"
@@ -437,7 +450,9 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
                     await page.wait_for_selector("input#passwordInput")
                     await page.wait_for_selector("span#submitButton")
                 except Exception as e:
-                    raise FBSLayoutError(f"login page did not load as expected: {e}") from e
+                    raise FBSLayoutError(
+                        f"login page did not load as expected: {e}"
+                    ) from e
 
                 print(f"navigating to {base_url}")
 
@@ -449,13 +464,17 @@ async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None
                 await page.wait_for_load_state("networkidle")
 
                 if await page.query_selector("#errorText, #error, .error_msg"):
-                    raise AuthFailedError("SMU login was rejected — check email and password")
+                    raise AuthFailedError(
+                        "SMU login was rejected — check email and password"
+                    )
 
                 await progress("navigating to target date")
                 # ---------- NAVIGATE TO GIVEN DATE ----------
                 frame = page.frame(name="frameBottom")
                 if not frame:
-                    raise AuthFailedError("login did not reach FBS dashboard (likely wrong credentials)")
+                    raise AuthFailedError(
+                        "login did not reach FBS dashboard (likely wrong credentials)"
+                    )
                 else:
                     frame = page.frame(name="frameContent")
                     while True:

@@ -14,9 +14,18 @@ from telegram.ext import (
     CallbackQueryHandler,
     PicklePersistence,
 )
-from async_do import scrape_smu_fbs
-from async_do import fill_missing_timeslots
-from async_do import AuthFailedError, NetworkError, FBSLayoutError, ScrapeError
+
+try:
+    from .async_do import scrape_smu_fbs
+    from .async_do import fill_missing_timeslots
+    from .async_do import AuthFailedError, NetworkError, FBSLayoutError, ScrapeError
+except ImportError:
+    if __package__:
+        raise
+    from async_do import scrape_smu_fbs
+    from async_do import fill_missing_timeslots
+    from async_do import AuthFailedError, NetworkError, FBSLayoutError, ScrapeError
+
 
 def read_token_env():
     """
@@ -29,6 +38,7 @@ def read_token_env():
         return None
     else:
         return bot_token
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -59,8 +69,12 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     USER_PASSWORD = context.user_data.get("password")
 
     try:
-        cancel_kb = InlineKeyboardMarkup([[InlineKeyboardButton("🛑 Cancel", callback_data="scrape_cancel")]])
-        status_msg = await callback_query.message.reply_text("⏳ Starting scrape…", reply_markup=cancel_kb)
+        cancel_kb = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🛑 Cancel", callback_data="scrape_cancel")]]
+        )
+        status_msg = await callback_query.message.reply_text(
+            "⏳ Starting scrape…", reply_markup=cancel_kb
+        )
 
         async def progress(stage):
             try:
@@ -69,7 +83,13 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                 print(f"progress edit failed: {e}")
 
         scrape_task = asyncio.create_task(
-            scrape_smu_fbs(TARGET_URL, USER_EMAIL, USER_PASSWORD, context.user_data.get("scrape_config"), progress)
+            scrape_smu_fbs(
+                TARGET_URL,
+                USER_EMAIL,
+                USER_PASSWORD,
+                context.user_data.get("scrape_config"),
+                progress,
+            )
         )
         context.user_data["scrape_task"] = scrape_task
         try:
@@ -119,7 +139,9 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
             for room, bookings in scraped_results.items():
                 complete_bookings = fill_missing_timeslots(bookings)
                 context.user_data["last_results"][room] = complete_bookings
-                available_slots = [b["timeslot"] for b in complete_bookings if b["available"]]
+                available_slots = [
+                    b["timeslot"] for b in complete_bookings if b["available"]
+                ]
                 if available_slots:
                     rooms_with_availability.append((room, available_slots))
 
@@ -132,10 +154,20 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                 buttons = []
                 for idx, (room, slots) in enumerate(rooms_with_availability):
                     summary += f"• <code>{room}</code> — {len(slots)} slot(s): {', '.join(slots[:3])}{'…' if len(slots) > 3 else ''}\n"
-                    buttons.append([InlineKeyboardButton(f"🔍 {room}", callback_data=f"room:{idx}")])
-                context.user_data["last_room_order"] = [r for r, _ in rooms_with_availability]
+                    buttons.append(
+                        [
+                            InlineKeyboardButton(
+                                f"🔍 {room}", callback_data=f"room:{idx}"
+                            )
+                        ]
+                    )
+                context.user_data["last_room_order"] = [
+                    r for r, _ in rooms_with_availability
+                ]
                 await callback_query.message.reply_text(
-                    summary, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(buttons)
+                    summary,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=InlineKeyboardMarkup(buttons),
                 )
 
     except AuthFailedError as e:
@@ -216,7 +248,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["settings_state"] = "awaiting_email"
 
 
-SMU_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$", re.IGNORECASE)
+SMU_EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$",
+    re.IGNORECASE,
+)
 
 
 async def handle_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -245,7 +280,9 @@ async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.delete()  # purge plaintext password from chat history
         except Exception as e:
             print(f"Could not delete password message: {e}")
-        await update.message.chat.send_message("Password saved and your message was deleted for safety!\nSettings updated ☑️")
+        await update.message.chat.send_message(
+            "Password saved and your message was deleted for safety!\nSettings updated ☑️"
+        )
         context.user_data["settings_state"] = None
     else:
         await update.message.reply_text(
@@ -255,15 +292,37 @@ async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 SCRAPE_PARAM_CHOICES = {
     "date": [
-        ("Today", 0), ("Tomorrow", 1), ("+2 days", 2), ("+3 days", 3),
-        ("+4 days", 4), ("+5 days", 5), ("+6 days", 6),
+        ("Today", 0),
+        ("Tomorrow", 1),
+        ("+2 days", 2),
+        ("+3 days", 3),
+        ("+4 days", 4),
+        ("+5 days", 5),
+        ("+6 days", 6),
     ],
-    "start_time": ["08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"],
+    "start_time": [
+        "08:00",
+        "09:00",
+        "10:00",
+        "11:00",
+        "12:00",
+        "13:00",
+        "14:00",
+        "15:00",
+        "16:00",
+        "17:00",
+        "18:00",
+        "19:00",
+    ],
     "duration": [0.5, 1, 1.5, 2, 2.5, 3, 4],
     "capacity": [
-        ("Any", None), ("<5 pax", "LessThan5Pax"), ("6-10 pax", "From6To10Pax"),
-        ("11-15 pax", "From11To15Pax"), ("16-20 pax", "From16To20Pax"),
-        ("21-50 pax", "From21To50Pax"), (">50 pax", "From51To100Pax"),
+        ("Any", None),
+        ("<5 pax", "LessThan5Pax"),
+        ("6-10 pax", "From6To10Pax"),
+        ("11-15 pax", "From11To15Pax"),
+        ("16-20 pax", "From16To20Pax"),
+        ("21-50 pax", "From21To50Pax"),
+        (">50 pax", "From51To100Pax"),
     ],
     "building": [
         "School of Computing & Information Systems 1",
@@ -276,7 +335,13 @@ SCRAPE_PARAM_CHOICES = {
         "Administration Building",
     ],
     "floor": ["Basement 1", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"],
-    "facility_type": ["Group Study Room", "Project Room", "Meeting Room", "Seminar Room", "Classroom"],
+    "facility_type": [
+        "Group Study Room",
+        "Project Room",
+        "Meeting Room",
+        "Seminar Room",
+        "Classroom",
+    ],
 }
 
 
@@ -286,17 +351,49 @@ def get_scrape_config(context):
 
 def _build_scrape_menu_keyboard(context):
     cfg = get_scrape_config(context)
+
     def label(key, fallback):
         return cfg.get(key, fallback)
+
     date_raw = cfg.get("date_raw", "Today (default)")
     kb = [
         [InlineKeyboardButton(f"📅 Date: {date_raw}", callback_data="pick:date")],
-        [InlineKeyboardButton(f"⏰ Start: {label('start_time', '11:00')}", callback_data="pick:start_time")],
-        [InlineKeyboardButton(f"⏳ Duration: {label('duration_hrs', 2.5)}h", callback_data="pick:duration")],
-        [InlineKeyboardButton(f"👥 Capacity: {label('room_capacity', 'Any')}", callback_data="pick:capacity")],
-        [InlineKeyboardButton(f"🏢 Buildings: {len(cfg.get('buildings') or [])} selected", callback_data="pick:building")],
-        [InlineKeyboardButton(f"🪜 Floors: {len(cfg.get('floors') or [])} selected", callback_data="pick:floor")],
-        [InlineKeyboardButton(f"🛋️ Facility: {len(cfg.get('facility_types') or [])} selected", callback_data="pick:facility_type")],
+        [
+            InlineKeyboardButton(
+                f"⏰ Start: {label('start_time', '11:00')}",
+                callback_data="pick:start_time",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"⏳ Duration: {label('duration_hrs', 2.5)}h",
+                callback_data="pick:duration",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"👥 Capacity: {label('room_capacity', 'Any')}",
+                callback_data="pick:capacity",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🏢 Buildings: {len(cfg.get('buildings') or [])} selected",
+                callback_data="pick:building",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🪜 Floors: {len(cfg.get('floors') or [])} selected",
+                callback_data="pick:floor",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"🛋️ Facility: {len(cfg.get('facility_types') or [])} selected",
+                callback_data="pick:facility_type",
+            )
+        ],
         [InlineKeyboardButton("↩️ Reset to defaults", callback_data="pick:reset")],
         [InlineKeyboardButton("✅ Done", callback_data="pick:done")],
     ]
@@ -313,26 +410,50 @@ async def scrape_config_command(update: Update, context: ContextTypes.DEFAULT_TY
 async def _open_param_picker(query, context, param):
     cfg = get_scrape_config(context)
     if param == "date":
-        buttons = [[InlineKeyboardButton(lbl, callback_data=f"set:date:{off}")] for lbl, off in SCRAPE_PARAM_CHOICES["date"]]
+        buttons = [
+            [InlineKeyboardButton(lbl, callback_data=f"set:date:{off}")]
+            for lbl, off in SCRAPE_PARAM_CHOICES["date"]
+        ]
     elif param == "start_time":
-        buttons = [[InlineKeyboardButton(t, callback_data=f"set:start_time:{t}")] for t in SCRAPE_PARAM_CHOICES["start_time"]]
+        buttons = [
+            [InlineKeyboardButton(t, callback_data=f"set:start_time:{t}")]
+            for t in SCRAPE_PARAM_CHOICES["start_time"]
+        ]
     elif param == "duration":
-        buttons = [[InlineKeyboardButton(f"{d}h", callback_data=f"set:duration:{d}")] for d in SCRAPE_PARAM_CHOICES["duration"]]
+        buttons = [
+            [InlineKeyboardButton(f"{d}h", callback_data=f"set:duration:{d}")]
+            for d in SCRAPE_PARAM_CHOICES["duration"]
+        ]
     elif param == "capacity":
-        buttons = [[InlineKeyboardButton(lbl, callback_data=f"set:capacity:{val or 'ANY'}")] for lbl, val in SCRAPE_PARAM_CHOICES["capacity"]]
+        buttons = [
+            [InlineKeyboardButton(lbl, callback_data=f"set:capacity:{val or 'ANY'}")]
+            for lbl, val in SCRAPE_PARAM_CHOICES["capacity"]
+        ]
     elif param in ("building", "floor", "facility_type"):
-        key_map = {"building": "buildings", "floor": "floors", "facility_type": "facility_types"}
+        key_map = {
+            "building": "buildings",
+            "floor": "floors",
+            "facility_type": "facility_types",
+        }
         selected = set(cfg.get(key_map[param]) or [])
         buttons = []
         for i, opt in enumerate(SCRAPE_PARAM_CHOICES[param]):
             mark = "✅ " if opt in selected else "◻️ "
-            buttons.append([InlineKeyboardButton(f"{mark}{opt}", callback_data=f"toggle:{param}:{i}")])
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"{mark}{opt}", callback_data=f"toggle:{param}:{i}"
+                    )
+                ]
+            )
         buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="pick:done")])
     else:
         return
     if param in ("date", "start_time", "duration", "capacity"):
         buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="pick:done")])
-    await query.edit_message_text(f"Select {param}:", reply_markup=InlineKeyboardMarkup(buttons))
+    await query.edit_message_text(
+        f"Select {param}:", reply_markup=InlineKeyboardMarkup(buttons)
+    )
 
 
 async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -343,11 +464,17 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
     if data.startswith("pick:"):
         param = data.split(":", 1)[1]
         if param == "done":
-            await query.edit_message_text("⚙️ Scrape configuration — tap a row to change:", reply_markup=_build_scrape_menu_keyboard(context))
+            await query.edit_message_text(
+                "⚙️ Scrape configuration — tap a row to change:",
+                reply_markup=_build_scrape_menu_keyboard(context),
+            )
             return
         if param == "reset":
             context.user_data["scrape_config"] = {}
-            await query.edit_message_text("⚙️ Scrape configuration — tap a row to change:", reply_markup=_build_scrape_menu_keyboard(context))
+            await query.edit_message_text(
+                "⚙️ Scrape configuration — tap a row to change:",
+                reply_markup=_build_scrape_menu_keyboard(context),
+            )
             return
         await _open_param_picker(query, context, param)
     elif data.startswith("set:"):
@@ -364,11 +491,18 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
             cfg.pop("end_time", None)
         elif param == "capacity":
             cfg["room_capacity"] = None if value == "ANY" else value
-        await query.edit_message_text("⚙️ Scrape configuration — tap a row to change:", reply_markup=_build_scrape_menu_keyboard(context))
+        await query.edit_message_text(
+            "⚙️ Scrape configuration — tap a row to change:",
+            reply_markup=_build_scrape_menu_keyboard(context),
+        )
     elif data.startswith("toggle:"):
         _, param, idx_s = data.split(":", 2)
         idx = int(idx_s)
-        key_map = {"building": "buildings", "floor": "floors", "facility_type": "facility_types"}
+        key_map = {
+            "building": "buildings",
+            "floor": "floors",
+            "facility_type": "facility_types",
+        }
         key = key_map[param]
         current = list(cfg.get(key) or [])
         opt = SCRAPE_PARAM_CHOICES[param][idx]
@@ -397,17 +531,29 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_password = bool(context.user_data.get("password"))
     if has_email and has_password:
         masked = _mask_email(context.user_data["email"])
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✏️ Change email", callback_data="settings:edit_email")],
-            [InlineKeyboardButton("🔑 Change password", callback_data="settings:edit_password")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="settings:cancel")],
-        ])
+        kb = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "✏️ Change email", callback_data="settings:edit_email"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🔑 Change password", callback_data="settings:edit_password"
+                    )
+                ],
+                [InlineKeyboardButton("❌ Cancel", callback_data="settings:cancel")],
+            ]
+        )
         await update.message.reply_text(
             f"Stored email: {masked}\nPick a field to change:", reply_markup=kb
         )
         return
     context.user_data["settings_state"] = "awaiting_email"
-    await update.message.reply_text("Please enter your SMU email address 📧\n(or /cancel to abort)")
+    await update.message.reply_text(
+        "Please enter your SMU email address 📧\n(or /cancel to abort)"
+    )
 
 
 def _mask_email(email: str) -> str:
@@ -425,7 +571,9 @@ async def settings_edit_callback(update: Update, context: ContextTypes.DEFAULT_T
     action = query.data.split(":", 1)[1]
     if action == "edit_email":
         context.user_data["settings_state"] = "awaiting_email"
-        await query.edit_message_text("Please enter your new SMU email address 📧\n(or /cancel to abort)")
+        await query.edit_message_text(
+            "Please enter your new SMU email address 📧\n(or /cancel to abort)"
+        )
     elif action == "edit_password":
         context.user_data["settings_state"] = "awaiting_password"
         await query.edit_message_text(
@@ -455,7 +603,7 @@ async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TY
             text += f"<i>{b['timeslot']}</i> — Outside hours 🔒\n"
     max_len = 4096
     for i in range(0, len(text), max_len):
-        await query.message.reply_text(text[i:i+max_len], parse_mode=ParseMode.HTML)
+        await query.message.reply_text(text[i : i + max_len], parse_mode=ParseMode.HTML)
 
 
 async def scrape_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -491,7 +639,9 @@ async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "All your stored credentials have been wiped clean 🧹\nType /settings to re-enter them."
         )
     else:
-        await update.message.reply_text("Nothing to wipe — no credentials were stored 👻")
+        await update.message.reply_text(
+            "Nothing to wipe — no credentials were stored 👻"
+        )
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -506,11 +656,19 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lines.append("<b>Scrape params</b> (unset = default)")
     lines.append(f"<i>Date:</i> {cfg.get('date_raw', 'today (default)')}")
     lines.append(f"<i>Start time:</i> {cfg.get('start_time', '11:00 (default)')}")
-    lines.append(f"<i>Duration:</i> {cfg.get('duration_hrs', '2.5h (default)')}h" if 'duration_hrs' in cfg else "<i>Duration:</i> 2.5h (default)")
+    lines.append(
+        f"<i>Duration:</i> {cfg.get('duration_hrs', '2.5h (default)')}h"
+        if "duration_hrs" in cfg
+        else "<i>Duration:</i> 2.5h (default)"
+    )
     lines.append(f"<i>Capacity:</i> {cfg.get('room_capacity') or 'any (default)'}")
-    lines.append(f"<i>Buildings:</i> {', '.join(cfg.get('buildings') or []) or '(default)'}")
+    lines.append(
+        f"<i>Buildings:</i> {', '.join(cfg.get('buildings') or []) or '(default)'}"
+    )
     lines.append(f"<i>Floors:</i> {', '.join(cfg.get('floors') or []) or '(default)'}")
-    lines.append(f"<i>Facility types:</i> {', '.join(cfg.get('facility_types') or []) or '(default)'}")
+    lines.append(
+        f"<i>Facility types:</i> {', '.join(cfg.get('facility_types') or []) or '(default)'}"
+    )
 
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
@@ -522,7 +680,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-PERSISTENCE_PATH = os.path.join(os.path.dirname(__file__), "bot_state.pickle")  # user_data survives restarts
+PERSISTENCE_PATH = os.path.join(
+    os.path.dirname(__file__), "bot_state.pickle"
+)  # user_data survives restarts
 
 
 def main():
@@ -535,10 +695,14 @@ def main():
     app.add_handler(CommandHandler("config", scrape_config_command))
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):"))
+    app.add_handler(
+        CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):")
+    )
     app.add_handler(CallbackQueryHandler(settings_edit_callback, pattern=r"^settings:"))
     app.add_handler(CallbackQueryHandler(room_details_callback, pattern=r"^room:"))
-    app.add_handler(CallbackQueryHandler(scrape_cancel_callback, pattern=r"^scrape_cancel$"))
+    app.add_handler(
+        CallbackQueryHandler(scrape_cancel_callback, pattern=r"^scrape_cancel$")
+    )
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
     print("Bot is polling...")
