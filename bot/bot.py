@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from telegram.constants import ParseMode
@@ -187,7 +188,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 print(f"Failed to edit message: {edit_error}")
     elif query.data == "view_help":
         await query.edit_message_text(
-            "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /logout to wipe stored credentials",
+            "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /cancel to abort an input flow\nType /logout to wipe stored credentials",
             parse_mode=ParseMode.HTML,
         )
     elif query.data == "settings":
@@ -195,14 +196,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["settings_state"] = "awaiting_email"
 
 
+SMU_EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$", re.IGNORECASE)
+
+
 async def handle_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("settings_state") == "awaiting_email":
-        context.user_data["email"] = update.message.text
+        email = update.message.text.strip()
+        if not SMU_EMAIL_RE.match(email):
+            await update.message.reply_text(
+                "That doesn't look like a valid SMU email 🤔\nTry again, or /cancel to abort."
+            )
+            return
+        context.user_data["email"] = email
         await update.message.reply_text(
             "SMU email saved!\nPlease enter your password 🔑\n\n⚠️ Your password message will be deleted immediately after I read it to protect your chat history."
         )
         context.user_data["settings_state"] = "awaiting_password"
-        # print("Email received:", context.user_data['email'])
     else:
         await update.message.reply_text(
             "Don't cut queue lah you.\nType /settings to enter your email 🐻‍❄️."
@@ -364,8 +373,54 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    has_email = bool(context.user_data.get("email"))
+    has_password = bool(context.user_data.get("password"))
+    if has_email and has_password:
+        masked = _mask_email(context.user_data["email"])
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Change email", callback_data="settings:edit_email")],
+            [InlineKeyboardButton("🔑 Change password", callback_data="settings:edit_password")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="settings:cancel")],
+        ])
+        await update.message.reply_text(
+            f"Stored email: {masked}\nPick a field to change:", reply_markup=kb
+        )
+        return
     context.user_data["settings_state"] = "awaiting_email"
-    await update.message.reply_text("Please enter your SMU email address 📧")
+    await update.message.reply_text("Please enter your SMU email address 📧\n(or /cancel to abort)")
+
+
+def _mask_email(email: str) -> str:
+    if "@" not in email:
+        return email
+    local, domain = email.split("@", 1)
+    if len(local) <= 2:
+        return "*" * len(local) + "@" + domain
+    return local[0] + "***" + local[-1] + "@" + domain
+
+
+async def settings_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    action = query.data.split(":", 1)[1]
+    if action == "edit_email":
+        context.user_data["settings_state"] = "awaiting_email"
+        await query.edit_message_text("Please enter your new SMU email address 📧\n(or /cancel to abort)")
+    elif action == "edit_password":
+        context.user_data["settings_state"] = "awaiting_password"
+        await query.edit_message_text(
+            "Please enter your new password 🔑\n\n⚠️ Your message will be deleted immediately after I read it.\n(or /cancel to abort)"
+        )
+    elif action == "cancel":
+        await query.edit_message_text("Settings unchanged 👍")
+
+
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    state = context.user_data.pop("settings_state", None)
+    if state:
+        await update.message.reply_text(f"Cancelled ({state}) ✋")
+    else:
+        await update.message.reply_text("Nothing to cancel 👻")
 
 
 async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -384,7 +439,7 @@ async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /logout to wipe stored credentials",
+        "<code>Sagasu</code> scrapes SMU FBS data.\n\nType /start to see all options\nType /help for help\nType /settings to adjust your credentials\nType /config to adjust scrape params\nType /cancel to abort an input flow\nType /logout to wipe stored credentials",
         parse_mode=ParseMode.HTML,
     )
 
@@ -400,7 +455,9 @@ def main():
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("logout", logout_command))
     app.add_handler(CommandHandler("config", scrape_config_command))
+    app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):"))
+    app.add_handler(CallbackQueryHandler(settings_edit_callback, pattern=r"^settings:"))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
     print("Bot is polling...")
