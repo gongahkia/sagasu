@@ -9,6 +9,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
     CallbackQueryHandler,
+    PicklePersistence,
 )
 from async_do import scrape_smu_fbs
 from async_do import fill_missing_timeslots
@@ -246,8 +247,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+PERSISTENCE_PATH = os.path.join(os.path.dirname(__file__), "bot_state.pickle")  # user_data survives restarts
+
+
 def main():
-    app = ApplicationBuilder().token(read_token_env()).build()
+    persistence = PicklePersistence(filepath=PERSISTENCE_PATH)
+    app = ApplicationBuilder().token(read_token_env()).persistence(persistence).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("settings", settings_command))
