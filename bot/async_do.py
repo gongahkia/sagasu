@@ -1,44 +1,3 @@
-"""
-~ FUA ~
-
-* add buttons for user to specify their configurations (school, floor etc.) after the username and password has been specified under settings, consider splitting settings into 2 buttons, configuration and authentication then save config locally to be referenced later
-* include user-specified preferences through easy to understand and select click-through buttons
-    * When (to book)?
-        * Now
-        * Select time
-    * How long (is the booking)?
-        * 30 minutes
-        * 1hr
-        * 2hr
-        * Set length
-* include an option when data has been scraped to 
-    * limit display of scraped rooms to just top 5 in a single message 
-        * perhaps with this format
-            * 1. Here are the available rooms! [displays 5 rooms]
-                * a. /next to show next 5
-                * b. /endbot or /start to exit event loop 
-    * rationale is that end-users are easily overwhelmed
-* include scraping defaults so the Now option searches for the available rooms now per the user-specified configuration
-* consider including a returned screenshot of the generated timetable to be sent to the user as an additional feature if they request it? maybe an additional button
-* deployment options to look into, but also check with Zane whether he can handle deployment
-    * heroku
-    * railway
-    * render
-    * google cloud platform (gcp)
-    * aws (amazon web services)
-    * azure (microsoft azure)
-    * vercel
-    * pythonanywhere
-    * digitalocean app platform
-    * caprover
-    * dokku
-    * coolify
-    * fly.io
-    * kubernetes (k3s)
-    * yunohost
-    * openshift (okd)
-"""
-
 import os
 import re
 import json
@@ -265,7 +224,6 @@ def fill_missing_timeslots(room_schedule):
         target_timeslot = f"{start}-{end}"
         target_timeslot_array.append(target_timeslot)
     for slot in room_schedule:
-        # print(slot)
         if slot["timeslot"] == target_timeslot_array[0]:  # already exists
             new_schedule.append(slot)
             del target_timeslot_array[0]
@@ -595,9 +553,6 @@ async def scrape_smu_fbs(base_url, user_email, user_password):
                         },
                     }
 
-                    # pretty_print_json(final_booking_log)
-                    # write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}scraped_log.json")
-
                     return [errors, final_booking_log]
 
                 else:
@@ -612,7 +567,6 @@ async def scrape_smu_fbs(base_url, user_email, user_password):
                     await page.wait_for_timeout(1000)
 
                     # ---------- VIEW TIMESLOTS ----------
-                    # await page.screenshot(path=f"{SCREENSHOT_FILEPATH}1.png")
 
                     frame = page.frame(name="frameBottom")
                     frame = page.frame(name="frameContent")
@@ -632,9 +586,6 @@ async def scrape_smu_fbs(base_url, user_email, user_password):
                         )
                     ]
                     bookings_array_sanitised = split_bookings_by_day(bookings_array_raw)
-
-                    # print(room_names_array_sanitised)
-                    # print(bookings_array_sanitised)
 
                     room_timeslot_map = {}
 
@@ -676,8 +627,6 @@ async def scrape_smu_fbs(base_url, user_email, user_password):
                             booking_details
                         )
 
-                    # print(room_timeslot_map)
-
                     current_datetime = datetime.now()
                     formatted_datetime = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -701,11 +650,7 @@ async def scrape_smu_fbs(base_url, user_email, user_password):
                         },
                     }
 
-                    # print(final_booking_log)
                     print("finished scraping")
-
-                    # write_json(final_booking_log, f"{BOOKING_LOG_FILEPATH}booking_log.json")
-                    # await page.screenshot(path=f"{SCREENSHOT_FILEPATH}2.png")
 
             except Exception as e:
                 errors.append(f"Error occurred during scraping process: {e}")
