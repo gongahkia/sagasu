@@ -27,10 +27,6 @@ If anything, the sluggish impression it gives off results from the overly conval
 
 ![](./asset/screenshot/1.png)
 
-## Other notes
-
-Also see [`local_sagasu`](https://github.com/gongahkia/the-sandbox/tree/main/python/local_sagasu).
-
 ## Contributors
 
 <table>
@@ -48,20 +44,6 @@ Also see [`local_sagasu`](https://github.com/gongahkia/the-sandbox/tree/main/pyt
                     <img src="https://avatars.githubusercontent.com/u/159885540?v=4" width="100;" alt="SpringOrca69"/>
                     <br/>
                     <sub><b>SpringOrca69</b></sub>
-                </a>
-            </td>
-	    <td align="center">
-                <a href="https://github.com/injaneity">
-                    <img src="https://avatars.githubusercontent.com/u/44902825?v=4" width="100;" alt="injaneity"/>
-                    <br/>
-                    <sub><b>injaneity</b></sub>
-                </a>
-            </td>
-	    <td align="center">
-                <a href="https://github.com/weisintai">
-                    <img src="https://avatars.githubusercontent.com/u/59339889?v=4" width="100;" alt="weisintai"/>
-                    <br/>
-                    <sub><b>weisintai</b></sub>
                 </a>
             </td>
         </tr>
