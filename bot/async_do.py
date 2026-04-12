@@ -242,7 +242,7 @@ def fill_missing_timeslots(room_schedule):
     return new_schedule
 
 
-async def scrape_smu_fbs(base_url, user_email, user_password):
+async def scrape_smu_fbs(base_url, user_email, user_password, scrape_config=None):
     """
     Handle automated login to SMU FBS based on
     personal credentials.json and scrapes all booked
@@ -376,20 +376,21 @@ async def scrape_smu_fbs(base_url, user_email, user_password):
         "Wireless Projection",
     ]
 
-    DATE_RAW = "4 november 2024"
+    cfg = scrape_config or {}  # user-supplied config overrides defaults
+
+    DATE_RAW = cfg.get("date_raw") or datetime.now().strftime("%d %B %Y").lower()
     DATE_FORMATTED = format_date(DATE_RAW)
-    DURATION_HRS = 2.5
-    START_TIME = "11:00"
-    END_TIME = calculate_end_time(VALID_TIME, START_TIME, DURATION_HRS)[0]
-    ROOM_CAPACITY_RAW = 7
-    ROOM_CAPACITY_FORMATTED = convert_room_capacity(ROOM_CAPACITY_RAW)
-    BUILDING_ARRAY = [
+    DURATION_HRS = cfg.get("duration_hrs", 2.5)
+    START_TIME = cfg.get("start_time", "11:00")
+    END_TIME = cfg.get("end_time") or calculate_end_time(VALID_TIME, START_TIME, DURATION_HRS)[0]
+    ROOM_CAPACITY_FORMATTED = cfg.get("room_capacity") or convert_room_capacity(cfg.get("room_capacity_raw", 7))
+    BUILDING_ARRAY = cfg.get("buildings") or [
         "Yong Pung How School of Law/Kwa Geok Choo Law Library",
         "School of Computing & Information Systems 1",
     ]
-    FLOOR_ARRAY = ["Basement 1", "Level 1", "Level 2", "Level 3", "Level 4"]
-    FACILITY_TYPE_ARRAY = ["Group Study Room"]
-    EQUIPMENT_ARRAY = []
+    FLOOR_ARRAY = cfg.get("floors") or ["Basement 1", "Level 1", "Level 2", "Level 3", "Level 4"]
+    FACILITY_TYPE_ARRAY = cfg.get("facility_types") or ["Group Study Room"]
+    EQUIPMENT_ARRAY = cfg.get("equipment") or []
     SCREENSHOT_FILEPATH = "./screenshot_log/"
     BOOKING_LOG_FILEPATH = "./booking_log/"
 
