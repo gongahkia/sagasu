@@ -110,31 +110,29 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                     response_text[i : i + max_length]
                 )
         else:
+            context.user_data["last_results"] = {}
+            rooms_with_availability = []
             for room, bookings in scraped_results.items():
                 complete_bookings = fill_missing_timeslots(bookings)
-                response_text = ""
-                response_text += f"<code>{room}</code> 🏠\n\n"
-                for booking in complete_bookings:
-                    if booking["available"]:
-                        response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                        response_text += f"<i>Status:</i> <u><a href='https://fbs.intranet.smu.edu.sg/home'>Available to book</a></u> ✅\n\n"
-                    else:
-                        if booking["details"]:
-                            response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                            response_text += f"<i>Status:</i> Booked ❌\n"
-                            response_text += f"<i>Purpose:</i> {booking['details']['Purpose of Booking']}\n"
-                            response_text += f"<i>Booker:</i> {booking['details']['Booked for User Name']} ({booking['details']['Booked for User Email Address']})\n"
-                            response_text += f"<i>Booking ref no:</i> {booking['details']['Booking Reference Number']}\n\n"
-                        else:
-                            response_text += f"<i>Timeslot:</i> {booking['timeslot']}\n"
-                            response_text += f"<i>Status:</i> Outside hours and cannot be booked 🔒\n\n"
+                context.user_data["last_results"][room] = complete_bookings
+                available_slots = [b["timeslot"] for b in complete_bookings if b["available"]]
+                if available_slots:
+                    rooms_with_availability.append((room, available_slots))
+
+            if not rooms_with_availability:
                 await callback_query.message.reply_text(
-                    response_text, parse_mode=ParseMode.HTML
+                    "😴 No rooms with availability in your window.\nAdjust /config and try again."
                 )
-            await callback_query.message.reply_text(
-                "<b><i>All results have been displayed! 🥳</i></b>",
-                parse_mode=ParseMode.HTML,
-            )
+            else:
+                summary = f"<b>🥳 {len(rooms_with_availability)} room(s) with openings:</b>\n\n"
+                buttons = []
+                for idx, (room, slots) in enumerate(rooms_with_availability):
+                    summary += f"• <code>{room}</code> — {len(slots)} slot(s): {', '.join(slots[:3])}{'…' if len(slots) > 3 else ''}\n"
+                    buttons.append([InlineKeyboardButton(f"🔍 {room}", callback_data=f"room:{idx}")])
+                context.user_data["last_room_order"] = [r for r, _ in rooms_with_availability]
+                await callback_query.message.reply_text(
+                    summary, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(buttons)
+                )
 
     except Exception as e:
         print(f"Error during scraping: {e}")
@@ -422,6 +420,29 @@ async def settings_edit_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text("Settings unchanged 👍")
 
 
+async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    idx = int(query.data.split(":", 1)[1])
+    order = context.user_data.get("last_room_order") or []
+    if idx >= len(order):
+        await query.message.reply_text("Results expired — run a new scrape.")
+        return
+    room = order[idx]
+    bookings = (context.user_data.get("last_results") or {}).get(room, [])
+    text = f"<code>{room}</code> 🏠\n\n"
+    for b in bookings:
+        if b["available"]:
+            text += f"<i>{b['timeslot']}</i> — <u><a href='https://fbs.intranet.smu.edu.sg/home'>Available</a></u> ✅\n"
+        elif b["details"]:
+            text += f"<i>{b['timeslot']}</i> — Booked ❌ ({b['details'].get('Purpose of Booking', 'n/a')})\n"
+        else:
+            text += f"<i>{b['timeslot']}</i> — Outside hours 🔒\n"
+    max_len = 4096
+    for i in range(0, len(text), max_len):
+        await query.message.reply_text(text[i:i+max_len], parse_mode=ParseMode.HTML)
+
+
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.pop("settings_state", None)
     if state:
@@ -465,6 +486,7 @@ def main():
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):"))
     app.add_handler(CallbackQueryHandler(settings_edit_callback, pattern=r"^settings:"))
+    app.add_handler(CallbackQueryHandler(room_details_callback, pattern=r"^room:"))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
     print("Bot is polling...")
