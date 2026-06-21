@@ -3,9 +3,6 @@
 ![](https://github.com/gongahkia/sagasu-2/actions/workflows/test.yml/badge.svg)
 ![Vercel Deploy](https://deploy-badge.vercel.app/vercel/sagasu-2)
 
-> [!WARNING]  
-> [`Sagasu 2`](https://github.com/gongahkia/sagasu-2)'s Vercel deployment is inactive as of 24 January 2026.  
-
 # `Sagasu 2`
 
 <p align="center">
