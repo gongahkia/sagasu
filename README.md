@@ -1,4 +1,4 @@
-[![](https://img.shields.io/badge/Sagasu_v1.0.0-active-brightgreen)](https://github.com/gongahkia/sagasu/releases/tag/1.0.0)
+[![](https://img.shields.io/badge/sagasu_v1.0.0-active-brightgreen)](https://github.com/gongahkia/sagasu/releases/tag/1.0.0)
 ![](https://github.com/gongahkia/sagasu/actions/workflows/ci.yml/badge.svg)
 
 # `Sagasu`
@@ -19,9 +19,12 @@ If anything, the sluggish impression it gives off results from the overly convol
 
 `Sagasu` is a Telegram bot that searches SMU FBS using user-specified filters, flags vacant facilities, and can book a selected or automatically chosen room after explicit confirmation.
 
-## Run
+## Usage
+
+The below instructions are for running `Sagasu` locally on your machine.
 
 ```console
+$ git clone https://github.com/gongahkia/sagasu && cd sagasu
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ pip install -r requirements.txt
@@ -29,15 +32,7 @@ $ cp .env.example .env
 $ python -m bot.bot
 ```
 
-Set `BOT_TOKEN` and `TELEGRAM_OWNER_ID` in `.env`. The first search opens Chrome; Sagasu prompts you to approve Microsoft Authenticator, then resumes the pending search automatically. It stores the browser session locally and never stores your SMU password.
-
-Use `/config` to set filters, `/start` to search, then select or auto-pick a room. To prepare a booking:
-
-```text
-/book Project meeting | co-booker@smu.edu.sg
-```
-
-**Validate only** stops before FBS confirmation. **Confirm & book** rechecks availability, submits the booking, and verifies it in **My Bookings**.
+Then set your `BOT_TOKEN` and `TELEGRAM_OWNER_ID` in `.env`. 
 
 ## Contributors
 
