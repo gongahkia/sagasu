@@ -1,146 +1,70 @@
-[![](https://img.shields.io/badge/sagasu_2.0.0-deployment_down-orange)](https://github.com/gongahkia/sagasu-2/releases/tag/2.0.0)
-![](https://github.com/gongahkia/sagasu-2/actions/workflows/scrape.yml/badge.svg)
-![](https://github.com/gongahkia/sagasu-2/actions/workflows/test.yml/badge.svg)
-![Vercel Deploy](https://deploy-badge.vercel.app/vercel/sagasu-2)
+[![](https://img.shields.io/badge/sagasu-active-brightgreen)](https://github.com/gongahkia/sagasu)
+![](https://github.com/gongahkia/sagasu/actions/workflows/ci.yml/badge.svg)
 
-# `Sagasu 2`
+# `Sagasu`
 
 <p align="center">
-    <img src="./asset/logo/logo-two.png" width=55% height=55%>
+<img src="./asset/logo/icon_with_words.png" width=50% height=50%>
 </p>
 
-Run it back *(but as a web app)*.
+Telegram bot that finds and books available rooms in SMU.
 
-## Stack
-
-* *Frontend*: [React](https://react.dev/), [Vite](https://vite.dev/), [Vercel](https://vercel.com/)
-* *Backend*: [Playwright](https://github.com/microsoft/playwright), [Node.js](https://nodejs.org/en), [Github Actions](https://docs.github.com/en/actions), [Cron](https://www.ibm.com/docs/en/db2/11.5.x?topic=task-unix-cron-format)
-* *CI/CD*: [Github Actions](https://github.com/features/actions)
+Access [`sagasu_bot`](https://t.me/sagasu_bot) ***live***.
 
 ## Rationale
 
-See [this](https://github.com/gongahkia/sagasu#rationale).
+[SMU's Facility Booking System](https://fbs.intranet.smu.edu.sg/home) isn't an inherently slow website. Booking facilities in itself is quick.
 
-## Architecture
+If anything, the sluggish impression it gives off results from the overly convoluted system users must navigate to search for available rooms.
 
-![](./asset/reference/architecture.png)
+`Sagasu` is a Telegram bot that searches SMU FBS using user-specified filters, flags vacant facilities, and can book a selected or automatically chosen room after explicit confirmation.
 
-## Screenshots
+## Run
 
-![](./asset/reference/1.png)  
-![](./asset/reference/2.png)  
-![](./asset/reference/3.png)  
-![](./asset/reference/4.png)  
-![](./asset/reference/5.png)  
-![](./asset/reference/6.png)  
+```console
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install -r requirements.txt
+$ cp .env.example .env
+$ python -m bot.bot
+```
 
-## Usage
+Set `BOT_TOKEN` and `TELEGRAM_OWNER_ID` in `.env`. The first search opens Chrome; Sagasu prompts you to approve Microsoft Authenticator, then resumes the pending search automatically. It stores the browser session locally and never stores your SMU password.
 
-`Sagasu 2` was primarily made for my own use.
+Use `/config` to set filters, `/start` to search, then select or auto-pick a room. To prepare a booking:
 
-The easiest way to view `Sagasu 2` is via the ***Live Web App*** at [sagasu-2.pages.dev](https://sagasu-2.pages.dev/).
+```text
+/book Project meeting | co-booker@smu.edu.sg
+```
 
-It's also the only way to access it. 
+**Validate only** stops before FBS confirmation. **Confirm & book** rechecks availability, submits the booking, and verifies it in **My Bookings**.
 
-## Configuration
+## Contributors
 
-For those interested, `Sagasu 2` is configured with the below environment variables locally in an `.env` file for dev and [Github Secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets) for prod.
-
-### Auth
-
-| Variable | Description | 
-|----------|-------------|
-| `SMU_EMAIL` | Your SMU email address | 
-| `SMU_PASSWORD` | Your SMU password | 
-
-### Scraping settings
-
-| Variable | Description | 
-|----------|-------------|
-| `SCRAPE_DATE` | Date to check room availability | 
-| `SCRAPE_START_TIME` | Start of time window to check | 
-| `SCRAPE_END_TIME` | End of time window to check | 
-| `SCRAPE_ROOM_CAPACITY` | Filter rooms by capacity | 
-| `SCRAPE_BUILDING_NAMES` | Buildings to search (comma-separated) 
-| `SCRAPE_FLOOR_NAMES` | Floors to search (comma-separated) | 
-| `SCRAPE_FACILITY_TYPES` | Types of facilities to search (comma-separated) | 
-| `SCRAPE_EQUIPMENT` | Required equipment (comma-separated) | 
-
-### Buildings
-
-Available building options (exact names, case-sensitive):
-
-- `School of Economics/School of Computing & Information Systems 2`
-- `School of Computing & Information Systems 1`
-- `School of Accountancy`
-- `Lee Kong Chian School of Business`
-- `Yong Pung How School of Law/Kwa Geok Choo Law Library`
-- `School of Social Sciences/College of Integrative Studies`
-- `Administration Building`
-- `Li Ka Shing Library`
-- `Sports & Recreation Centre`
-- `Campus Centre`
-- `Prinsep Street Residences`
-- `Concourse - Room/Lab`
-- `Campus Open Spaces - Events/Activities`
-- `SMU Connexion`
-
-### Floors
-
-Available floor options (exact names, case-sensitive):
-
-- `Basement 1`
-- `Basement 2`
-- `Level 1`
-- `Level 2`
-- `Level 3`
-- `Level 4`
-- `Level 5`
-- `Level 6`
-- `Level 7`
-
-### Facility Types
-
-Available facility type options:
-
-- `Project Room`
-- `Project Room (Level 5)`
-- `Discussion Room`
-- `Seminar Room`
-- `Classroom`
-- `Chatterbox`
-- `Group Study Room`
-- `Hostel Facilities`
-- `Meeting Pod`
-- `MPH / Sports Hall`
-- `Phone Booth`
-- `SMUC Facilities`
-- `Student Activities Area`
-- `Study Booth`
-
-### Equipment
-
-Available equipment options:
-
-- `Classroom PC`
-- `Classroom Prompter`
-- `Clip-on Mic`
-- `Doc Camera`
-- `DVD Player`
-- `Gooseneck Mic`
-- `Handheld Mic`
-- `Hybrid (USB connection)`
-- `In-room VC System`
-- `Projector`
-- `Rostrum Mic`
-- `Teams Room`
-- `Teams Room NEAT Board`
-- `TV Panel`
-- `USB Connection VC room`
-- `Video Recording`
-- `Wired Mic`
-- `Wireless Projection`       
-
-## Other notes
-
-`Sagasu 2` is where it is today because of its progenitor [Sagasu](https://github.com/gongahkia/sagasu).
+<table>
+	<tbody>
+        <tr>
+	    <td align="center">
+                <a href="https://github.com/gongahkia">
+                    <img src="https://avatars.githubusercontent.com/u/117062305?v=4" width="100;" alt="gongahkia"/>
+                    <br/>
+                    <sub><b>gongahkia</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/SpringOrca69">
+                    <img src="https://avatars.githubusercontent.com/u/159885540?v=4" width="100;" alt="SpringOrca69"/>
+                    <br/>
+                    <sub><b>SpringOrca69</b></sub>
+                </a>
+            </td>
+			<td align="center">
+                <a href="https://github.com/injaneity">
+                    <img src="https://avatars.githubusercontent.com/u/44902825?v=4" width="100;" alt="injaneity"/>
+                    <br/>
+                    <sub><b>injaneity</b></sub>
+                </a>
+            </td>
+        </tr>
+	<tbody>
+</table>
