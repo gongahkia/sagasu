@@ -1,4 +1,4 @@
-[![](https://img.shields.io/badge/sagasu-active-brightgreen)](https://github.com/gongahkia/sagasu)
+[![](https://img.shields.io/badge/Sagasu_v1.0.0-active-brightgreen)](https://github.com/gongahkia/sagasu/releases/tag/1.0.0)
 ![](https://github.com/gongahkia/sagasu/actions/workflows/ci.yml/badge.svg)
 
 # `Sagasu`
