@@ -63,10 +63,14 @@ async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Restrict a deployed personal bot when TELEGRAM_OWNER_ID is configured."""
 
     owner_id = os.getenv("TELEGRAM_OWNER_ID")
-    if not owner_id or (update.effective_user and str(update.effective_user.id) == owner_id):
+    if not owner_id or (
+        update.effective_user and str(update.effective_user.id) == owner_id
+    ):
         return
     if update.callback_query:
-        await update.callback_query.answer("This is a private Sagasu instance.", show_alert=True)
+        await update.callback_query.answer(
+            "This is a private Sagasu instance.", show_alert=True
+        )
     elif update.effective_message:
         await update.effective_message.reply_text("This is a private Sagasu instance.")
     raise ApplicationHandlerStop
@@ -137,12 +141,20 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"{escape(result.config.start_time)}–{escape(result.config.end_time)}\n\n"
             )
             buttons = [
-                [InlineKeyboardButton("✨ Auto-pick best room", callback_data="autopick")]
+                [
+                    InlineKeyboardButton(
+                        "✨ Auto-pick best room", callback_data="autopick"
+                    )
+                ]
             ]
             for idx, room in enumerate(rooms[:20]):
                 summary += f"• <code>{escape(room.name)}</code>\n"
                 buttons.append(
-                    [InlineKeyboardButton(f"🏠 {room.name}", callback_data=f"room:{idx}")]
+                    [
+                        InlineKeyboardButton(
+                            f"🏠 {room.name}", callback_data=f"room:{idx}"
+                        )
+                    ]
                 )
             await status_msg.edit_text(
                 summary,
@@ -519,7 +531,11 @@ async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TY
     room = order[idx]
     search = context.user_data.get("last_search") or {}
     room_data = next(
-        (candidate for candidate in search.get("rooms", []) if candidate["name"] == room),
+        (
+            candidate
+            for candidate in search.get("rooms", [])
+            if candidate["name"] == room
+        ),
         None,
     )
     if not room_data:
@@ -537,7 +553,13 @@ async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TY
         text + "\nUse <code>/book purpose | co-booker email</code> to continue.",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("✅ Select this room", callback_data=f"select_room:{idx}")]]
+            [
+                [
+                    InlineKeyboardButton(
+                        "✅ Select this room", callback_data=f"select_room:{idx}"
+                    )
+                ]
+            ]
         ),
     )
 
@@ -651,11 +673,15 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
     draft = drafts.get(token)
     if not draft or draft["expires_at"] < time.time():
         drafts.pop(token, None)
-        await query.edit_message_text("This booking confirmation expired. Create a new one.")
+        await query.edit_message_text(
+            "This booking confirmation expired. Create a new one."
+        )
         return
     if action == "booking_cancel":
         drafts.pop(token, None)
-        await query.edit_message_text("Booking cancelled locally; nothing was submitted.")
+        await query.edit_message_text(
+            "Booking cancelled locally; nothing was submitted."
+        )
         return
 
     submit = action == "booking_confirm"
@@ -801,7 +827,9 @@ def main():
         CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):")
     )
     app.add_handler(CallbackQueryHandler(room_details_callback, pattern=r"^room:"))
-    app.add_handler(CallbackQueryHandler(select_room_callback, pattern=r"^select_room:"))
+    app.add_handler(
+        CallbackQueryHandler(select_room_callback, pattern=r"^select_room:")
+    )
     app.add_handler(CallbackQueryHandler(autopick_callback, pattern=r"^autopick$"))
     app.add_handler(
         CallbackQueryHandler(

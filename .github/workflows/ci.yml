@@ -42,5 +42,8 @@ jobs:
           print("bot modules imported successfully")
           PY
 
+      - name: Run unit tests
+        run: python -m unittest discover -v
+
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure

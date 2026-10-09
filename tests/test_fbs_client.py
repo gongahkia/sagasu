@@ -26,7 +26,9 @@ class TimeHelpersTest(unittest.TestCase):
     def test_parse_booked_and_unavailable_events(self):
         booked = parse_event_title("Booking Time: 09:00-10:30\nStatus: Confirmed")
         unavailable = parse_event_title("(12:00-13:00) (not available)")
-        self.assertEqual((booked.start, booked.end, booked.status), ("09:00", "10:30", "booked"))
+        self.assertEqual(
+            (booked.start, booked.end, booked.status), ("09:00", "10:30", "booked")
+        )
         self.assertEqual(unavailable.status, "unavailable")
         self.assertIsNone(parse_event_title("unexpected"))
 

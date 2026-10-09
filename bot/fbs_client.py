@@ -229,7 +229,9 @@ def add_free_windows(
     cursor = window_start
     for start, end, slot in clamped:
         if start > cursor:
-            result.append(TimeSlot(minutes_to_time(cursor), minutes_to_time(start), "free"))
+            result.append(
+                TimeSlot(minutes_to_time(cursor), minutes_to_time(start), "free")
+            )
         if end > cursor:
             result.append(
                 TimeSlot(
@@ -241,7 +243,9 @@ def add_free_windows(
             )
             cursor = end
     if cursor < window_end:
-        result.append(TimeSlot(minutes_to_time(cursor), minutes_to_time(window_end), "free"))
+        result.append(
+            TimeSlot(minutes_to_time(cursor), minutes_to_time(window_end), "free")
+        )
     return result
 
 
@@ -294,7 +298,11 @@ class FBSClient:
                 headless=self.headless,
                 viewport={"width": 1440, "height": 1000},
             )
-            self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
+            self.page = (
+                self.context.pages[0]
+                if self.context.pages
+                else await self.context.new_page()
+            )
             _SHARED_PLAYWRIGHT = self._playwright
             _SHARED_CONTEXT = self.context
             return self
@@ -343,7 +351,9 @@ class FBSClient:
         email_submitted = False
         while (asyncio.get_running_loop().time() - started) * 1000 < AUTH_TIMEOUT_MS:
             if await self.page.locator("iframe#frameBottom").count():
-                await self.progress("Microsoft authentication complete; continuing scrape")
+                await self.progress(
+                    "Microsoft authentication complete; continuing scrape"
+                )
                 return
 
             state, prompt = await self._classify_auth_state()
@@ -370,9 +380,12 @@ class FBSClient:
                 yes = self.page.locator("#idSIButton9:visible").first
                 if await yes.count():
                     await yes.click()
-            elif state == "webauthn" and not self._auth_method_switched and os.getenv(
-                "SAGASU_PREFER_AUTHENTICATOR", "true"
-            ).lower() not in {"0", "false", "no"}:
+            elif (
+                state == "webauthn"
+                and not self._auth_method_switched
+                and os.getenv("SAGASU_PREFER_AUTHENTICATOR", "true").lower()
+                not in {"0", "false", "no"}
+            ):
                 # Cancel the host-device passkey prompt and choose a method that
                 # can be approved remotely from the owner's phone.
                 await self.page.keyboard.press("Escape")
@@ -466,13 +479,13 @@ class FBSClient:
         page, frame = await self.ensure_authenticated()
         await self.progress("configuring availability search")
         await self._set_date(frame, config.date)
-        await frame.locator("select#TimeFrom_c1_ctl04").select_option(
-            config.start_time
-        )
+        await frame.locator("select#TimeFrom_c1_ctl04").select_option(config.start_time)
         await self._wait_for_idle(frame)
         await frame.locator("select#TimeTo_c1_ctl04").select_option(config.end_time)
         await self._wait_for_idle(frame)
-        await self._set_multi_select(frame, "DropMultiBuildingList_c1", config.buildings)
+        await self._set_multi_select(
+            frame, "DropMultiBuildingList_c1", config.buildings
+        )
         await self._set_multi_select(frame, "DropMultiFloorList_c1", config.floors)
         await self._set_multi_select(
             frame, "DropMultiFacilityTypeList_c1", config.facility_types
@@ -484,7 +497,9 @@ class FBSClient:
         else:
             await frame.locator("select#DropCapacity_c1").select_option(index=0)
         await self._wait_for_idle(frame)
-        await self._set_multi_select(frame, "DropMultiEquipmentList_c1", config.equipment)
+        await self._set_multi_select(
+            frame, "DropMultiEquipmentList_c1", config.equipment
+        )
 
         await self.progress("loading matching facilities")
         await frame.locator("table#GridResults_gv").wait_for(timeout=30000)
@@ -533,9 +548,9 @@ class FBSClient:
         )
         await frame.locator("a#btnMakeBooking").click()
         booking_frame = await self._wait_for_frame("frameBookingDetails")
-        await booking_frame.locator(
-            "input#bookingFormControl1_TextboxPurpose_c1"
-        ).fill(request.purpose)
+        await booking_frame.locator("input#bookingFormControl1_TextboxPurpose_c1").fill(
+            request.purpose
+        )
         await booking_frame.locator(
             "select#bookingFormControl1_DropDownUsageType_c1"
         ).select_option(label=request.usage_type)
@@ -611,7 +626,9 @@ class FBSClient:
                         ):
                             return {
                                 "status": "verified",
-                                "reference_number": (await cells[1].inner_text()).strip(),
+                                "reference_number": (
+                                    await cells[1].inner_text()
+                                ).strip(),
                                 "fbs_status": (await cells[8].inner_text()).strip(),
                             }
                 except Exception:
@@ -641,7 +658,9 @@ class FBSClient:
     ) -> None:
         await self._wait_for_idle(frame)
         opener = frame.locator(f"#{control_id}_textItem:visible").first
-        current_value = await frame.locator(f"#{control_id}_textValue").first.input_value()
+        current_value = await frame.locator(
+            f"#{control_id}_textValue"
+        ).first.input_value()
         await opener.click()
         panel = frame.locator(f"#{control_id}_panelContainer:visible").first
         await panel.wait_for(state="visible", timeout=10000)
@@ -707,9 +726,7 @@ class FBSClient:
             if box:
                 room_headers[name] = box["y"] + box["height"] / 2
 
-        blocked_by_room: dict[str, list[TimeSlot]] = {
-            room: [] for room in room_names
-        }
+        blocked_by_room: dict[str, list[TimeSlot]] = {room: [] for room in room_names}
         events = frame.locator(
             "div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0"
         )
@@ -840,8 +857,7 @@ def search_config_from_bot(config: dict) -> SearchConfig:
         start_time=start,
         end_time=end,
         buildings=tuple(
-            config.get("buildings")
-            or ("School of Computing & Information Systems 1",)
+            config.get("buildings") or ("School of Computing & Information Systems 1",)
         ),
         floors=tuple(config.get("floors") or ("Level 2", "Level 3", "Level 4")),
         facility_types=tuple(config.get("facility_types") or ("Group Study Room",)),
