@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
-from bot.fbs_client import AuthenticationRequired
+from bot.fbs_client import AuthenticationRequired, FBSClient, LayoutChanged
 from bot.scraper_session import (
     ProfileBusy,
     ScraperClient,
@@ -243,3 +243,41 @@ class SessionStorageTest(unittest.IsolatedAsyncioTestCase):
             with patch.object(FBSClient, "__aenter__", AsyncMock()):
                 self.assertIs(await client.__aenter__(), client)
             client.context.add_cookies.assert_awaited_once_with(cookies)
+
+
+class SelectionTest(unittest.IsolatedAsyncioTestCase):
+    def selection(self, *, count=2, selected=2):
+        client = ScraperClient()
+        client._wait_for_idle = AsyncMock()
+        frame = Mock()
+        controls = frame.locator.return_value
+        controls.count = AsyncMock(return_value=count)
+        controls.all = AsyncMock(return_value=[AsyncMock() for _ in range(count)])
+        controls.evaluate_all = AsyncMock(return_value=selected)
+        return client, frame, controls
+
+    async def test_every_discovered_room_is_explicitly_selected(self):
+        client, frame, controls = self.selection()
+        with patch.object(
+            FBSClient, "_matching_room_names", AsyncMock(return_value=["A", "B"])
+        ):
+            self.assertEqual(await client._matching_room_names(frame), ["A", "B"])
+        for checkbox in controls.all.return_value:
+            checkbox.check.assert_awaited_once()
+
+    async def test_missing_selection_control_is_rejected(self):
+        client, frame, controls = self.selection(count=1)
+        with patch.object(
+            FBSClient, "_matching_room_names", AsyncMock(return_value=["A", "B"])
+        ):
+            with self.assertRaises(LayoutChanged):
+                await client._matching_room_names(frame)
+        controls.all.assert_not_awaited()
+
+    async def test_failed_selection_cannot_be_published_as_campus_wide(self):
+        client, frame, controls = self.selection(selected=1)
+        with patch.object(
+            FBSClient, "_matching_room_names", AsyncMock(return_value=["A", "B"])
+        ):
+            with self.assertRaises(LayoutChanged):
+                await client._matching_room_names(frame)

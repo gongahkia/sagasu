@@ -45,7 +45,7 @@ ROWS = """scroll => {
 EVENTS = """scroll => {
     const origin = scroll.getBoundingClientRect().top;
     return [...scroll.closest('#dps').querySelectorAll(
-        'div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0')].map(el => {
+        'div.scheduler_bluewhite_event')].map(el => {
         const box = el.getBoundingClientRect();
         return {title: el.getAttribute('title'), top: box.top - origin + scroll.scrollTop,
             bottom: box.bottom - origin + scroll.scrollTop, height: box.height};

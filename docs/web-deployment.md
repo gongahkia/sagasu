@@ -38,7 +38,7 @@ The scraper reuses the saved profile, defaults to headless, and never submits cr
 
 Success writes `snapshot.json` and `status.json` to `artifacts/daily` (override with `--output`). Failure exits nonzero and writes a fixed, sanitized failure status while retaining the previous complete snapshot. Check the exit status and `status.json`; an existing snapshot does not prove the current attempt succeeded.
 
-Before enabling publishing or scheduling, confirm a **real seven-day scrape** succeeds and compare room coverage and intervals against live FBS. The strict scraper rejects unreadable events, missing calendar rows and result pagination instead of assuming rooms are free. These conditions must be checked against live FBS after MFA; mocked/synthetic tests do not validate campus-wide completeness. Do not publish an incomplete scrape by disabling strict checks.
+Before enabling publishing or scheduling, confirm a **real seven-day scrape** succeeds and compare room coverage and intervals against live FBS. The strict scraper rejects unreadable events, missing calendar rows and result pagination instead of assuming rooms are free. These conditions must be checked against live FBS after MFA; mocked/synthetic tests do not validate campus-wide completeness. Do not publish an incomplete scrape by disabling strict checks. The live FBS calendar has a grouped resource tree, scroll-rendered row headers, and multiple event lines for overlapping bookings. The public reader explicitly selects every discovered room, matches the complete resource tree against discovery, scans the calendar scroll area for every room's coordinates, and reads every event line. It requires the rendered event count to match the loaded calendar event list and rejects dynamic/server-windowed event loading, unknown events and ambiguous room assignments. The personal bot's calendar reader remains unchanged.
 
 ## Static GitHub Pages publishing
 
@@ -48,11 +48,48 @@ The `Publish availability website` workflow checks out the default branch, fetch
 
 Website pushes, public-data pushes, manual dispatch, and a daily 22:17 UTC rebuild can trigger deployment. The daily rebuild is only a static publish fallback; it does not refresh FBS data. A push of `availability-data` checks out website code from the default branch. Git credentials that suppress workflow triggers (such as Actions' own token) require a manual dispatch or the scheduled rebuild.
 
-Local sanitized-data push automation and scheduler installation are deferred until the first successful live scrape. Only the two public JSON files should reach `availability-data`. Never push an entire working directory, browser profile, `.env`, raw FBS results, or diagnostics. `scripts/publish_snapshot.py` remains available to merge an attempt directory into retained public data: only an `ok` attempt replaces the snapshot; failures update status while preserving the snapshot. The destination directory must already exist.
+After a complete live scrape, publish the current attempt:
 
-## Local scheduling gate
+```sh
+.venv/bin/python scripts/publish_snapshot.py --attempt artifacts/daily --push
+```
 
-This checkout was inspected on macOS with `launchctl` available. After live validation, use a user LaunchAgent with absolute paths, a working directory at this repository, and an explicit browser channel; launchd does not inherit interactive shell configuration. Keep sanitized-data publishing in that local job, separate from Actions. A sleeping/offline Mac cannot guarantee on-time scraping. On supported Linux hosts, prefer a user systemd timer with persistence; detect availability before installing one. Do not install a scheduler until both live scraping and the public-data push have been verified.
+The publisher creates or updates `availability-data` through a temporary Git repository, without changing your checkout, index or staged work. Only `snapshot.json` and `status.json` are committed. It validates seven consecutive days and full interval coverage, reconstructs allowlisted fields and canonical status messages, and refuses a data branch containing other files. A failed attempt keeps the remote's previous complete snapshot and updates status. Pushes are ordinary fast-forward pushes; concurrent changes fail safely, without force-pushing. A first failed attempt can publish an honest empty snapshot and failure status.
+
+GitHub push access is required separately from SMU login. For an HTTPS GitHub remote, the publisher prefers an already authenticated `gh` CLI in its temporary checkout, avoiding stale Keychain Git credentials. Otherwise it uses your existing Git credential helper. Git prompting is disabled and operations have deadlines; diagnostics never include raw Git output. Authenticate GitHub locally with `gh auth login --web` if needed; never put a token in chat or an SMU password in GitHub secrets.
+
+For a complete daily cycle, including publishing a failed-refresh status:
+
+```sh
+.venv/bin/python -m bot.refresh_daily
+```
+
+Use `--no-push` to refresh local data only. This command serializes the whole scrape/publish cycle with a second local process lock. It exits nonzero for scraping or publishing failures. `scripts/publish_snapshot.py --attempt PATH --retained PATH` still supports local retention without contacting GitHub. Never push an entire working directory, browser profile, `.env`, raw FBS results or diagnostics.
+
+## Local daily scheduling
+
+A live headless seven-day scrape was verified on 31 October 2026: 100 rooms per day for 31 October–6 November. Saved-session reuse worked without further MFA. The public allowlist and a real push of the two sanitized data files were also verified. This does not establish how long SMU keeps the session valid.
+
+Generate the schedule first, then install it after validating local scraping and Git push access:
+
+```sh
+.venv/bin/python scripts/schedule_refresh.py
+.venv/bin/python scripts/schedule_refresh.py --install
+```
+
+The script detects the actual OS and user scheduler. This machine is macOS in the Asia/Singapore timezone with a GUI user `launchctl` domain. It generates an ignored preview under `artifacts/schedule` and installs a user LaunchAgent named `sg.sagasu.availability` for 06:17 Singapore time. It preserves absolute interpreter/repository paths, browser channel and the executable search path needed for Git/`gh`, without copying login credentials. It does not trigger an immediate scrape at installation.
+
+On Linux it prefers a working user systemd manager, using an explicit `Asia/Singapore` calendar timezone and a persistent timer. If no user systemd manager or macOS GUI scheduler is available, it can append a tagged user-cron entry while preserving other entries. LaunchAgent and cron installation require the machine's current UTC offset to be +08:00; their calendar time follows the machine timezone. Regenerate if changing timezone or moving the repository. No supported scheduler means a clear failure; run `python -m bot.refresh_daily` manually instead. No self-hosted Actions runner is involved.
+
+Check the Mac job without printing its environment:
+
+```sh
+launchctl list sg.sagasu.availability
+```
+
+Run one immediate cycle when needed with `launchctl kickstart gui/$(id -u)/sg.sagasu.availability`. Fixed progress/status output is in ignored `artifacts/schedule/refresh.log`; scheduler startup errors are in `refresh-error.log`. If macOS denies access to the repository on Desktop, grant appropriate local access or move the checkout to an accessible location and regenerate the schedule. Sleeping/offline/logged-out computers cannot guarantee a fresh snapshot at the scheduled time. Session expiry requires another manual `python -m bot.scraper_login` and a refresh; the job never submits stored SMU credentials.
+
+Remove a Mac schedule with `launchctl bootout gui/$(id -u)/sg.sagasu.availability`, then remove `~/Library/LaunchAgents/sg.sagasu.availability.plist`. On systemd, disable with `systemctl --user disable --now sg.sagasu.availability.timer`; unit files are under `~/.config/systemd/user`. For cron, remove only the line tagged `sg.sagasu.availability` with `crontab -e`. Keep other user jobs intact.
 
 ## Data and failures
 
@@ -75,4 +112,4 @@ node --test tests/*.test.cjs
 .venv/bin/pre-commit run --all-files --show-diff-on-failure
 ```
 
-Automated login tests verify code paths only. Live authentication, saved-session reuse, seven-day coverage and scheduled publishing require separate verification on the owner's computer.
+Automated login tests verify code paths only. Live authentication, saved-session reuse and seven-day coverage were verified separately on this computer. The first overnight scheduled run and long-term session lifetime still require observation.

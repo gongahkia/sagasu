@@ -39,7 +39,7 @@ async def scrape(*, headed=False, verbose=False):
     return public_snapshot(results)
 
 
-def main():
+def main(argv=None):
     load_dotenv(ROOT / ".env")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("artifacts/daily"))
@@ -53,7 +53,7 @@ def main():
         action="store_true",
         help="Print fixed progress labels, never page text or credentials",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     # Replace only after a complete scrape; failures retain the last good data.
     snapshot_path = args.output / "snapshot.json"
     status = {"attempted_at": datetime.now(SGT).isoformat()}

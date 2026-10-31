@@ -25,6 +25,18 @@ class CalendarCoverageTest(unittest.TestCase):
             all(slot.details is None for room in rooms for slot in room.timeslots)
         )
 
+    def test_second_event_line_in_expanded_room_row_stays_busy(self):
+        rows = {"A": (0, 25), "B": (300, 350)}
+        second = {
+            "title": "Booking Time: 10:30-12:00",
+            "top": 326,
+            "bottom": 349,
+            "height": 23,
+        }
+        rooms = calendar_rooms(["A", "B"], self.config, rows, [self.event, second], 2)
+        self.assertFalse(rooms[1].is_free("11:00", "12:00"))
+        self.assertTrue(rooms[1].is_free("12:00", "22:00"))
+
     def test_missing_room_row_is_rejected_even_if_no_events(self):
         with self.assertRaises(LayoutChanged):
             calendar_rooms(["A", "B"], self.config, {"A": self.rows["A"]}, [], 0)

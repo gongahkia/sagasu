@@ -5,6 +5,11 @@ import json
 import shutil
 from pathlib import Path
 
+if __package__:
+    from .public_data import sanitize_snapshot, sanitize_status
+else:
+    from public_data import sanitize_snapshot, sanitize_status
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -25,6 +30,11 @@ def build(output, data):
             source = ROOT / "web/data" / name
         # Parse before copying: no broken JSON reaches deployment.
         value = json.loads(source.read_text(encoding="utf-8"))
+        value = (
+            sanitize_snapshot(value)
+            if name == "snapshot.json"
+            else sanitize_status(value)
+        )
         (output / "data" / name).write_text(
             json.dumps(value, indent=2) + "\n", encoding="utf-8"
         )
