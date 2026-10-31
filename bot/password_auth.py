@@ -8,6 +8,8 @@ import asyncio
 import os
 import re
 
+from playwright.async_api import Error as PlaywrightError
+
 from .fbs_client import AuthenticationRequired
 
 
@@ -57,11 +59,21 @@ async def password_sign_in(page, *, timeout_seconds=120, progress=None):
 
 async def _password_flow(page, email, password, report):
     email_attempts = password_attempts = alternate_attempts = 0
+    security_prompt_cancelled = False
+    transition_polls_remaining = 0
+    password_submitted = False
     while True:
         if await page.locator("iframe#frameBottom").count():
             await report("authenticated")
             return
-        body = (await page.locator("body").inner_text(timeout=5000)).casefold()
+        try:
+            body = (await page.locator("body").inner_text(timeout=5000)).casefold()
+        except PlaywrightError as error:
+            # Microsoft can redirect while we read the previous document.
+            if "execution context was destroyed" not in str(error).casefold():
+                raise
+            await page.wait_for_timeout(250)
+            continue
         if any(
             text in body
             for text in (
@@ -75,12 +87,31 @@ async def _password_flow(page, email, password, report):
         ):
             raise PasswordLoginError("rejected", "credential_rejected")
 
+        if (
+            not security_prompt_cancelled
+            and "choose a way to sign in" not in body
+            and any(
+                text in body
+                for text in (
+                    "face, fingerprint, pin or security key",
+                    "your device will open a security window",
+                )
+            )
+        ):
+            await report("cancelling_security_key_prompt")
+            await _cancel_passkey(page, report)
+            security_prompt_cancelled = True
+            transition_polls_remaining = 12
+            await page.wait_for_timeout(750)
+            continue
+
         email_field = page.locator(
             'input[name="loginfmt"]:visible, input#userNameInput:visible, input[type="email"]:visible'
         ).first
         password_field = page.locator('input[type="password"]:visible').first
         if await password_field.count():
-            if password_attempts >= 1:
+            transition_polls_remaining = 0
+            if password_submitted or password_attempts >= 2:
                 await page.wait_for_timeout(750)
                 continue
             await report("entering_password")
@@ -92,8 +123,10 @@ async def _password_flow(page, email, password, report):
                 '#submitButton:visible, input[type="submit"]:visible, button[type="submit"]:visible'
             ).first.click()
             password_attempts += 1
+            password_submitted = True
             await report("waiting_after_password")
         elif await email_field.count():
+            transition_polls_remaining = 0
             if email_attempts >= 1:
                 await page.wait_for_timeout(750)
                 continue
@@ -111,7 +144,7 @@ async def _password_flow(page, email, password, report):
             # Choose only a password route. Never choose/approve Authenticator.
             password_option = page.get_by_text(
                 re.compile(
-                    r"^(use (your |a )?password( instead)?|password|sign in with (your |a )?password)$",
+                    r"^(use (my |your |a )?password( instead)?|password|sign in with (my |your |a )?password)$",
                     re.I,
                 )
             )
@@ -127,9 +160,12 @@ async def _password_flow(page, email, password, report):
                     for option in await options.all():
                         if await option.is_visible():
                             await report("selecting_password_route")
-                            await page.keyboard.press("Escape")
                             await option.click()
+                            if options is password_option:
+                                password_submitted = False
+                                security_prompt_cancelled = False
                             alternate_attempts += 1
+                            transition_polls_remaining = 12
                             clicked = True
                             break
                     if clicked:
@@ -149,7 +185,35 @@ async def _password_flow(page, email, password, report):
                     "more information required",
                 )
             ):
+                if transition_polls_remaining:
+                    # The request may start after the first cancellation attempt.
+                    if "your device will open a security window" in body:
+                        await _cancel_passkey(page, report)
+                    # Cancelling WebAuthn or choosing an alternate method can
+                    # leave the old prompt visible while Microsoft redirects.
+                    # Poll for the password choice before declaring MFA needed.
+                    await report("waiting_for_password_choices")
+                    transition_polls_remaining -= 1
+                    await page.wait_for_timeout(750)
+                    continue
                 raise PasswordLoginError(
                     "interactive_verification", "verification_prompt"
                 )
         await page.wait_for_timeout(750)
+
+
+async def _cancel_passkey(page, report):
+    cancelled = 0
+    for frame in page.frames:
+        try:
+            cancelled += await frame.evaluate(
+                "() => window.__sagasuCancelPasskeyRequest?.() ?? 0"
+            )
+        except PlaywrightError as error:
+            if "execution context was destroyed" not in str(error).casefold():
+                raise
+    if cancelled:
+        await report("passkey_request_cancelled")
+    else:
+        # Best effort for requests that predate installation of the hook.
+        await page.keyboard.press("Escape")

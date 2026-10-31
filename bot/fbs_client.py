@@ -8,6 +8,7 @@ SMU password.  Booking submission is opt-in through ``submit=True`` only.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 from dataclasses import asdict, dataclass, field
@@ -299,6 +300,19 @@ class FBSClient:
                     _SHARED_CONTEXT = None
                     _SHARED_PLAYWRIGHT = None
             self.profile_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if self.unattended:
+                preferences_path = self.profile_path / "Default" / "Preferences"
+                preferences_path.parent.mkdir(parents=True, exist_ok=True)
+                preferences = (
+                    json.loads(preferences_path.read_text())
+                    if preferences_path.exists()
+                    else {}
+                )
+                preferences["credentials_enable_service"] = False
+                preferences.setdefault("profile", {})[
+                    "password_manager_enabled"
+                ] = False
+                preferences_path.write_text(json.dumps(preferences))
             self._playwright = await async_playwright().start()
             self.context = await self._playwright.chromium.launch_persistent_context(
                 str(self.profile_path),
@@ -306,6 +320,10 @@ class FBSClient:
                 headless=self.headless,
                 viewport={"width": 1440, "height": 1000},
             )
+            if self.unattended:
+                await self.context.add_init_script(
+                    path=str(Path(__file__).with_name("passkey_cancel.js"))
+                )
             self.page = (
                 self.context.pages[0]
                 if self.context.pages

@@ -131,6 +131,9 @@ class FakeLocator:
 
     async def inner_text(self, **kwargs):
         return {
+            "security_key": "Face, fingerprint, PIN or security key. Your device will open a security window.",
+            "method": "Choose a way to sign in. Face, fingerprint, PIN or security key. Approve a request on my Microsoft Authenticator app. Use my password",
+            "leaving_security_key": "Face, fingerprint, PIN or security key. Your device will open a security window.",
             "mfa": "Approve a request in Microsoft Authenticator",
             "rejected": "Your account or password is incorrect",
         }.get(self.page.state, "Sign in")
@@ -145,7 +148,8 @@ class FakeLocator:
             "method": "password",
             "password": self.page.after_password,
         }
-        self.page.state = transitions[self.page.state]
+        target = transitions[self.page.state]
+        self.page.state = target.pop(0) if isinstance(target, list) else target
 
     async def all(self):
         return [self] if await self.count() else []
@@ -159,6 +163,13 @@ class FakePage:
         self.state, self.after_password = state, after_password
         self.entered = []
         self.keyboard = AsyncMock()
+        self.keyboard.press.side_effect = self.press_key
+        self.frames = [self]
+        self.evaluate = AsyncMock(return_value=0)
+
+    async def press_key(self, key):
+        if self.state == "security_key" and key == "Escape":
+            self.state = "method"
 
     def locator(self, selector):
         if selector == "iframe#frameBottom":
@@ -174,16 +185,90 @@ class FakePage:
         return FakeLocator(self, kind)
 
     def get_by_text(self, pattern):
-        return FakeLocator(
-            self,
-            "alternate" if pattern.search("Sign in another way") else "password_option",
-        )
+        if pattern.search("Sign in another way"):
+            return FakeLocator(self, "alternate")
+        if pattern.search("Use my password"):
+            return FakeLocator(self, "password_option")
+        return FakeLocator(self, "missing")
 
     async def wait_for_timeout(self, duration):
         pass
 
 
 class PasswordAuthTest(unittest.IsolatedAsyncioTestCase):
+    async def test_pending_passkey_request_is_aborted_without_keyboard_input(self):
+        page = FakePage(state="security_key")
+
+        async def cancel_request(script):
+            page.state = "method"
+            return 1
+
+        page.evaluate.side_effect = cancel_request
+        progress = AsyncMock()
+        with patch.dict(
+            os.environ,
+            {"SMU_LOGIN_EMAIL": "fixture", "SMU_LOGIN_PASSWORD": "fixture-only"},
+        ):
+            await password_sign_in(page, progress=progress)
+        self.assertEqual(page.state, "done")
+        page.keyboard.press.assert_not_awaited()
+        progress.assert_any_await("login: passkey_request_cancelled")
+
+    async def test_password_can_be_submitted_again_only_after_explicit_password_choice(
+        self,
+    ):
+        page = FakePage(state="password", after_password=["security_key", "done"])
+        with patch.dict(
+            os.environ,
+            {"SMU_LOGIN_EMAIL": "fixture", "SMU_LOGIN_PASSWORD": "fixture-only"},
+        ):
+            await password_sign_in(page)
+        self.assertEqual(page.state, "done")
+        self.assertEqual(page.entered, ["password", "password"])
+
+    async def test_password_choices_can_arrive_after_security_key_cancel(self):
+        class DelayedPage(FakePage):
+            polls = 0
+
+            async def press_key(self, key):
+                if self.state == "security_key" and key == "Escape":
+                    self.state = "leaving_security_key"
+
+            async def wait_for_timeout(self, duration):
+                if self.state == "leaving_security_key":
+                    self.polls += 1
+                    if self.polls == 4:
+                        self.state = "method"
+
+        page = DelayedPage(state="security_key")
+        progress = AsyncMock()
+        with patch.dict(
+            os.environ,
+            {"SMU_LOGIN_EMAIL": "fixture", "SMU_LOGIN_PASSWORD": "fixture-only"},
+        ):
+            await password_sign_in(page, progress=progress)
+        self.assertEqual(page.state, "done")
+        progress.assert_any_await("login: waiting_for_password_choices")
+
+    async def test_security_key_cancel_then_use_my_password(self):
+        page = FakePage(state="security_key")
+        progress = AsyncMock()
+        with patch.dict(
+            os.environ,
+            {
+                "SMU_LOGIN_EMAIL": "fixture@smu.edu.sg",
+                "SMU_LOGIN_PASSWORD": "fixture-only",
+            },
+        ):
+            await password_sign_in(page, progress=progress)
+        self.assertEqual(page.state, "done")
+        page.keyboard.press.assert_any_await("Escape")
+        self.assertEqual(page.entered, ["password"])
+        labels = [call.args[0] for call in progress.call_args_list]
+        self.assertEqual(labels[0], "login: cancelling_security_key_prompt")
+        self.assertIn("login: selecting_password_route", labels)
+        self.assertIn("login: entering_password", labels)
+
     async def test_alternate_password_route(self):
         page = FakePage()
         progress = AsyncMock()

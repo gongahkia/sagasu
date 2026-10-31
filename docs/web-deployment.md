@@ -60,7 +60,7 @@ The daily scrape is read-only but still depends on FBS availability, access from
 ```sh
 python -m unittest discover -v
 python -m compileall -q bot scripts
-node --test tests/web.test.cjs
+node --test tests/*.test.cjs
 pre-commit run --all-files --show-diff-on-failure
 ```
 
@@ -75,3 +75,5 @@ SAGASU_BROWSER_CHANNEL=chromium python -m bot.scrape_daily --headed --verbose
 ```
 
 This opens the same fresh-profile password-only flow in a visible browser. When authentication fails in an interactive terminal, the browser stays open until you press Enter so you can read the prompt yourself. The command prints fixed login stages and writes an `error_code` and `login_stage` to `status.json`: `missing_credentials`, `rejected`, `interactive_verification`, `timeout`, or `browser_error`. These do not include credentials, URLs, or raw page content. Describe the prompt and share those codes when diagnosing; do not share credentials or verification codes. A successful run assisted by manual interaction does not validate unattended Actions login.
+
+For Microsoft's security-key screen, the scheduled browser installs a hook before login that attaches an AbortController to passkey requests on the Microsoft login hosts. The scraper cancels the pending request and then selects **Use my password** when offered. This rejects the passkey request; it does not supply a passkey or approve MFA. It retries cancellation briefly if the request starts after the screen appears. Chrome password saving is disabled in the scheduled browser profile. The personal Telegram browser is unchanged. See the [WebAuthn abort specification](https://www.w3.org/TR/webauthn-3/#sctn-abortoperation) and [Playwright initialization scripts](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-add-init-script).

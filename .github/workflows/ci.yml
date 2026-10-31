@@ -53,7 +53,7 @@ jobs:
 
       - name: Check static website
         run: |
-          node --test tests/web.test.cjs
+          node --test tests/*.test.cjs
           python -m compileall -q scripts
           python scripts/build_site.py
 

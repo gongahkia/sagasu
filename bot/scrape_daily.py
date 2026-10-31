@@ -41,11 +41,16 @@ async def scrape(*, headed=False, verbose=False):
                     for index, config in enumerate(search_days(), 1):
                         print(f"Reading availability day {index}/7", flush=True)
                         results.append(await client.search(config))
-                except AuthenticationRequired:
+                except AuthenticationRequired as error:
                     if headed and sys.stdin.isatty():
+                        reason = (
+                            f" ({error.code}; {error.stage})"
+                            if isinstance(error, PasswordLoginError)
+                            else ""
+                        )
                         await asyncio.to_thread(
                             input,
-                            "Login stopped. Inspect the Chrome prompt locally, then "
+                            f"Login stopped{reason}. Inspect the Chrome prompt locally, then "
                             "press Enter here to close the browser. Do not share credentials.\n",
                         )
                     raise
