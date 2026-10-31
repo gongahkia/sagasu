@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-10-31T15:28:56.245404+08:00",
+  "updated_at": "2026-10-31T15:44:49.261825+08:00",
   "timezone": "Asia/Singapore",
   "days": [
     {
@@ -1138,8 +1138,13 @@
             },
             {
               "start": "15:30",
-              "end": "17:00",
+              "end": "16:00",
               "status": "free"
+            },
+            {
+              "start": "16:00",
+              "end": "17:00",
+              "status": "booked"
             },
             {
               "start": "17:00",
@@ -3110,6 +3115,16 @@
             },
             {
               "start": "08:30",
+              "end": "10:00",
+              "status": "free"
+            },
+            {
+              "start": "10:00",
+              "end": "14:00",
+              "status": "booked"
+            },
+            {
+              "start": "14:00",
               "end": "17:00",
               "status": "free"
             },
@@ -3130,8 +3145,13 @@
             },
             {
               "start": "08:30",
-              "end": "17:00",
+              "end": "13:00",
               "status": "free"
+            },
+            {
+              "start": "13:00",
+              "end": "17:00",
+              "status": "booked"
             },
             {
               "start": "17:00",
