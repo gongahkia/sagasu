@@ -14,7 +14,7 @@ from bot.fbs_client import (
     SearchResult,
     TimeSlot,
 )
-from bot.password_auth import password_sign_in
+from bot.password_auth import PasswordLoginError, password_sign_in
 from bot.snapshot import SGT, public_snapshot, search_days, write_json
 from scripts.build_site import build
 from scripts.publish_snapshot import merge
@@ -186,6 +186,7 @@ class FakePage:
 class PasswordAuthTest(unittest.IsolatedAsyncioTestCase):
     async def test_alternate_password_route(self):
         page = FakePage()
+        progress = AsyncMock()
         with patch.dict(
             os.environ,
             {
@@ -193,9 +194,13 @@ class PasswordAuthTest(unittest.IsolatedAsyncioTestCase):
                 "SMU_LOGIN_PASSWORD": "fixture-only",
             },
         ):
-            await password_sign_in(page)
+            await password_sign_in(page, progress=progress)
         self.assertEqual(page.state, "done")
         self.assertEqual(page.entered, ["email", "password"])
+        labels = [call.args[0] for call in progress.call_args_list]
+        self.assertIn("login: selecting_password_route", labels)
+        self.assertEqual(labels[-1], "login: authenticated")
+        self.assertNotIn("fixture", str(labels))
 
     async def test_mfa_and_rejected_credentials_fail_without_approval(self):
         for state in ("mfa", "rejected"):
@@ -207,8 +212,12 @@ class PasswordAuthTest(unittest.IsolatedAsyncioTestCase):
                     "SMU_LOGIN_PASSWORD": "fixture-only",
                 },
             ):
-                with self.assertRaises(AuthenticationRequired):
+                with self.assertRaises(PasswordLoginError) as error:
                     await password_sign_in(page)
+            self.assertEqual(
+                error.exception.code,
+                "interactive_verification" if state == "mfa" else "rejected",
+            )
             self.assertEqual(page.state, state)
 
     async def test_missing_credentials(self):
@@ -227,6 +236,17 @@ class PasswordAuthTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(AuthenticationRequired) as error:
                 await password_sign_in(page)
         self.assertNotIn("private", str(error.exception))
+        self.assertEqual(error.exception.code, "browser_error")
+
+    async def test_expired_deadline_reports_a_fixed_code(self):
+        with patch.dict(
+            os.environ, {"SMU_LOGIN_EMAIL": "fixture", "SMU_LOGIN_PASSWORD": "secret"}
+        ), patch(
+            "bot.password_auth._password_flow", AsyncMock(side_effect=TimeoutError())
+        ):
+            with self.assertRaises(PasswordLoginError) as error:
+                await password_sign_in(FakePage())
+        self.assertEqual(error.exception.code, "timeout")
 
 
 class BrowserContractTest(unittest.IsolatedAsyncioTestCase):
@@ -284,6 +304,29 @@ class BrowserContractTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ScraperCommandTest(unittest.TestCase):
+    def test_login_failure_reports_code_and_headed_flags_reach_scraper(self):
+        from bot.scrape_daily import main
+
+        with tempfile.TemporaryDirectory() as directory:
+            mocked = AsyncMock(
+                side_effect=PasswordLoginError(
+                    "interactive_verification", "verification_prompt"
+                )
+            )
+            with (
+                patch(
+                    "sys.argv",
+                    ["scrape_daily", "--headed", "--verbose", "--output", directory],
+                ),
+                patch("bot.scrape_daily.scrape", mocked),
+                patch("builtins.print"),
+            ):
+                self.assertEqual(main(), 1)
+            mocked.assert_awaited_once_with(headed=True, verbose=True)
+            status = json.loads((Path(directory) / "status.json").read_text())
+            self.assertEqual(status["error_code"], "interactive_verification")
+            self.assertEqual(status["login_stage"], "verification_prompt")
+
     def test_failed_attempt_has_sanitized_status_and_no_leftover_snapshot(self):
         from bot.scrape_daily import main
 

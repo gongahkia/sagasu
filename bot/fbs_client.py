@@ -349,7 +349,7 @@ class FBSClient:
             if self.unattended:
                 from .password_auth import password_sign_in
 
-                await password_sign_in(self.page)
+                await password_sign_in(self.page, progress=self.progress)
                 frame = await self._wait_for_frame("frameContent")
                 await frame.locator("input#DateBookingFrom_c1_textDate").wait_for(
                     timeout=30000

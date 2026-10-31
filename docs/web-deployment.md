@@ -65,3 +65,13 @@ pre-commit run --all-files --show-diff-on-failure
 ```
 
 The mocked login tests verify expected route behavior; they do not prove live SMU authentication. Keep real credential tests manual and never capture credentials in test fixtures.
+
+## Diagnose a local login failure
+
+On Fedora, try Playwright's bundled Chromium with `python -m playwright install chromium`, then set `SAGASU_BROWSER_CHANNEL=chromium` locally. The branded Chrome installer only supports selected distributions.
+
+```sh
+SAGASU_BROWSER_CHANNEL=chromium python -m bot.scrape_daily --headed --verbose
+```
+
+This opens the same fresh-profile password-only flow in a visible browser. When authentication fails in an interactive terminal, the browser stays open until you press Enter so you can read the prompt yourself. The command prints fixed login stages and writes an `error_code` and `login_stage` to `status.json`: `missing_credentials`, `rejected`, `interactive_verification`, `timeout`, or `browser_error`. These do not include credentials, URLs, or raw page content. Describe the prompt and share those codes when diagnosing; do not share credentials or verification codes. A successful run assisted by manual interaction does not validate unattended Actions login.
