@@ -8,7 +8,13 @@ from contextlib import contextmanager
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from .fbs_client import AuthenticationRequired, FBSClient, FBS_URL, PROFILE_PATH
+from .fbs_client import (
+    AuthenticationRequired,
+    FBSClient,
+    FBS_URL,
+    LayoutChanged,
+    PROFILE_PATH,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -182,6 +188,33 @@ class ScraperClient(FBSClient):
             raise AuthenticationRequired(
                 "FBS session is not ready; run python -m bot.scraper_login"
             ) from None
+
+    async def _matching_room_names(self, frame):
+        names = await super()._matching_room_names(frame)
+        if not names:
+            return names
+        checkboxes = frame.locator('table#GridResults_gv input[type="checkbox"]')
+        if len(set(names)) != len(names) or await checkboxes.count() != len(names):
+            raise LayoutChanged(
+                "Matching facilities do not have unique selection controls"
+            )
+        async with asyncio.timeout(90):
+            await self.progress("selecting all matching facilities")
+            for checkbox in await checkboxes.all():
+                await checkbox.check(timeout=10000)
+            await self._wait_for_idle(frame)
+        selected = await checkboxes.evaluate_all(
+            "(els) => els.filter(el => el.checked).length"
+        )
+        if selected != len(names) or await super()._matching_room_names(frame) != names:
+            raise LayoutChanged("Not all matching facilities are selected")
+        return names
+
+    async def _read_availability(self, frame, room_names, config):
+        from .scraper_calendar import read_complete_calendar
+
+        await self._wait_for_idle(frame)
+        return await read_complete_calendar(frame, room_names, config)
 
     async def book(self, *args, **kwargs):
         raise RuntimeError("The public scraper cannot book facilities")
