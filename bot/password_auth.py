@@ -21,6 +21,35 @@ LOGIN_FAILURES = {
     "browser_error": "The browser could not complete the password-only login",
 }
 
+PASSWORD_CHOICE = re.compile(
+    r"^\s*(?:use\s+(?:(?:my|your|a)\s+)?password(?:\s+instead)?|password|sign\s+in\s+with\s+(?:(?:my|your|a)\s+)?password)\s*$",
+    re.I,
+)
+ALTERNATE_CHOICE = re.compile(
+    r"^\s*(?:sign\s+in\s+another\s+way|other\s+ways\s+to\s+sign\s+in|use\s+another\s+sign-in\s+method)\s*$",
+    re.I,
+)
+
+
+async def _choose_password_route(page, report):
+    for kind, pattern in (
+        ("password", PASSWORD_CHOICE),
+        ("alternate", ALTERNATE_CHOICE),
+    ):
+        # Accessible names normalize nested text; the text fallback also covers
+        # Microsoft's clickable tiles without a semantic button/link role.
+        for locator in (
+            page.get_by_role("button", name=pattern),
+            page.get_by_role("link", name=pattern),
+            page.get_by_text(pattern),
+        ):
+            for option in await locator.all():
+                if await option.is_visible():
+                    await report("selecting_password_route")
+                    await option.click(timeout=5000)
+                    return kind
+    return None
+
 
 class PasswordLoginError(AuthenticationRequired):
     """Only fixed codes/stages may enter logs or public status JSON."""
@@ -101,7 +130,7 @@ async def _password_flow(page, email, password, report):
             await report("cancelling_security_key_prompt")
             await _cancel_passkey(page, report)
             security_prompt_cancelled = True
-            transition_polls_remaining = 12
+            transition_polls_remaining = 40
             await page.wait_for_timeout(750)
             continue
 
@@ -142,34 +171,15 @@ async def _password_flow(page, email, password, report):
             await page.locator("#idSIButton9:visible").click()
         else:
             # Choose only a password route. Never choose/approve Authenticator.
-            password_option = page.get_by_text(
-                re.compile(
-                    r"^(use (my |your |a )?password( instead)?|password|sign in with (my |your |a )?password)$",
-                    re.I,
-                )
-            )
-            alternate = page.get_by_text(
-                re.compile(
-                    r"^(sign in another way|other ways to sign in|use another sign-in method)$",
-                    re.I,
-                )
-            )
-            clicked = False
+            clicked = None
             if alternate_attempts < 3:
-                for options in (password_option, alternate):
-                    for option in await options.all():
-                        if await option.is_visible():
-                            await report("selecting_password_route")
-                            await option.click()
-                            if options is password_option:
-                                password_submitted = False
-                                security_prompt_cancelled = False
-                            alternate_attempts += 1
-                            transition_polls_remaining = 12
-                            clicked = True
-                            break
-                    if clicked:
-                        break
+                clicked = await _choose_password_route(page, report)
+                if clicked:
+                    if clicked == "password":
+                        password_submitted = False
+                        security_prompt_cancelled = False
+                    alternate_attempts += 1
+                    transition_polls_remaining = 40
             if not clicked and any(
                 text in body
                 for text in (

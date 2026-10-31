@@ -14,7 +14,7 @@ from bot.fbs_client import (
     SearchResult,
     TimeSlot,
 )
-from bot.password_auth import PasswordLoginError, password_sign_in
+from bot.password_auth import PASSWORD_CHOICE, PasswordLoginError, password_sign_in
 from bot.snapshot import SGT, public_snapshot, search_days, write_json
 from scripts.build_site import build
 from scripts.publish_snapshot import merge
@@ -141,7 +141,7 @@ class FakeLocator:
     async def fill(self, value):
         self.page.entered.append(self.kind)
 
-    async def click(self):
+    async def click(self, **kwargs):
         transitions = {
             "email": "alternate",
             "alternate": "method",
@@ -191,11 +191,30 @@ class FakePage:
             return FakeLocator(self, "password_option")
         return FakeLocator(self, "missing")
 
+    def get_by_role(self, role, *, name):
+        return self.get_by_text(name)
+
     async def wait_for_timeout(self, duration):
         pass
 
 
 class PasswordAuthTest(unittest.IsolatedAsyncioTestCase):
+    def test_password_tile_whitespace_and_nested_text_labels(self):
+        for label in (
+            "Use my password",
+            "\n Use my password \n",
+            "Use\n my\n password",
+            "Use\u00a0my\u00a0password",
+            "Use your password instead",
+        ):
+            with self.subTest(label=label):
+                self.assertIsNotNone(PASSWORD_CHOICE.fullmatch(label))
+        self.assertIsNone(
+            PASSWORD_CHOICE.fullmatch(
+                "Approve a request on my Microsoft Authenticator app"
+            )
+        )
+
     async def test_pending_passkey_request_is_aborted_without_keyboard_input(self):
         page = FakePage(state="security_key")
 
