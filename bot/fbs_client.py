@@ -260,10 +260,18 @@ class FBSClient:
         interactive: bool = True,
         headless: bool = False,
         progress: ProgressCallback | None = None,
+        keep_alive: bool = True,
+        profile_path: Path | None = None,
+        unattended: bool = False,
+        strict_availability: bool = False,
     ) -> None:
         self.interactive = interactive
         self.headless = headless
         self.progress = progress or _noop_progress
+        self.keep_alive = keep_alive
+        self.profile_path = profile_path or PROFILE_PATH
+        self.unattended = unattended
+        self.strict_availability = strict_availability
         self._playwright = None
         self.context: BrowserContext | None = None
         self.page: Page | None = None
@@ -273,7 +281,7 @@ class FBSClient:
         global _SHARED_CONTEXT, _SHARED_PLAYWRIGHT
         await _BROWSER_LOCK.acquire()
         try:
-            if _SHARED_CONTEXT is not None:
+            if self.keep_alive and _SHARED_CONTEXT is not None:
                 try:
                     self.context = _SHARED_CONTEXT
                     self._playwright = _SHARED_PLAYWRIGHT
@@ -290,10 +298,10 @@ class FBSClient:
                 except Exception:
                     _SHARED_CONTEXT = None
                     _SHARED_PLAYWRIGHT = None
-            PROFILE_PATH.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self.profile_path.mkdir(parents=True, exist_ok=True, mode=0o700)
             self._playwright = await async_playwright().start()
             self.context = await self._playwright.chromium.launch_persistent_context(
-                str(PROFILE_PATH),
+                str(self.profile_path),
                 channel=os.getenv("SAGASU_BROWSER_CHANNEL", "chrome"),
                 headless=self.headless,
                 viewport={"width": 1440, "height": 1000},
@@ -303,17 +311,31 @@ class FBSClient:
                 if self.context.pages
                 else await self.context.new_page()
             )
-            _SHARED_PLAYWRIGHT = self._playwright
-            _SHARED_CONTEXT = self.context
+            if self.keep_alive:
+                _SHARED_PLAYWRIGHT = self._playwright
+                _SHARED_CONTEXT = self.context
             return self
-        except Exception:
-            _BROWSER_LOCK.release()
+        except BaseException:
+            try:
+                if self.context:
+                    await self.context.close()
+                if self._playwright:
+                    await self._playwright.stop()
+            finally:
+                _BROWSER_LOCK.release()
             raise
 
     async def __aexit__(self, exc_type, exc, traceback) -> None:
-        # Keep the authenticated FBS window alive for the bot process lifetime.
-        # This avoids triggering Microsoft authentication for every command.
-        _BROWSER_LOCK.release()
+        try:
+            if not self.keep_alive:
+                try:
+                    if self.context:
+                        await self.context.close()
+                finally:
+                    if self._playwright:
+                        await self._playwright.stop()
+        finally:
+            _BROWSER_LOCK.release()
 
     async def ensure_authenticated(self) -> tuple[Page, Frame]:
         if not self.page:
@@ -324,6 +346,15 @@ class FBSClient:
         try:
             await self.page.wait_for_selector("iframe#frameBottom", timeout=15000)
         except Exception as error:
+            if self.unattended:
+                from .password_auth import password_sign_in
+
+                await password_sign_in(self.page)
+                frame = await self._wait_for_frame("frameContent")
+                await frame.locator("input#DateBookingFrom_c1_textDate").wait_for(
+                    timeout=30000
+                )
+                return self.page, frame
             if not self.interactive or self.headless:
                 raise AuthenticationRequired(
                     "FBS session expired; run an interactive login first"
@@ -727,6 +758,8 @@ class FBSClient:
                 room_headers[name] = box["y"] + box["height"] / 2
 
         blocked_by_room: dict[str, list[TimeSlot]] = {room: [] for room in room_names}
+        if self.strict_availability and set(room_headers) != set(room_names):
+            raise LayoutChanged("Not all matching rooms have readable calendar rows")
         events = frame.locator(
             "div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0"
         )
@@ -734,6 +767,8 @@ class FBSClient:
             title = await event.get_attribute("title")
             box = await event.bounding_box()
             slot = parse_event_title(title or "")
+            if self.strict_availability and (not box or not slot or not room_headers):
+                raise LayoutChanged("Calendar contains an unreadable availability event")
             if not box or not slot or not room_headers:
                 continue
             event_y = box["y"] + box["height"] / 2
