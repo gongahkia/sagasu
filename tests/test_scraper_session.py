@@ -1,4 +1,6 @@
+import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -10,6 +12,7 @@ from bot.fbs_client import AuthenticationRequired
 from bot.scraper_session import (
     ProfileBusy,
     ScraperClient,
+    SessionStorageError,
     profile_lock,
     scraper_profile,
 )
@@ -60,6 +63,7 @@ class SessionTest(unittest.IsolatedAsyncioTestCase):
         frame.locator.return_value.wait_for = AsyncMock()
         page.frame.return_value = frame if ready else None
         client.page = page
+        client._save_session = AsyncMock()
         return client
 
     async def test_readiness_requires_search_controls(self):
@@ -161,3 +165,81 @@ class ScrapeTest(unittest.IsolatedAsyncioTestCase):
                 client.__aexit__.assert_awaited_once()
             with profile_lock(directory):
                 pass
+
+
+class SessionStorageTest(unittest.IsolatedAsyncioTestCase):
+    async def test_only_session_cookies_are_saved_atomically_and_privately(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = ScraperClient(profile_path=Path(directory))
+            client.context = AsyncMock()
+            session_cookie = {
+                "name": "fixture_session",
+                "value": "synthetic-only",
+                "domain": "example.invalid",
+                "path": "/",
+                "expires": -1,
+            }
+            client.context.cookies.return_value = [
+                session_cookie,
+                {**session_cookie, "name": "persistent", "expires": 2000000000},
+            ]
+            await client._save_session()
+            self.assertEqual(
+                json.loads(client.session_path.read_text()), [session_cookie]
+            )
+            self.assertEqual(stat.S_IMODE(client.session_path.stat().st_mode), 0o600)
+            self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+            # A refreshed server session replaces the saved set; removed cookies stay removed.
+            client.context.cookies.return_value = []
+            await client._save_session()
+            self.assertEqual(json.loads(client.session_path.read_text()), [])
+
+    async def test_save_failure_does_not_replace_previous_private_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = ScraperClient(profile_path=Path(directory))
+            client.context = AsyncMock()
+            client.context.cookies.return_value = [{"expires": -1}]
+            client.session_path.write_text("[]")
+            with patch(
+                "bot.scraper_session.json.dump", side_effect=OSError("private content")
+            ):
+                with self.assertRaises(SessionStorageError) as error:
+                    await client._save_session()
+            self.assertNotIn("private content", str(error.exception))
+            self.assertEqual(client.session_path.read_text(), "[]")
+            self.assertEqual(list(Path(directory).glob("*.tmp")), [])
+
+    async def test_unreadable_saved_state_fails_scraping_and_closes_browser(self):
+        from bot.fbs_client import FBSClient
+
+        with tempfile.TemporaryDirectory() as directory:
+            client = ScraperClient(profile_path=Path(directory))
+            client.session_path.write_text("invalid private fixture")
+            with (
+                patch.object(FBSClient, "__aenter__", AsyncMock()),
+                patch.object(FBSClient, "__aexit__", AsyncMock()) as close,
+            ):
+                with self.assertRaises(AuthenticationRequired):
+                    await client.__aenter__()
+                close.assert_awaited_once()
+
+    async def test_manual_login_can_repair_unreadable_saved_state(self):
+        from bot.fbs_client import FBSClient
+
+        with tempfile.TemporaryDirectory() as directory:
+            client = ScraperClient(profile_path=Path(directory), manual_login=True)
+            client.session_path.write_text("invalid private fixture")
+            with patch.object(FBSClient, "__aenter__", AsyncMock()):
+                self.assertIs(await client.__aenter__(), client)
+
+    async def test_saved_cookies_are_restored_before_navigation(self):
+        from bot.fbs_client import FBSClient
+
+        with tempfile.TemporaryDirectory() as directory:
+            client = ScraperClient(profile_path=Path(directory))
+            client.context = AsyncMock()
+            cookies = [{"name": "fixture", "value": "synthetic-only", "expires": -1}]
+            client.session_path.write_text(json.dumps(cookies))
+            with patch.object(FBSClient, "__aenter__", AsyncMock()):
+                self.assertIs(await client.__aenter__(), client)
+            client.context.add_cookies.assert_awaited_once_with(cookies)
