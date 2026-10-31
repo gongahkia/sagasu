@@ -2,69 +2,51 @@
 
 import argparse
 import asyncio
-import os
-import sys
 from datetime import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from dotenv import load_dotenv
 
-from .fbs_client import AuthenticationRequired, FBSClient, LayoutChanged
+from .fbs_client import AuthenticationRequired, LayoutChanged
+from .scraper_session import (
+    ROOT,
+    ProfileBusy,
+    ScraperClient,
+    profile_lock,
+    scraper_profile,
+)
 from .password_auth import PasswordLoginError
 from .snapshot import SGT, public_snapshot, search_days, write_json
 
 
 async def scrape(*, headed=False, verbose=False):
-    if not os.environ.get("SMU_LOGIN_EMAIL", "").strip() or not os.environ.get(
-        "SMU_LOGIN_PASSWORD"
-    ):
-        raise PasswordLoginError("missing_credentials")
-
     async def progress(stage):
         if verbose:
             print(f"Progress: {stage}", flush=True)
 
     results = []
-    with TemporaryDirectory(prefix="sagasu-browser-") as directory:
+    profile = scraper_profile()
+    with profile_lock(profile):
         async with asyncio.timeout(1200):
-            async with FBSClient(
-                interactive=False,
+            async with ScraperClient(
                 headless=not headed,
                 progress=progress,
-                keep_alive=False,
-                profile_path=Path(directory),
-                unattended=True,
-                strict_availability=True,
+                profile_path=profile,
             ) as client:
-                try:
-                    for index, config in enumerate(search_days(), 1):
-                        print(f"Reading availability day {index}/7", flush=True)
-                        results.append(await client.search(config))
-                except AuthenticationRequired as error:
-                    if headed and sys.stdin.isatty():
-                        reason = (
-                            f" ({error.code}; {error.stage})"
-                            if isinstance(error, PasswordLoginError)
-                            else ""
-                        )
-                        await asyncio.to_thread(
-                            input,
-                            f"Login stopped{reason}. Inspect the Chrome prompt locally, then "
-                            "press Enter here to close the browser. Do not share credentials.\n",
-                        )
-                    raise
+                for index, config in enumerate(search_days(), 1):
+                    print(f"Reading availability day {index}/7", flush=True)
+                    results.append(await client.search(config))
     return public_snapshot(results)
 
 
 def main():
-    load_dotenv()
+    load_dotenv(ROOT / ".env")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("artifacts/daily"))
     parser.add_argument(
         "--headed",
         action="store_true",
-        help="Watch login in a local browser; pause on authentication failure in a terminal",
+        help="Watch the saved-session scrape; does not wait for manual login",
     )
     parser.add_argument(
         "--verbose",
@@ -72,15 +54,20 @@ def main():
         help="Print fixed progress labels, never page text or credentials",
     )
     args = parser.parse_args()
-    # Never allow a leftover output file to masquerade as this run's success.
+    # Replace only after a complete scrape; failures retain the last good data.
     snapshot_path = args.output / "snapshot.json"
-    snapshot_path.unlink(missing_ok=True)
     status = {"attempted_at": datetime.now(SGT).isoformat()}
     exit_code = 0
     try:
         snapshot = asyncio.run(scrape(headed=args.headed, verbose=args.verbose))
         write_json(snapshot_path, snapshot)
         status.update(status="ok", message="Daily availability refresh completed.")
+    except ProfileBusy:
+        status.update(
+            status="failed",
+            message="Scraper profile is busy. Showing the last successful snapshot.",
+        )
+        exit_code = 1
     except PasswordLoginError as error:
         status.update(
             status="authentication_required",
@@ -91,6 +78,7 @@ def main():
         print(f"Login failure: {error.code}; step: {error.stage}", flush=True)
         exit_code = 1
     except AuthenticationRequired:
+        print("Renew the local session with python -m bot.scraper_login", flush=True)
         status.update(
             status="authentication_required",
             message="SMU sign-in needs attention. Showing the last successful snapshot.",

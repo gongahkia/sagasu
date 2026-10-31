@@ -1,79 +1,78 @@
 # Public availability website
 
-Sagasu's website publishes a read-only daily snapshot of campus-wide group study rooms for today plus six days, 08:00–22:00 Singapore time. Visitors filter this snapshot locally; the website never logs visitors into SMU or submits bookings. The existing Telegram bot remains a separate personal deployment; see the website's **Your own bot** guide.
+Sagasu publishes a read-only daily snapshot of campus-wide group study rooms for today plus six days, 08:00–22:00 Asia/Singapore. The website filters public JSON locally. Booking remains in the separate personal Telegram bot with explicit confirmation.
 
-## Run locally
+## Local login and first live scrape
 
-Use Python 3.12 with the repository's requirements installed in a virtual environment. No Node build or web framework is needed.
+Use Python 3.12 or newer and the repository requirements in a virtual environment. Run commands from the repository root:
 
 ```sh
-python scripts/build_site.py
-python -m http.server 8000 --directory dist
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m bot.scraper_login
 ```
 
-Open `http://localhost:8000`. Until a scrape succeeds, the site displays an honest empty state. There is no generated sample availability.
+Chrome is the default browser. To use bundled Chromium (including on Fedora), install it and set the channel for **both** login and scraping:
 
-## Validate unattended login first
+```sh
+.venv/bin/python -m playwright install chromium
+export SAGASU_BROWSER_CHANNEL=chromium
+.venv/bin/python -m bot.scraper_login
+```
 
-The scheduled client uses a fresh temporary Chrome profile and a bounded password-only sign-in flow. It recognizes standard Microsoft email/password fields, SMU's federated username/password form, and password alternatives under **Sign in another way**. These selectors still need verification against your actual SMU login and GitHub's runner environment. The user's successful local password-only login does not guarantee cloud-runner access.
+Complete Microsoft login and MFA in the browser. If a native passkey request appears, cancel it yourself and select the appropriate login method. Choosing **Use my password** does not remove MFA. No SMU password environment variable is required or read by this authentication path. The scraper does not automatically enter a username, password, approve MFA, or record authentication screenshots. Do not paste credentials or codes into chat or the terminal.
 
-1. Install Chrome with `python -m playwright install chrome`.
-2. Set `SMU_LOGIN_EMAIL` and `SMU_LOGIN_PASSWORD` privately in your local `.env` or environment. Do not send them in chat, place them in command arguments, or commit them.
-3. Run `python -m bot.scrape_daily`.
-4. A successful run writes `artifacts/daily/snapshot.json` and `status.json`. A failed run writes only a sanitized status. For a successful local preview run `python scripts/build_site.py --data artifacts/daily`.
-5. Confirm the published room names/times against FBS. Then validate the same login with a manually dispatched GitHub workflow.
+The login command waits up to ten minutes (override with `--timeout SECONDS`, maximum 1800), verifies visible FBS search controls in the FBS content frame, closes the browser, and saves its session. A navigation shell alone does not count as success. Closing the browser or reaching the deadline fails login. Pressing Enter is not required and does not resume a failed login.
 
-If the route requests MFA, device approval, additional registration, or blocks the runner, the job fails. It does not approve a prompt, circumvent an actual second factor, export a browser session, or upload login screenshots. Confirm the current supported sign-in route locally before adjusting selectors. Fully unattended operation remains unverified until a GitHub-hosted run succeeds.
+The dedicated default profile is `artifacts/scraper-profile`, separate from the Telegram bot's `bot/.fbs-profile`. `artifacts/` is ignored by Git. An optional `SAGASU_SCRAPER_PROFILE` can point outside the repository or under its ignored `artifacts/` directory; it must not overlap the bot profile. This directory contains private authentication state: never commit or upload it. A nonblocking OS file lock prevents login and scraper processes from opening it concurrently. The kernel releases the lock after a process exits; do not delete the lock file. Chrome also protects against opening a profile already in use.
 
-## Configure GitHub
+After login succeeds:
 
-1. In repository **Settings → Secrets and variables → Actions**, add repository secrets `SMU_LOGIN_EMAIL` and `SMU_LOGIN_PASSWORD`.
-2. In **Settings → Pages**, select **GitHub Actions** as the build and deployment source. Ensure Actions is allowed to write repository contents; branch rules must permit the workflow to maintain `availability-data`.
-3. Keep your normal development branch as the default branch. Never make `availability-data` the default branch.
-4. Push the implementation to that default branch and open **Actions → Daily availability and website → Run workflow**. A push of website files deploys the site without using SMU secrets; manual dispatch performs the first scrape.
-5. Verify the run and its Pages deployment URL. Review the seven-day data and compare it to FBS before advertising the site.
-6. Enable GitHub Actions failure notifications in your GitHub notification preferences.
+```sh
+.venv/bin/python -m bot.scrape_daily --verbose
+.venv/bin/python scripts/build_site.py --data artifacts/daily
+.venv/bin/python -m http.server 8000 --directory dist
+```
 
-The workflow runs at `22:17 UTC` (06:17 the following day in Singapore), with a 30-minute job limit and serialized runs. GitHub scheduled workflows are best effort: runs can be delayed or dropped, and public-repository schedules can be disabled after inactivity. Dispatch manually when needed. See [GitHub's schedule documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
+The scraper reuses the saved profile, defaults to headless, and never submits credentials or enters the booking path. `--headed` shows the scrape without pausing for login. Missing/expired sessions fail on a login redirect; FBS readiness waits are bounded to 90 seconds per search and the entire seven-day scrape to 20 minutes. Renew sessions with `python -m bot.scraper_login`, then retry once. Do not repeatedly submit credentials or run the old fresh-profile/password route.
 
-The workflow only runs on the default branch and does not expose credentials to pull-request workflows. Secrets are scoped to the scrape step. No booking code is called by the scheduled entrypoint. Credentials are not needed in the browser, Pages settings, Telegram, or static site build.
+Success writes `snapshot.json` and `status.json` to `artifacts/daily` (override with `--output`). Failure exits nonzero and writes a fixed, sanitized failure status while retaining the previous complete snapshot. Check the exit status and `status.json`; an existing snapshot does not prove the current attempt succeeded.
+
+Before enabling publishing or scheduling, confirm a **real seven-day scrape** succeeds and compare room coverage and intervals against live FBS. The strict scraper rejects unreadable events, missing calendar rows and result pagination instead of assuming rooms are free. These conditions must be checked against live FBS after MFA; mocked/synthetic tests do not validate campus-wide completeness. Do not publish an incomplete scrape by disabling strict checks.
+
+## Static GitHub Pages publishing
+
+GitHub Actions no longer logs into SMU, installs a browser, or reads SMU password secrets. Remove obsolete `SMU_LOGIN_EMAIL` and `SMU_LOGIN_PASSWORD` repository secrets if previously configured. Do not attach a self-hosted Actions runner to this public repository.
+
+The `Publish availability website` workflow checks out the default branch, fetches the `availability-data` branch's public `snapshot.json` and `status.json` when present, and builds Pages. If the data branch does not exist yet, it uses the honest empty state in `web/data`. Select **GitHub Actions** as the Pages source in repository settings. Keep the development branch as the default branch. If the `github-pages` environment restricts deployment branches, allow both the default branch and `availability-data` (data-push runs retain that event ref).
+
+Website pushes, public-data pushes, manual dispatch, and a daily 22:17 UTC rebuild can trigger deployment. The daily rebuild is only a static publish fallback; it does not refresh FBS data. A push of `availability-data` checks out website code from the default branch. Git credentials that suppress workflow triggers (such as Actions' own token) require a manual dispatch or the scheduled rebuild.
+
+Local sanitized-data push automation and scheduler installation are deferred until the first successful live scrape. Only the two public JSON files should reach `availability-data`. Never push an entire working directory, browser profile, `.env`, raw FBS results, or diagnostics. `scripts/publish_snapshot.py` remains available to merge an attempt directory into retained public data: only an `ok` attempt replaces the snapshot; failures update status while preserving the snapshot. The destination directory must already exist.
+
+## Local scheduling gate
+
+This checkout was inspected on macOS with `launchctl` available. After live validation, use a user LaunchAgent with absolute paths, a working directory at this repository, and an explicit browser channel; launchd does not inherit interactive shell configuration. Keep sanitized-data publishing in that local job, separate from Actions. A sleeping/offline Mac cannot guarantee on-time scraping. On supported Linux hosts, prefer a user systemd timer with persistence; detect availability before installing one. Do not install a scheduler until both live scraping and the public-data push have been verified.
 
 ## Data and failures
 
-The workflow retains only `snapshot.json` and `status.json` on `availability-data`, then builds and deploys the static website using the Pages artifact/deployment actions. A complete successful seven-day scrape replaces the snapshot. A failure updates the attempt status but retains the previous complete snapshot. The workflow still reports failure after deploying the updated status so GitHub notifications work.
+Public data retains the existing allowlist: room names, dates, interval times/statuses, and timestamps. Event descriptions, booker identities, emails, authentication state and raw FBS data are excluded. Treat the site and data branch as public.
 
-Public data includes room names, dates, free/busy intervals, and timestamps. Raw event descriptions, names of bookers, emails, credentials, browser profiles, and login diagnostics are not published. Treat both the Pages site and data branch as public.
-
-- **No successful scrape:** the website shows the first-run empty state.
-- **Valid result with no free rooms:** the site shows no matching rooms, without labelling the scrape a failure.
-- **Authentication failure:** check secret names/values and test the password route locally. Do not repeatedly retry a rejected password.
-- **Layout failure:** the strict scraper stops if events cannot be parsed or matching room rows cannot be read. It does not infer availability from unreadable events. Pagination that prevents complete room discovery must be supported before publishing a campus-wide result.
-- **Partial scrape:** no new snapshot is published. The retained data stays intact.
-- **Old snapshot:** after 36 hours the website marks the data stale. Failed workflow attempts show a separate status and timestamp.
-- **Runner/dependency/publishing failure:** the workflow fails; the already deployed website stays available and becomes stale based on its timestamp. No attempt status can be published if infrastructure fails before the scraper runs.
-- **Pages permission failure:** confirm Pages uses Actions and the `github-pages` environment permits the default branch.
-
-The daily scrape is read-only but still depends on FBS availability, access from GitHub runners, and SMU's authentication policies. The website labels results as snapshots and directs users to check FBS before booking.
+- **No successful scrape:** the site shows an empty state, with no invented availability.
+- **No matching/free rooms:** a valid complete result may be empty.
+- **Authentication failure:** renew the dedicated local session manually, then retry.
+- **Layout failure/partial scrape:** retain the last complete snapshot; investigate live DOM completeness before publishing.
+- **Old snapshot:** the frontend marks data stale after 36 hours, independently of redeployment.
+- **Refresh failure:** a separate status/timestamp reports failure while keeping the last successful data.
+- **Network/publishing failure:** the deployed site remains available and becomes stale; publishing failures may prevent a new failure status from reaching it.
 
 ## Checks
 
 ```sh
-python -m unittest discover -v
-python -m compileall -q bot scripts
+.venv/bin/python -m unittest discover -v
 node --test tests/*.test.cjs
-pre-commit run --all-files --show-diff-on-failure
+.venv/bin/python -m compileall -q bot scripts
+.venv/bin/pre-commit run --all-files --show-diff-on-failure
 ```
 
-The mocked login tests verify expected route behavior; they do not prove live SMU authentication. Keep real credential tests manual and never capture credentials in test fixtures.
-
-## Diagnose a local login failure
-
-On Fedora, try Playwright's bundled Chromium with `python -m playwright install chromium`, then set `SAGASU_BROWSER_CHANNEL=chromium` locally. The branded Chrome installer only supports selected distributions.
-
-```sh
-SAGASU_BROWSER_CHANNEL=chromium python -m bot.scrape_daily --headed --verbose
-```
-
-This opens the same fresh-profile password-only flow in a visible browser. When authentication fails in an interactive terminal, the browser stays open until you press Enter so you can read the prompt yourself. The command prints fixed login stages and writes an `error_code` and `login_stage` to `status.json`: `missing_credentials`, `rejected`, `interactive_verification`, `timeout`, or `browser_error`. These do not include credentials, URLs, or raw page content. Describe the prompt and share those codes when diagnosing; do not share credentials or verification codes. A successful run assisted by manual interaction does not validate unattended Actions login.
-
-For Microsoft's security-key screen, the scheduled browser installs a hook before login that attaches an AbortController to passkey requests on the Microsoft login hosts. The scraper cancels the pending request and then selects **Use my password** when offered. This rejects the passkey request; it does not supply a passkey or approve MFA. It retries cancellation briefly if the request starts after the screen appears. Chrome password saving is disabled in the scheduled browser profile. The personal Telegram browser is unchanged. See the [WebAuthn abort specification](https://www.w3.org/TR/webauthn-3/#sctn-abortoperation) and [Playwright initialization scripts](https://playwright.dev/python/docs/api/class-browsercontext#browser-context-add-init-script).
+Automated login tests verify code paths only. Live authentication, saved-session reuse, seven-day coverage and scheduled publishing require separate verification on the owner's computer.

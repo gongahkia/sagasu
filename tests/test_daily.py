@@ -431,12 +431,13 @@ class ScraperCommandTest(unittest.TestCase):
             self.assertEqual(status["error_code"], "interactive_verification")
             self.assertEqual(status["login_stage"], "verification_prompt")
 
-    def test_failed_attempt_has_sanitized_status_and_no_leftover_snapshot(self):
+    def test_failed_attempt_has_sanitized_status_and_retains_snapshot(self):
         from bot.scrape_daily import main
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            write_json(root / "snapshot.json", {"old": "incomplete"})
+            original = public_snapshot(SnapshotTest().results())
+            write_json(root / "snapshot.json", original)
             with (
                 patch("sys.argv", ["scrape_daily", "--output", directory]),
                 patch(
@@ -446,7 +447,7 @@ class ScraperCommandTest(unittest.TestCase):
                 patch("builtins.print"),
             ):
                 self.assertEqual(main(), 1)
-            self.assertFalse((root / "snapshot.json").exists())
+            self.assertEqual(json.loads((root / "snapshot.json").read_text()), original)
             status = json.loads((root / "status.json").read_text())
             self.assertEqual(status["status"], "layout_changed")
             self.assertNotIn("private", json.dumps(status))
