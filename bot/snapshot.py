@@ -33,18 +33,26 @@ def public_snapshot(results, *, now=None):
         "timezone": "Asia/Singapore",
         "days": [
             {
-                "date": datetime.strptime(result.config.date, "%d-%b-%Y").date().isoformat(),
+                "date": datetime.strptime(result.config.date, "%d-%b-%Y")
+                .date()
+                .isoformat(),
                 "start_time": result.config.start_time,
                 "end_time": result.config.end_time,
                 "rooms": [
                     {
                         "name": room.name,
                         "timeslots": [
-                            {"start": slot.start, "end": slot.end, "status": slot.status}
+                            {
+                                "start": slot.start,
+                                "end": slot.end,
+                                "status": slot.status,
+                            }
                             for slot in room.timeslots
                         ],
                     }
-                    for room in sorted(result.rooms, key=lambda item: item.name.casefold())
+                    for room in sorted(
+                        result.rooms, key=lambda item: item.name.casefold()
+                    )
                 ],
             }
             for result in results

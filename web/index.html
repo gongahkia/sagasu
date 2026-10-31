@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Daily SMU group study room availability and personal Sagasu Telegram bot setup.">
+  <title>Sagasu — SMU room availability</title>
+  <link rel="icon" href="assets/icon_no_words.jpg">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="shell"><a class="brand" href="index.html">Sagasu</a><nav aria-label="Main navigation"><a href="#availability">Availability</a><a href="setup.html">Telegram setup</a><a href="https://github.com/gongahkia/sagasu">GitHub</a></nav></header>
+  <main class="shell">
+    <h1>SMU room availability</h1>
+    <p>Group study rooms across campus, for the next seven days. Daily snapshots cover 08:00–22:00 Singapore time.</p>
+    <section id="availability" aria-label="Room availability">
+      <div class="status-panel" role="status" aria-live="polite"><span class="dot" id="status-dot"></span><div><strong id="freshness">Loading availability…</strong><p id="update-detail">Daily snapshots · All times in Singapore (SGT)</p></div></div>
+      <p>A daily snapshot, not live availability. Confirm availability in <a href="https://fbs.intranet.smu.edu.sg/home" target="_blank" rel="noopener noreferrer">SMU FBS</a> before booking. This website does not submit bookings.</p>
+      <form id="filters" class="filters" aria-label="Filter available rooms">
+        <label>Date<select id="date" required disabled><option value="">Awaiting data</option></select></label>
+        <label>From<select id="start" required></select></label>
+        <label>Until<select id="end" required></select></label>
+        <label class="room-filter">Room name<input id="room" type="search" placeholder="e.g. SCIS, library…" autocomplete="off"></label>
+        <button type="submit">Find rooms</button>
+      </form>
+      <div class="results-heading"><h2 id="results-count">Available rooms</h2><span>Free for your whole session</span></div>
+      <p id="filter-error" class="error" role="alert" hidden></p>
+      <div id="results" class="results" aria-live="polite"><div class="empty"><h3>Loading results…</h3><p>Room availability will appear here.</p></div></div>
+    </section>
+    <section class="telegram" id="telegram"><h2>Use Sagasu in Telegram</h2><p>Deploy a personal bot using your own Telegram token and SMU session. Set filters, search on demand, select or auto-pick a room, then review and explicitly confirm any booking.</p><p>Your personal bot uses a private local Chrome profile for Microsoft login and MFA. Your credentials are separate from this public website.</p><a class="button" href="setup.html">Personal deployment instructions</a></section>
+  </main>
+  <footer class="shell"><p>A community project for SMU. Not an official university service.</p></footer>
+</body>
+</html>

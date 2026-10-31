@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import os
 from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,6 +14,10 @@ from .snapshot import SGT, public_snapshot, search_days, write_json
 
 
 async def scrape():
+    if not os.environ.get("SMU_LOGIN_EMAIL", "").strip() or not os.environ.get(
+        "SMU_LOGIN_PASSWORD"
+    ):
+        raise AuthenticationRequired("Scheduled login credentials are missing")
     results = []
     with TemporaryDirectory(prefix="sagasu-browser-") as directory:
         async with asyncio.timeout(1200):
@@ -45,13 +50,22 @@ def main():
         write_json(snapshot_path, snapshot)
         status.update(status="ok", message="Daily availability refresh completed.")
     except AuthenticationRequired:
-        status.update(status="authentication_required", message="SMU sign-in needs attention. Showing the last successful snapshot.")
+        status.update(
+            status="authentication_required",
+            message="SMU sign-in needs attention. Showing the last successful snapshot.",
+        )
         exit_code = 1
     except LayoutChanged:
-        status.update(status="layout_changed", message="FBS availability could not be read reliably. Showing the last successful snapshot.")
+        status.update(
+            status="layout_changed",
+            message="FBS availability could not be read reliably. Showing the last successful snapshot.",
+        )
         exit_code = 1
     except Exception:
-        status.update(status="failed", message="The daily refresh failed. Showing the last successful snapshot.")
+        status.update(
+            status="failed",
+            message="The daily refresh failed. Showing the last successful snapshot.",
+        )
         exit_code = 1
     write_json(args.output / "status.json", status)
     # Fixed messages only: never print exception text, page content, or credentials.

@@ -77,10 +77,16 @@ async def _password_flow(page, email, password):
         else:
             # Choose only a password route. Never choose/approve Authenticator.
             password_option = page.get_by_text(
-                re.compile(r"^(use (your |a )?password( instead)?|password|sign in with (your |a )?password)$", re.I)
+                re.compile(
+                    r"^(use (your |a )?password( instead)?|password|sign in with (your |a )?password)$",
+                    re.I,
+                )
             )
             alternate = page.get_by_text(
-                re.compile(r"^(sign in another way|other ways to sign in|use another sign-in method)$", re.I)
+                re.compile(
+                    r"^(sign in another way|other ways to sign in|use another sign-in method)$",
+                    re.I,
+                )
             )
             clicked = False
             if alternate_attempts < 3:

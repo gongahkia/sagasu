@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Deploy your own Sagasu Telegram bot with your own SMU session.">
+  <title>Your own Sagasu — Telegram setup</title>
+  <link rel="icon" href="assets/icon_no_words.jpg"><link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="header shell"><a class="brand" href="index.html"><img src="assets/icon_no_words.jpg" alt="" width="38" height="38">sagasu<span>探す</span></a><nav aria-label="Main navigation"><a href="index.html#availability">Find a room ↗</a></nav></header>
+  <main class="guide shell">
+    <div class="eyebrow">YOUR OWN LITTLE CAMPUS COMPANION</div>
+    <h1>Bring Sagasu<br>to <em>your chat.</em></h1>
+    <p>The public website shows daily, read-only snapshots. Your personal Telegram bot can search on demand and book a room after you review and explicitly confirm it.</p>
+    <div class="callout">You run your own instance with your own Telegram token and SMU session. Microsoft password entry and MFA happen in your local Chrome window. Keep the computer running while you use the bot.</div>
+    <h2>01 / Get the essentials</h2>
+    <p>You need Python 3.12, Git, Google Chrome, a Telegram account, and an SMU account with FBS access. In Telegram, open <a href="https://t.me/BotFather">@BotFather</a>, send <code>/newbot</code>, and keep the returned token private. Find your numeric Telegram user ID using <a href="https://t.me/userinfobot">@userinfobot</a>.</p>
+    <h2>02 / Install Sagasu</h2>
+    <pre><code>git clone https://github.com/gongahkia/sagasu.git
+cd sagasu
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chrome
+cp .env.example .env</code></pre>
+    <p>On Windows, activate with <code>.venv\Scripts\activate</code>. Installing the Playwright Chrome channel may install or update Google Chrome.</p>
+    <h2>03 / Make it personal</h2>
+    <p>Edit your local <code>.env</code>. Set <code>BOT_TOKEN</code> to the token from BotFather and <code>TELEGRAM_OWNER_ID</code> to your numeric user ID. Optionally set <code>SMU_LOGIN_EMAIL</code> to prefill your username. The personal bot does not need a saved SMU password.</p>
+    <pre><code>BOT_TOKEN=your-private-bot-token
+TELEGRAM_OWNER_ID=your-numeric-user-id
+SMU_LOGIN_EMAIL=your.name@smu.edu.sg</code></pre>
+    <p>Keep <code>.env</code>, <code>bot/.fbs-profile/</code>, and <code>bot/bot_state.pickle</code> private. Never commit or share them. The browser profile contains your signed-in session.</p>
+    <h2>04 / Find your first room</h2>
+    <pre><code>python -m bot.bot</code></pre>
+    <ol>
+      <li>Open your new bot in Telegram and send <code>/start</code>.</li>
+      <li>Use <code>/config</code> to choose your date, time, buildings, and room filters.</li>
+      <li>Choose “Find available rooms.” If prompted, complete Microsoft login and MFA in Chrome on the computer running the bot.</li>
+      <li>Select a room or auto-pick, then send <code>/book Project meeting | friend@smu.edu.sg</code>.</li>
+      <li>Review your details. “Validate only” prepares the form without submitting. “Confirm &amp; book” submits and checks My Bookings.</li>
+    </ol>
+    <h2>A few useful commands</h2>
+    <p><code>/status</code> shows settings and the selected room. <code>/help</code> shows the flow. <code>/logout</code> clears Telegram search and booking state; sign out in Chrome separately to end the SMU session.</p>
+    <h2>If something needs attention</h2>
+    <p><strong>No response?</strong> Check that the process is running, your token is correct, and the configured owner ID matches your account. <strong>Login expired?</strong> Search again and complete the Chrome prompts. <strong>FBS layout changed?</strong> The browser automation may need an update. If a booking outcome is unclear, check My Bookings in FBS before retrying.</p>
+    <p>Hosting the public daily snapshot is a separate workflow. See the repository’s <a href="https://github.com/gongahkia/sagasu/blob/main/docs/web-deployment.md">website deployment guide ↗</a> for GitHub Actions and Pages setup.</p>
+    <a class="button primary" href="index.html#availability">Back to the noticeboard <span aria-hidden="true">↗</span></a>
+  </main>
+  <footer class="shell"><a class="brand" href="index.html">sagasu<span>探す</span></a><p>A community project for SMU. Not an official university service.</p><a href="https://github.com/gongahkia/sagasu">GitHub ↗</a></footer>
+</body>
+</html>

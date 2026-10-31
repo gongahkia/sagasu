@@ -13,3 +13,4 @@ artifacts/
 /scraper_async/.env
 /scraper_async/*.pem
 AGENTS.md
+/dist/

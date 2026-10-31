@@ -733,6 +733,13 @@ class FBSClient:
         await frame.wait_for_timeout(250)
 
     async def _matching_room_names(self, frame: Frame) -> list[str]:
+        if self.strict_availability:
+            # An incomplete first page must never be advertised as campus-wide.
+            pagination = frame.locator('table#GridResults_gv a[href*="Page$"]')
+            if await pagination.count():
+                raise LayoutChanged(
+                    "FBS room results are paginated; complete discovery is required"
+                )
         result = []
         for row in await frame.locator("table#GridResults_gv tbody tr").all():
             cells = await row.locator("td").all()
@@ -768,7 +775,9 @@ class FBSClient:
             box = await event.bounding_box()
             slot = parse_event_title(title or "")
             if self.strict_availability and (not box or not slot or not room_headers):
-                raise LayoutChanged("Calendar contains an unreadable availability event")
+                raise LayoutChanged(
+                    "Calendar contains an unreadable availability event"
+                )
             if not box or not slot or not room_headers:
                 continue
             event_y = box["y"] + box["height"] / 2
