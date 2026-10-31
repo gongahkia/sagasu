@@ -44,9 +44,9 @@ Before enabling publishing or scheduling, confirm a **real seven-day scrape** su
 
 GitHub Actions no longer logs into SMU, installs a browser, or reads SMU password secrets. Remove obsolete `SMU_LOGIN_EMAIL` and `SMU_LOGIN_PASSWORD` repository secrets if previously configured. Do not attach a self-hosted Actions runner to this public repository.
 
-The `Publish availability website` workflow checks out the default branch, fetches the `availability-data` branch's public `snapshot.json` and `status.json` when present, and builds Pages. If the data branch does not exist yet, it uses the honest empty state in `web/data`. Select **GitHub Actions** as the Pages source in repository settings. Keep the development branch as the default branch. If the `github-pages` environment restricts deployment branches, allow both the default branch and `availability-data` (data-push runs retain that event ref).
+The `Publish availability website` workflow checks out the default branch, fetches the `availability-data` branch's public `snapshot.json` and `status.json` when present, and builds Pages. If the data branch does not exist yet, it uses the honest empty state in `web/data`. Select **GitHub Actions** as the Pages source in repository settings. Keep the development branch as the default branch. The `github-pages` environment only needs to allow deployments from the default branch.
 
-Website pushes, public-data pushes, manual dispatch, and a daily 22:17 UTC rebuild can trigger deployment. The daily rebuild is only a static publish fallback; it does not refresh FBS data. A push of `availability-data` checks out website code from the default branch. Git credentials that suppress workflow triggers (such as Actions' own token) require a manual dispatch or the scheduled rebuild.
+Website pushes, manual dispatch from the local publisher, and a daily 22:17 UTC rebuild can trigger deployment. The daily rebuild is only a static publish fallback; it does not refresh FBS data. The orphan `availability-data` branch contains no workflow files, so its pushes cannot launch a workflow by themselves. After publishing, the local command explicitly dispatches `availability.yml` on the default branch with the authenticated GitHub CLI. An unchanged-data retry also dispatches, allowing recovery from a previous dispatch failure. Failed dispatch exits nonzero even if the data push succeeded; retry the publish command or dispatch manually.
 
 After a complete live scrape, publish the current attempt:
 
@@ -56,7 +56,7 @@ After a complete live scrape, publish the current attempt:
 
 The publisher creates or updates `availability-data` through a temporary Git repository, without changing your checkout, index or staged work. Only `snapshot.json` and `status.json` are committed. It validates seven consecutive days and full interval coverage, reconstructs allowlisted fields and canonical status messages, and refuses a data branch containing other files. A failed attempt keeps the remote's previous complete snapshot and updates status. Pushes are ordinary fast-forward pushes; concurrent changes fail safely, without force-pushing. A first failed attempt can publish an honest empty snapshot and failure status.
 
-GitHub push access is required separately from SMU login. For an HTTPS GitHub remote, the publisher prefers an already authenticated `gh` CLI in its temporary checkout, avoiding stale Keychain Git credentials. Otherwise it uses your existing Git credential helper. Git prompting is disabled and operations have deadlines; diagnostics never include raw Git output. Authenticate GitHub locally with `gh auth login --web` if needed; never put a token in chat or an SMU password in GitHub secrets.
+An installed and authenticated `gh` CLI with repository push and workflow-dispatch access is required for GitHub publishing, separately from SMU login. For an HTTPS GitHub remote, the temporary checkout uses that CLI as its Git credential helper, avoiding stale Keychain Git credentials. SSH remotes retain their existing SSH authentication. Non-GitHub remotes support data-only publishing without dispatch (also used by local integration tests). Git prompting is disabled and operations have deadlines; diagnostics never include raw Git output. Authenticate GitHub locally with `gh auth login --web` if needed; never put a token in chat or an SMU password in GitHub secrets.
 
 For a complete daily cycle, including publishing a failed-refresh status:
 
@@ -68,7 +68,7 @@ Use `--no-push` to refresh local data only. This command serializes the whole sc
 
 ## Local daily scheduling
 
-A live headless seven-day scrape was verified on 31 October 2026: 100 rooms per day for 31 October–6 November. Saved-session reuse worked without further MFA. The public allowlist and a real push of the two sanitized data files were also verified. This does not establish how long SMU keeps the session valid.
+A live headless seven-day scrape was verified on 31 October 2026: 100 rooms per day for 31 October–6 November. Saved-session reuse worked without further MFA. The public allowlist and a real push of the two sanitized data files were also verified. A manual trigger of the installed LaunchAgent also completed all seven days and pushed successfully (exit status 0). The publisher's explicit workflow dispatch succeeded, and the HTTPS site at https://gabrielongzm.com/sagasu/ was checked against the LaunchAgent-produced public JSON. This does not establish how long SMU keeps the session valid.
 
 Generate the schedule first, then install it after validating local scraping and Git push access:
 
@@ -112,4 +112,4 @@ node --test tests/*.test.cjs
 .venv/bin/pre-commit run --all-files --show-diff-on-failure
 ```
 
-Automated login tests verify code paths only. Live authentication, saved-session reuse and seven-day coverage were verified separately on this computer. The first overnight scheduled run and long-term session lifetime still require observation.
+Automated login tests verify code paths only. Live authentication, saved-session reuse and seven-day coverage were verified separately on this computer. The first overnight scheduled run and long-term session lifetime still require observation. Linux systemd/cron generation is unit-tested, but has not been live-tested on this Mac.

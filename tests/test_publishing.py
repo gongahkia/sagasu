@@ -8,7 +8,13 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from scripts.public_data import sanitize_snapshot, sanitize_status, write_json
-from scripts.publish_snapshot import PublishError, merge, publish
+from scripts.publish_snapshot import (
+    PublishError,
+    github_repository,
+    merge,
+    publish,
+    request_pages,
+)
 from scripts.schedule_refresh import schedule_files, scheduler_kind
 
 
@@ -224,3 +230,43 @@ class SchedulerTest(unittest.TestCase):
         self.assertIn("Persistent=true", timer)
         self.assertIn('WorkingDirectory="/tmp/project with spaces"', service)
         self.assertIn("TimeoutStartSec=30min", service)
+
+
+class WorkflowDispatchTest(unittest.TestCase):
+    def test_github_remote_forms_map_to_the_same_repository(self):
+        self.assertEqual(
+            github_repository("https://github.com/example/sagasu.git"), "example/sagasu"
+        )
+        self.assertEqual(
+            github_repository("git@github.com:example/sagasu.git"), "example/sagasu"
+        )
+        self.assertIsNone(github_repository("/tmp/test.git"))
+
+    def test_dispatch_uses_default_branch_and_no_credentials_in_arguments(self):
+        with (
+            patch(
+                "scripts.publish_snapshot.subprocess.run",
+                return_value=Mock(returncode=0),
+            ) as run,
+            patch("builtins.print"),
+        ):
+            request_pages("/usr/local/bin/gh", "example/sagasu")
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "/usr/local/bin/gh",
+                "workflow",
+                "run",
+                "availability.yml",
+                "--repo",
+                "example/sagasu",
+            ],
+        )
+
+    def test_dispatch_failure_is_not_reported_as_publish_success(self):
+        with patch(
+            "scripts.publish_snapshot.subprocess.run", return_value=Mock(returncode=1)
+        ):
+            with self.assertRaises(PublishError) as error:
+                request_pages("/usr/local/bin/gh", "example/sagasu")
+        self.assertEqual(error.exception.operation, "workflow_dispatch")

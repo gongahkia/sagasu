@@ -88,11 +88,68 @@ def git(directory, *args, allowed=(0,)):
     return result
 
 
+def github_repository(remote):
+    parsed = urlparse(remote)
+    if parsed.hostname == "github.com":
+        path = parsed.path
+    elif remote.startswith("git@github.com:"):
+        path = remote.split(":", 1)[1]
+    else:
+        return None
+    path = path.strip("/").removesuffix(".git")
+    if len(path.split("/")) != 2:
+        raise PublishError("Unsupported GitHub repository URL")
+    return path
+
+
+def request_pages(gh, repository):
+    # The orphan data branch has no workflow file. Dispatch on the default branch.
+    try:
+        result = subprocess.run(
+            [gh, "workflow", "run", "availability.yml", "--repo", repository],
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise PublishError(
+            "Pages workflow dispatch could not be confirmed",
+            operation="workflow_dispatch",
+            code="timeout",
+        ) from None
+    if result.returncode:
+        raise PublishError(
+            "Pages workflow dispatch failed",
+            operation="workflow_dispatch",
+            code="dispatch_failed",
+        )
+    print("Static Pages workflow requested.")
+
+
 def publish(attempt, repository=ROOT):
     # Validate before contacting GitHub. This does not touch the caller's checkout/index.
     load_attempt(attempt)
     repository = Path(repository).resolve()
     remote = git(repository, "remote", "get-url", "origin").stdout.strip()
+    github_repo = github_repository(remote)
+    gh = shutil.which("gh")
+    if github_repo:
+        if not gh:
+            raise PublishError(
+                "GitHub CLI is required for Pages dispatch",
+                operation="workflow_dispatch",
+                code="github_cli_required",
+            )
+        auth = subprocess.run(
+            [gh, "auth", "status", "--hostname", "github.com"],
+            capture_output=True,
+            timeout=30,
+        )
+        if auth.returncode:
+            raise PublishError(
+                "Authenticate GitHub CLI locally before publishing",
+                operation="workflow_dispatch",
+                code="authentication",
+            )
     branch = git(
         repository,
         "ls-remote",
@@ -108,26 +165,15 @@ def publish(attempt, repository=ROOT):
         git(retained, "remote", "add", "origin", remote)
         # Reuse the authenticated local GitHub CLI in this temporary repository.
         # Avoid changing global Git settings or relying on stale Keychain credentials.
-        gh = shutil.which("gh")
-        if (
-            gh
-            and urlparse(remote).hostname == "github.com"
-            and urlparse(remote).scheme == "https"
-        ):
-            auth = subprocess.run(
-                [gh, "auth", "status", "--hostname", "github.com"],
-                capture_output=True,
-                timeout=30,
+        if github_repo and urlparse(remote).scheme == "https":
+            git(retained, "config", "credential.helper", "")
+            git(
+                retained,
+                "config",
+                "--add",
+                "credential.helper",
+                "!" + shlex.quote(gh) + " auth git-credential",
             )
-            if auth.returncode == 0:
-                git(retained, "config", "credential.helper", "")
-                git(
-                    retained,
-                    "config",
-                    "--add",
-                    "credential.helper",
-                    "!" + shlex.quote(gh) + " auth git-credential",
-                )
         if branch.returncode == 0:
             git(
                 retained,
@@ -161,20 +207,25 @@ def publish(attempt, repository=ROOT):
         git(retained, "config", "user.name", "Sagasu local publisher")
         git(retained, "config", "user.email", "sagasu@localhost")
         git(retained, "add", "--", "snapshot.json", "status.json")
-        if git(retained, "diff", "--cached", "--quiet", allowed=(0, 1)).returncode == 0:
-            return False
-        git(
-            retained,
-            "-c",
-            "commit.gpgsign=false",
-            "commit",
-            "--quiet",
-            "-m",
-            "Refresh public availability snapshot",
+        changed = (
+            git(retained, "diff", "--cached", "--quiet", allowed=(0, 1)).returncode != 0
         )
-        # Ordinary fast-forward push: concurrent remote updates fail safely; never force.
-        git(retained, "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}")
-    return True
+        if changed:
+            git(
+                retained,
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "--quiet",
+                "-m",
+                "Refresh public availability snapshot",
+            )
+            # Ordinary fast-forward push: concurrent remote updates fail safely; never force.
+            git(retained, "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}")
+    if github_repo:
+        # Retry deployment dispatch even when data is unchanged after a previous dispatch failure.
+        request_pages(gh, github_repo)
+    return changed
 
 
 def main():

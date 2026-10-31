@@ -191,7 +191,7 @@ def main():
     )
     args = parser.parse_args()
     try:
-        # Do not schedule against a mocked/empty first-run data file.
+        # Require a complete successful local snapshot before scheduling.
         snapshot = sanitize_snapshot(read_json(ROOT / "artifacts/daily/snapshot.json"))
         status = sanitize_status(read_json(ROOT / "artifacts/daily/status.json"))
         if snapshot is None or status["status"] != "ok":

@@ -335,10 +335,12 @@ class FBSClient:
             return self
         except BaseException:
             try:
-                if self.context:
-                    await self.context.close()
-                if self._playwright:
-                    await self._playwright.stop()
+                try:
+                    if self.context:
+                        await asyncio.wait_for(self.context.close(), timeout=15)
+                finally:
+                    if self._playwright:
+                        await asyncio.wait_for(self._playwright.stop(), timeout=15)
             finally:
                 _BROWSER_LOCK.release()
             raise
@@ -348,10 +350,10 @@ class FBSClient:
             if not self.keep_alive:
                 try:
                     if self.context:
-                        await self.context.close()
+                        await asyncio.wait_for(self.context.close(), timeout=15)
                 finally:
                     if self._playwright:
-                        await self._playwright.stop()
+                        await asyncio.wait_for(self._playwright.stop(), timeout=15)
         finally:
             _BROWSER_LOCK.release()
 

@@ -281,3 +281,18 @@ class SelectionTest(unittest.IsolatedAsyncioTestCase):
         ):
             with self.assertRaises(LayoutChanged):
                 await client._matching_room_names(frame)
+
+
+class CleanupTest(unittest.IsolatedAsyncioTestCase):
+    async def test_close_timeout_still_stops_driver_and_releases_browser_lock(self):
+        import bot.fbs_client as module
+
+        client = ScraperClient()
+        client.context = AsyncMock()
+        client.context.close.side_effect = TimeoutError()
+        client._playwright = AsyncMock()
+        await module._BROWSER_LOCK.acquire()
+        with self.assertRaises(TimeoutError):
+            await client.__aexit__(None, None, None)
+        client._playwright.stop.assert_awaited_once()
+        self.assertFalse(module._BROWSER_LOCK.locked())

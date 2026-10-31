@@ -6,10 +6,8 @@ on:
     - cron: '17 22 * * *'
   workflow_dispatch:
   push:
-    branches: [main, master, availability-data]
+    branches: [main, master]
     paths:
-      - 'snapshot.json'
-      - 'status.json'
       - 'web/**'
       - 'scripts/**'
       - 'asset/logo/**'
@@ -24,7 +22,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.ref == 'refs/heads/availability-data'
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
