@@ -26,6 +26,29 @@
   const formatDate = date => new Intl.DateTimeFormat("en-SG", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Singapore" }).format(new Date(date + "T12:00:00+08:00"));
   const formatStamp = value => new Intl.DateTimeFormat("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Singapore" }).format(new Date(value));
   let snapshot = null;
+  let lastMapRooms = [];
+  const mapData = root.SagasuMapData;
+  function updateMap(rooms) {
+    if (!mapData) return;
+    lastMapRooms = rooms;
+    const counts = mapData.counts(rooms);
+    const buttons = mapData.buildings.map(building => {
+      const button = document.createElement("button"); button.type = "button";
+      button.className = "map-building";
+      button.textContent = `${building.id} · ${counts.buildings[building.id]} available`;
+      button.title = building.name;
+      button.setAttribute("aria-label", `${building.name}: ${counts.buildings[building.id]} available rooms. Filter results.`);
+      button.addEventListener("click", () => { $("room").value = building.prefix; render(); $("results-count").scrollIntoView({behavior: "smooth", block: "start"}); });
+      return button;
+    });
+    const all = document.createElement("button"); all.type = "button"; all.className = "map-building";
+    all.textContent = "All buildings"; all.addEventListener("click", () => { $("room").value = ""; render(); });
+    $("map-buildings").replaceChildren(all, ...buttons);
+    $("map-unmapped").hidden = !counts.unmapped;
+    $("map-unmapped").textContent = `${counts.unmapped} available room(s) could not be assigned to a building; they remain in the results.`;
+    window.dispatchEvent(new CustomEvent("sagasu:results", { detail: { rooms } }));
+  }
+  window.addEventListener("sagasu:map-ready", () => updateMap(lastMapRooms));
   function empty(title, message) {
     const panel = document.createElement("div"); panel.className = "empty";
     const icon = document.createElement("span"); icon.textContent = "◷"; icon.setAttribute("aria-hidden", "true");
@@ -40,11 +63,13 @@
     if (!(minutes(start) < minutes(end))) {
       error.textContent = "Choose an end time after the start time."; error.hidden = false;
       $("results-count").textContent = "Check your session times";
+      updateMap([]);
       empty("A little time adjustment", "Your session must end after it starts."); return;
     }
     const day = snapshot.days.find(item => item.date === $("date").value);
     if (!day) return;
     const rooms = filterRooms(day, start, end, $("room").value);
+    updateMap(rooms);
     $("results-count").textContent = `${rooms.length} room${rooms.length === 1 ? "" : "s"} for your session`;
     if (!rooms.length) {
       empty("No rooms for this session", day.rooms.length ? "Try a different time, date, or room name. These are saved results; check FBS for current availability." : "FBS returned no matching group study rooms for this date. Try another date or check FBS directly."); return;

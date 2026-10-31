@@ -7,7 +7,9 @@
   <title>Sagasu — SMU room availability</title>
   <link rel="icon" href="assets/icon_no_words.jpg">
   <link rel="stylesheet" href="styles.css">
+  <script src="map-data.js" defer></script>
   <script src="app.js" defer></script>
+  <script type="module" src="campus-map.js"></script>
 </head>
 <body>
   <header class="shell"><a class="brand" href="index.html">Sagasu</a><nav aria-label="Main navigation"><a href="#availability">Availability</a><a href="setup.html">Telegram setup</a><a href="https://github.com/gongahkia/sagasu">GitHub</a></nav></header>
@@ -24,6 +26,14 @@
         <label class="room-filter">Room name<input id="room" type="search" placeholder="e.g. SCIS, library…" autocomplete="off"></label>
         <button type="submit">Find rooms</button>
       </form>
+      <section class="campus-map" aria-labelledby="map-title">
+        <div><h2 id="map-title">Explore by building</h2><p>Available rooms for the selected session. Building positions are schematic; individual room locations are not shown.</p></div>
+        <div id="campus-canvas" class="campus-canvas" aria-hidden="true"></div>
+        <p id="map-fallback">Loading the 3D campus view…</p>
+        <div id="map-buildings" class="map-buildings" aria-label="Filter by building"></div>
+        <p id="map-unmapped" class="map-note" hidden></p>
+        <p class="map-note">Building names referenced from <a href="https://admissions.smu.edu.sg/sites/admissions.smu.edu.sg/files/2025%20Collaterals/2025%20Open%20House%20Flyer%20Map%20-%20Sat.pdf" target="_blank" rel="noopener noreferrer">SMU’s campus map</a>. For precise directions, use <a href="https://maps.smu.edu.sg/home" target="_blank" rel="noopener noreferrer">Maps @ SMU</a>.</p>
+      </section>
       <div class="results-heading"><h2 id="results-count">Available rooms</h2><span>Free for your whole session</span></div>
       <p id="filter-error" class="error" role="alert" hidden></p>
       <div id="results" class="results" aria-live="polite"><div class="empty"><h3>Loading results…</h3><p>Room availability will appear here.</p></div></div>

@@ -17,7 +17,14 @@ def build(output, data):
     output = Path(output).resolve()
     # Never recursively delete a caller-selected directory.
     output.mkdir(parents=True, exist_ok=True)
-    for name in ("index.html", "setup.html", "styles.css", "app.js"):
+    for name in (
+        "index.html",
+        "setup.html",
+        "styles.css",
+        "app.js",
+        "map-data.js",
+        "campus-map.js",
+    ):
         shutil.copyfile(ROOT / "web" / name, output / name)
     (output / "assets").mkdir(exist_ok=True)
     shutil.copyfile(
