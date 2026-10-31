@@ -22,8 +22,10 @@ def build(output, data):
         "setup.html",
         "styles.css",
         "app.js",
+        "search.js",
         "map-data.js",
-        "campus-map.js",
+        "floor-geometry.js",
+        "floor-3d.js",
     ):
         shutil.copyfile(ROOT / "web" / name, output / name)
     (output / "assets").mkdir(exist_ok=True)

@@ -6,12 +6,12 @@ try {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xe8efe4);
   const camera = new THREE.OrthographicCamera(-7, 7, 5, -5, 0.1, 100);
-  camera.position.set(9, 11, 13); camera.lookAt(0, 0, 0);
+  camera.position.set(0, 14, 18); camera.lookAt(0, 0, 0);
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   container.append(renderer.domElement);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x8aab91, 2.3));
-  const ground = new THREE.Mesh(new THREE.BoxGeometry(11, 0.25, 7), new THREE.MeshStandardMaterial({ color: 0xc9d9c3 }));
+  const ground = new THREE.Mesh(new THREE.BoxGeometry(10, 0.25, 12), new THREE.MeshStandardMaterial({ color: 0xc9d9c3 }));
   ground.position.y = -0.2; scene.add(ground);
   const meshes = new Map(), labels = new Map();
   function labelFor(text) {
@@ -22,15 +22,16 @@ try {
   }
   for (const building of data.buildings) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 1.8), new THREE.MeshStandardMaterial({ color: 0x849a8b }));
-    mesh.position.set(building.x, 0.6, building.z); scene.add(mesh); meshes.set(building.id, mesh);
+    const { x, z } = data.project(building.lat, building.lon);
+    mesh.position.set(x, 0.6, z); scene.add(mesh); meshes.set(building.id, mesh);
     const label = new THREE.Sprite(new THREE.SpriteMaterial({map: labelFor(building.id), transparent: true}));
-    label.scale.set(2.7, 0.53, 1); label.position.set(building.x, 1.9, building.z); scene.add(label); labels.set(building.id, label);
+    label.scale.set(2.7, 0.53, 1); label.position.set(x, 1.9, z); scene.add(label); labels.set(building.id, label);
   }
   function resize() {
     const width = container.clientWidth, height = container.clientHeight;
     if (!width || !height) return;
     const aspect = width / height;
-    camera.left = -5 * aspect; camera.right = 5 * aspect; camera.top = 5; camera.bottom = -5;
+    camera.left = -6.8 * aspect; camera.right = 6.8 * aspect; camera.top = 6.8; camera.bottom = -6.8;
     camera.updateProjectionMatrix(); renderer.setSize(width, height); renderer.render(scene, camera);
   }
   function update(event) {
@@ -38,9 +39,7 @@ try {
     for (const building of data.buildings) {
       const mesh = meshes.get(building.id), count = counts.buildings[building.id];
       mesh.material.color.setHex(count ? 0x255e47 : 0x9aaca0);
-      const height = 0.8 + Math.min(count, 30) * 0.045;
-      mesh.scale.y = height; mesh.position.y = 0.6 * height;
-      const label = labels.get(building.id); label.position.y = 1.2 * height + 0.65;
+      const label = labels.get(building.id);
       label.material.map.dispose(); label.material.map = labelFor(`${building.id} · ${count} free`); label.material.needsUpdate = true;
     }
     renderer.render(scene, camera);

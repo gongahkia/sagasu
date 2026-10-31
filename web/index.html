@@ -8,38 +8,35 @@
   <link rel="icon" href="assets/icon_no_words.jpg">
   <link rel="stylesheet" href="styles.css">
   <script src="map-data.js" defer></script>
+  <script src="floor-geometry.js" defer></script>
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js"}}</script>
+  <script src="search.js" defer></script>
   <script src="app.js" defer></script>
-  <script type="module" src="campus-map.js"></script>
+  <script type="module" src="floor-3d.js"></script>
 </head>
 <body>
-  <header class="shell"><a class="brand" href="index.html">Sagasu</a><nav aria-label="Main navigation"><a href="#availability">Availability</a><a href="setup.html">Telegram setup</a><a href="https://github.com/gongahkia/sagasu">GitHub</a></nav></header>
+  <a class="github-corner" href="https://github.com/gongahkia/sagasu" aria-label="View Sagasu on GitHub"><svg width="72" height="72" viewBox="0 0 250 250" aria-hidden="true"><path class="corner-fill" d="M0 0h250v250L142 142l-27-27z"/><path class="octo-arm" fill="currentColor" d="M128.3 109c-15.1-9.3-9-19.5-9-19.5 3.1-7.1 1.6-11.3 1.6-11.3-1.3-6.3 2.8-2.2 2.8-2.2 3.8 4.6 2 11.4 2 11.4-2.6 10.3 5.1 14.6 8.9 15.9"/><path fill="currentColor" d="M115 115c-.1.1 3.7 1.5 4.8.4l13.9-13.8c3.2-2.4 6.2-3.3 8.6-3.2-8.4-11-14.7-25.1 1.2-41 4.6-4.6 10-6.8 15.6-7.2.6-1.6 3.5-7.5 11.7-10.1 0 0 4.7 2.4 7.4 16.1 4.3 2.4 8.4 5.6 12.1 9.3 3.7 3.7 6.9 7.8 9.3 12.1 13.7 2.7 16.1 7.4 16.1 7.4-2.6 8.2-8.5 11.1-10.1 11.7-.4 5.6-2.6 11-7.2 15.6-15.9 15.9-30 9.6-41 1.2.1 2.4-.8 5.4-3.2 8.6l-13.8 13.9c-1.1 1.1.3 4.9.4 4.8z"/></svg></a>
+  <header class="shell app-header"><nav aria-label="Main navigation"><a class="telegram-link" href="setup.html"><svg class="nav-icon" viewBox="0 0 496 512" aria-hidden="true"><path fill="currentColor" d="M248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm121.8 169.9-40.7 191.8c-3 13.6-11 16.9-22.3 10.5l-62-45.7-29.9 28.8c-3.3 3.3-6.1 6.1-12.5 6.1l4.5-63.2 115-103.9c5-4.5-1.1-7-7.7-2.5L172 289.4l-61.2-19.1c-13.3-4.2-13.6-13.3 2.8-19.7l239.5-92.3c11.1-4.1 20.8 2.7 17.2 19.6z"/></svg>Deploy your Telegram bot</a><details class="nav-status"><summary><span class="dot" id="status-dot"></span><span id="freshness" role="status">Loading availability…</span></summary><p id="update-detail">Daily snapshots · All times in Singapore (SGT)</p></details></nav></header>
   <main class="shell">
-    <h1>SMU room availability</h1>
-    <p>Group study rooms across campus, for the next seven days. Daily snapshots cover 08:00–22:00 Singapore time.</p>
-    <section id="availability" aria-label="Room availability">
-      <div class="status-panel" role="status" aria-live="polite"><span class="dot" id="status-dot"></span><div><strong id="freshness">Loading availability…</strong><p id="update-detail">Daily snapshots · All times in Singapore (SGT)</p></div></div>
-      <p>A daily snapshot, not live availability. Confirm availability in <a href="https://fbs.intranet.smu.edu.sg/home" target="_blank" rel="noopener noreferrer">SMU FBS</a> before booking. This website does not submit bookings.</p>
+    <section id="availability" aria-label="Room availability"><div class="search-stage"><h1>Find your next study space.</h1><p>Search SMU rooms in your own words.</p>
+      
+      <form id="search-form" class="search-form"><label class="sr-only" for="search-query">Describe the room and time you want</label><div class="search-entry"><input id="search-query" type="search" placeholder="SOA tomorrow 2-4pm with a projector" autocomplete="off"></div><button type="submit" disabled id="search-submit" aria-label="Search rooms"><svg class="search-icon" viewBox="0 0 512 512" aria-hidden="true"><path fill="currentColor" d="M505 442.7 405.3 343c28.4-35.4 45.4-80.3 45.4-129.1C450.7 95.8 354.9 0 236.8 0S22.9 95.8 22.9 213.9s95.8 213.9 213.9 213.9c48.8 0 93.7-17 129.1-45.4l99.7 99.7c10.9 10.9 28.5 10.9 39.4 0s10.9-28.5 0-39.4zM236.8 363.6c-82.7 0-149.7-67-149.7-149.7s67-149.7 149.7-149.7 149.7 67 149.7 149.7-67 149.7-149.7 149.7z"/></svg></button></form>
+      <p id="search-summary" role="status"></p><p id="search-warning" class="search-warning" role="status" hidden></p>
+      </div><div hidden>
       <form id="filters" class="filters" aria-label="Filter available rooms">
         <label>Date<select id="date" required disabled><option value="">Awaiting data</option></select></label>
         <label>From<select id="start" required></select></label>
         <label>Until<select id="end" required></select></label>
         <label class="room-filter">Room name<input id="room" type="search" placeholder="e.g. SCIS, library…" autocomplete="off"></label>
         <button type="submit">Find rooms</button>
-      </form>
-      <section class="campus-map" aria-labelledby="map-title">
-        <div><h2 id="map-title">Explore by building</h2><p>Available rooms for the selected session. Building positions are schematic; individual room locations are not shown.</p></div>
-        <div id="campus-canvas" class="campus-canvas" aria-hidden="true"></div>
-        <p id="map-fallback">Loading the 3D campus view…</p>
-        <div id="map-buildings" class="map-buildings" aria-label="Filter by building"></div>
-        <p id="map-unmapped" class="map-note" hidden></p>
-        <p class="map-note">Building names referenced from <a href="https://admissions.smu.edu.sg/sites/admissions.smu.edu.sg/files/2025%20Collaterals/2025%20Open%20House%20Flyer%20Map%20-%20Sat.pdf" target="_blank" rel="noopener noreferrer">SMU’s campus map</a>. For precise directions, use <a href="https://maps.smu.edu.sg/home" target="_blank" rel="noopener noreferrer">Maps @ SMU</a>.</p>
-      </section>
-      <div class="results-heading"><h2 id="results-count">Available rooms</h2><span>Free for your whole session</span></div>
+      </form></div>
+      <div id="search-output" hidden><div class="results-heading"><h2 id="results-count">Available rooms</h2><span>Free for your whole session</span></div>
       <p id="filter-error" class="error" role="alert" hidden></p>
       <div id="results" class="results" aria-live="polite"><div class="empty"><h3>Loading results…</h3><p>Room availability will appear here.</p></div></div>
+
+      </div>
     </section>
-    <section class="telegram" id="telegram"><h2>Use Sagasu in Telegram</h2><p>Deploy a personal bot using your own Telegram token and SMU session. Set filters, search on demand, select or auto-pick a room, then review and explicitly confirm any booking.</p><p>Your personal bot uses a private local Chrome profile for Microsoft login and MFA. Your credentials are separate from this public website.</p><a class="button" href="setup.html">Personal deployment instructions</a></section>
   </main>
-  <footer class="shell"><p>A community project for SMU. Not an official university service.</p></footer>
+  <dialog id="room-dialog" aria-labelledby="room-title"><button id="close-room" type="button" class="close-room" aria-label="Close room details">Close</button><h2 id="room-title"></h2><label for="timeline-date">Date<select id="timeline-date"></select></label><div class="floor-plan"><div class="floor-controls"><label for="building-select">Building<select id="building-select"><option value="">Choose a building</option></select></label><label for="floor-select">Focus floor<select id="floor-select" disabled><option value="">Choose a building first</option></select></label><label class="layer-toggle"><input id="show-other-floors" type="checkbox" checked> Show other floors transparently</label><label class="layer-toggle"><input id="show-exterior" type="checkbox" checked> Show exterior</label><button id="campus-overview" type="button" class="map-building">View campus</button></div><div id="floor-3d" class="floor-3d" aria-hidden="true"></div><p id="floor-3d-message" class="map-note" role="status">Choose a floor to load its 3D room diagram.</p><p id="model-reference" hidden></p><p id="floor-summary" class="sr-only">Choose a floor to compare the plan with available rooms.</p><a id="floor-image-link" style="display:none" target="_blank" rel="noopener noreferrer" hidden><img id="floor-image" alt="" loading="lazy"></a></div><p id="map-unmapped" class="sr-only" hidden></p><div id="room-timeline" class="room-timeline"></div><div class="timeline-axis" aria-hidden="true"><span>08:00</span><span>15:00</span><span>22:00</span></div><div class="timeline-legend">Green: free · Rose: booked · Grey: unavailable</div><ul id="room-intervals"></ul><a href="https://fbs.intranet.smu.edu.sg/home" target="_blank" rel="noopener noreferrer">Check this room in SMU FBS</a></dialog>
 </body>
 </html>
