@@ -1,9 +1,9 @@
-all:start
+.PHONY: all start test
 
-test:
-	@echo "executing asynchronous scraper for a test..."
-	@python3 async_do.py
+all: start
 
 start:
-	@echo "executing bot script..."
-	@python3 bot.py
+	$(MAKE) -C .. start
+
+test:
+	$(MAKE) -C .. test

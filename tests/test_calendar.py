@@ -1,13 +1,12 @@
 import unittest
 
-from bot.fbs_client import LayoutChanged
-from bot.scraper_calendar import calendar_rooms
-from bot.snapshot import search_days
+from bot.fbs_client import LayoutChanged, SearchConfig
+from bot.fbs_calendar import calendar_rooms
 
 
 class CalendarCoverageTest(unittest.TestCase):
     def setUp(self):
-        self.config = search_days()[0]
+        self.config = SearchConfig("01-Nov-2026", "08:00", "22:00")
         self.rows = {"A": (0, 25), "B": (300, 325)}
         self.event = {
             "title": "Booking Time: 10:00-11:00\nPRIVATE PERSON",

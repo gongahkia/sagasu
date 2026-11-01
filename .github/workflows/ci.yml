@@ -1,8 +1,7 @@
-name: Sagasu CI/CD on push
+name: Validate Telegram bot
 
 on:
   push:
-    branches-ignore: [availability-data]
   workflow_dispatch:
 
 permissions:
@@ -37,7 +36,8 @@ jobs:
       - name: Import bot modules
         run: |
           python - <<'PY'
-          import bot.async_do
+          import bot.fbs_client
+          import bot.fbs_calendar
           import bot.bot
 
           print("bot modules imported successfully")
@@ -45,17 +45,6 @@ jobs:
 
       - name: Run unit tests
         run: python -m unittest discover -v
-
-      - name: Set up Node for static frontend tests
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Check static website
-        run: |
-          node --test tests/*.test.cjs
-          python -m compileall -q scripts
-          python scripts/build_site.py
 
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure

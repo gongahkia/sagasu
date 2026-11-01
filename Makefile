@@ -1,3 +1,5 @@
+.PHONY: all config start test
+
 all:config
 
 config:
@@ -6,3 +8,6 @@ config:
 
 start:
 	python3 -m bot.bot
+
+test:
+	python3 -m unittest discover -v

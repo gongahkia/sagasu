@@ -8,7 +8,6 @@ SMU password.  Booking submission is opt-in through ``submit=True`` only.
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import re
 from dataclasses import asdict, dataclass, field
@@ -263,16 +262,12 @@ class FBSClient:
         progress: ProgressCallback | None = None,
         keep_alive: bool = True,
         profile_path: Path | None = None,
-        unattended: bool = False,
-        strict_availability: bool = False,
     ) -> None:
         self.interactive = interactive
         self.headless = headless
         self.progress = progress or _noop_progress
         self.keep_alive = keep_alive
         self.profile_path = profile_path or PROFILE_PATH
-        self.unattended = unattended
-        self.strict_availability = strict_availability
         self._playwright = None
         self.context: BrowserContext | None = None
         self.page: Page | None = None
@@ -300,19 +295,6 @@ class FBSClient:
                     _SHARED_CONTEXT = None
                     _SHARED_PLAYWRIGHT = None
             self.profile_path.mkdir(parents=True, exist_ok=True, mode=0o700)
-            if self.unattended:
-                preferences_path = self.profile_path / "Default" / "Preferences"
-                preferences_path.parent.mkdir(parents=True, exist_ok=True)
-                preferences = (
-                    json.loads(preferences_path.read_text())
-                    if preferences_path.exists()
-                    else {}
-                )
-                preferences["credentials_enable_service"] = False
-                preferences.setdefault("profile", {})[
-                    "password_manager_enabled"
-                ] = False
-                preferences_path.write_text(json.dumps(preferences))
             self._playwright = await async_playwright().start()
             self.context = await self._playwright.chromium.launch_persistent_context(
                 str(self.profile_path),
@@ -320,10 +302,6 @@ class FBSClient:
                 headless=self.headless,
                 viewport={"width": 1440, "height": 1000},
             )
-            if self.unattended:
-                await self.context.add_init_script(
-                    path=str(Path(__file__).with_name("passkey_cancel.js"))
-                )
             self.page = (
                 self.context.pages[0]
                 if self.context.pages
@@ -366,15 +344,6 @@ class FBSClient:
         try:
             await self.page.wait_for_selector("iframe#frameBottom", timeout=15000)
         except Exception as error:
-            if self.unattended:
-                from .password_auth import password_sign_in
-
-                await password_sign_in(self.page, progress=self.progress)
-                frame = await self._wait_for_frame("frameContent")
-                await frame.locator("input#DateBookingFrom_c1_textDate").wait_for(
-                    timeout=30000
-                )
-                return self.page, frame
             if not self.interactive or self.headless:
                 raise AuthenticationRequired(
                     "FBS session expired; run an interactive login first"
@@ -752,14 +721,7 @@ class FBSClient:
         )
         await frame.wait_for_timeout(250)
 
-    async def _matching_room_names(self, frame: Frame) -> list[str]:
-        if self.strict_availability:
-            # An incomplete first page must never be advertised as campus-wide.
-            pagination = frame.locator('table#GridResults_gv a[href*="Page$"]')
-            if await pagination.count():
-                raise LayoutChanged(
-                    "FBS room results are paginated; complete discovery is required"
-                )
+    async def _room_names(self, frame: Frame) -> list[str]:
         result = []
         for row in await frame.locator("table#GridResults_gv tbody tr").all():
             cells = await row.locator("td").all()
@@ -770,51 +732,44 @@ class FBSClient:
                 result.append(value)
         return result
 
+    async def _matching_room_names(self, frame: Frame) -> list[str]:
+        pagination = frame.locator('table#GridResults_gv a[href*="Page$"]')
+        if await pagination.count():
+            raise LayoutChanged(
+                "FBS room results are paginated; complete discovery is required"
+            )
+        names = await self._room_names(frame)
+        if not names:
+            return names
+        checkboxes = frame.locator('table#GridResults_gv input[type="checkbox"]')
+        if len(set(names)) != len(names) or await checkboxes.count() != len(names):
+            raise LayoutChanged(
+                "Matching facilities do not have unique selection controls"
+            )
+        async with asyncio.timeout(90):
+            await self.progress("selecting all matching facilities")
+            for checkbox in await checkboxes.all():
+                await checkbox.check(timeout=10000)
+            await self._wait_for_idle(frame)
+        selected = await checkboxes.evaluate_all(
+            "(els) => els.filter(el => el.checked).length"
+        )
+        if selected != len(names) or await self._room_names(frame) != names:
+            raise LayoutChanged("Not all matching facilities are selected")
+        return names
+
     async def _read_availability(
         self, frame: Frame, room_names: list[str], config: SearchConfig
     ) -> list[RoomAvailability]:
-        room_headers: dict[str, float] = {}
-        for header in await frame.locator(
-            "div.scheduler_bluewhite_rowheader_inner"
-        ).all():
-            name = (await header.inner_text()).strip()
-            if name not in room_names:
-                continue
-            box = await header.bounding_box()
-            if box:
-                room_headers[name] = box["y"] + box["height"] / 2
+        try:
+            from .fbs_calendar import read_complete_calendar
+        except ImportError:
+            if __package__:
+                raise
+            from fbs_calendar import read_complete_calendar
 
-        blocked_by_room: dict[str, list[TimeSlot]] = {room: [] for room in room_names}
-        if self.strict_availability and set(room_headers) != set(room_names):
-            raise LayoutChanged("Not all matching rooms have readable calendar rows")
-        events = frame.locator(
-            "div.scheduler_bluewhite_event.scheduler_bluewhite_event_line0"
-        )
-        for event in await events.all():
-            title = await event.get_attribute("title")
-            box = await event.bounding_box()
-            slot = parse_event_title(title or "")
-            if self.strict_availability and (not box or not slot or not room_headers):
-                raise LayoutChanged(
-                    "Calendar contains an unreadable availability event"
-                )
-            if not box or not slot or not room_headers:
-                continue
-            event_y = box["y"] + box["height"] / 2
-            room = min(room_headers, key=lambda name: abs(room_headers[name] - event_y))
-            blocked_by_room[room].append(slot)
-
-        return [
-            RoomAvailability(
-                room,
-                add_free_windows(
-                    blocked_by_room.get(room, []),
-                    config.start_time,
-                    config.end_time,
-                ),
-            )
-            for room in room_names
-        ]
+        await self._wait_for_idle(frame)
+        return await read_complete_calendar(frame, room_names, config)
 
     async def _drag_timeslot(
         self, frame: Frame, room_name: str, start_time: str, end_time: str

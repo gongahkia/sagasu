@@ -10,7 +10,4 @@ mvenv/
 bot/bot_state.pickle
 bot/.fbs-profile/
 artifacts/
-/scraper_async/.env
-/scraper_async/*.pem
 AGENTS.md
-/dist/

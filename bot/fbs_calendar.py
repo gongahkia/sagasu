@@ -2,15 +2,27 @@
 
 import asyncio
 
-from .fbs_client import (
-    LayoutChanged,
-    RoomAvailability,
-    TimeSlot,
-    add_free_windows,
-    parse_event_title,
-)
+try:
+    from .fbs_client import (
+        LayoutChanged,
+        RoomAvailability,
+        TimeSlot,
+        add_free_windows,
+        parse_event_title,
+    )
+except ImportError:
+    if __package__:
+        raise
+    from fbs_client import (
+        LayoutChanged,
+        RoomAvailability,
+        TimeSlot,
+        add_free_windows,
+        parse_event_title,
+    )
 
-# Only public room names/counts and rendering configuration leave this evaluation.
+
+# Only room names/counts and rendering configuration leave this evaluation.
 METADATA = """() => {
     const scheduler = window.dps;
     if (!scheduler || !Array.isArray(scheduler.resources) ||
