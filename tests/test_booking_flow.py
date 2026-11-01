@@ -288,6 +288,30 @@ class BookingFlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.backend.await_args.kwargs["submit"])
         self.assertNotIn(token, self.context.user_data["booking_drafts"])
 
+    async def test_uncertain_submission_disables_review_instead_of_offering_retry(self):
+        from bot.fbs_client import BookingOutcomeUnknown
+
+        await self.purpose_and_email()
+        await self.click("skip")
+        token = next(iter(self.context.user_data["booking_drafts"]))
+        self.backend.side_effect = BookingOutcomeUnknown(
+            "Check FBS My Bookings before retrying."
+        )
+        status = Mock(edit_text=AsyncMock())
+        self.message.reply_text.return_value = status
+        query = Mock(
+            message=self.message,
+            answer=AsyncMock(),
+            edit_message_text=AsyncMock(),
+            data=f"booking_confirm:{token}",
+        )
+        update = SimpleNamespace(callback_query=query)
+        await bot.booking_action_callback(update, self.context)
+        self.assertNotIn(token, self.context.user_data["booking_drafts"])
+        self.assertIn("disabled", status.edit_text.await_args.args[0])
+        await bot.booking_action_callback(update, self.context)
+        self.backend.assert_awaited_once()
+
     async def test_no_room_selection_does_not_open_questions(self):
         self.context.user_data.pop("selected_room")
         await begin_booking(self.message, self.context)

@@ -64,6 +64,27 @@ class RoomSelectionTest(unittest.IsolatedAsyncioTestCase):
             await client._matching_room_names(frame)
         controls.all.assert_not_awaited()
 
+    async def test_target_room_is_selected_and_partial_matches_are_deselected(self):
+        client, frame, controls = self.selection(selected=1)
+        client._room_names.return_value = ["SCIS1 GSR 2-1", "SCIS1 GSR 2-10"]
+        self.assertEqual(
+            await client._matching_room_names(frame, only_room="SCIS1 GSR 2-1"),
+            ["SCIS1 GSR 2-1"],
+        )
+        first, other = controls.all.return_value
+        first.set_checked.assert_awaited_once_with(True, timeout=10000)
+        other.set_checked.assert_awaited_once_with(False, timeout=10000)
+
+    async def test_missing_target_does_not_fall_back_to_other_rooms(self):
+        client, frame, controls = self.selection()
+        self.assertEqual(await client._matching_room_names(frame, only_room="C"), [])
+        controls.all.assert_not_awaited()
+
+    async def test_target_search_rejects_extra_selected_rooms(self):
+        client, frame, _ = self.selection(selected=2)
+        with self.assertRaises(LayoutChanged):
+            await client._matching_room_names(frame, only_room="A")
+
     async def test_failed_selection_cannot_mark_unselected_room_as_free(self):
         client, frame, _ = self.selection(selected=1)
         with self.assertRaises(LayoutChanged):
@@ -98,6 +119,58 @@ class RoomSelectionTest(unittest.IsolatedAsyncioTestCase):
         ) as reader:
             self.assertEqual(await client._read_availability(frame, ["A"], config), [])
         reader.assert_awaited_once_with(frame, ["A"], config)
+
+
+class TargetedSearchTest(unittest.IsolatedAsyncioTestCase):
+    async def test_targeted_search_uses_keyword_and_reads_only_target_calendar(self):
+        client = FBSClient()
+        page = Mock(wait_for_timeout=AsyncMock())
+        control = Mock(
+            input_value=AsyncMock(return_value=""),
+            select_option=AsyncMock(),
+            wait_for=AsyncMock(),
+            click=AsyncMock(),
+        )
+        control.first = control
+        frame = Mock()
+        frame.locator.return_value = control
+        client.ensure_authenticated = AsyncMock(return_value=(page, frame))
+        client._set_date = AsyncMock()
+        client._wait_for_idle = AsyncMock()
+        client._set_multi_select = AsyncMock()
+        client._set_facility_keyword = AsyncMock()
+        client._matching_room_names = AsyncMock(return_value=["Room A"])
+        client._read_availability = AsyncMock(return_value=[])
+        config = SearchConfig(
+            "02-Nov-2026", "14:00", "15:00", floors=("Level 2", "Level 3")
+        )
+        await client.search(config, room_name="Room A")
+        client._set_facility_keyword.assert_awaited_once_with(frame, "Room A")
+        client._matching_room_names.assert_awaited_once_with(frame, only_room="Room A")
+        client._read_availability.assert_awaited_once_with(frame, ["Room A"], config)
+        client._set_multi_select.assert_not_awaited()
+
+    async def test_keyword_uses_visible_search_button_after_focusing_watermark(self):
+        client = FBSClient()
+        client._wait_for_idle = AsyncMock()
+        field = Mock(
+            is_visible=AsyncMock(return_value=False),
+            wait_for=AsyncMock(),
+            fill=AsyncMock(),
+        )
+        watermark = Mock(count=AsyncMock(return_value=1), click=AsyncMock())
+        watermark.first = watermark
+        button = Mock(click=AsyncMock())
+        frame = Mock()
+        frame.locator.side_effect = {
+            "input#panel_SimpleSearch_c1": field,
+            "#panel_SimpleSearch input:visible": watermark,
+            "a#panel_buttonSimpleSearch": button,
+        }.__getitem__
+        await client._set_facility_keyword(frame, "Room A")
+        watermark.click.assert_awaited_once()
+        field.fill.assert_awaited_once_with("Room A")
+        button.click.assert_awaited_once()
 
 
 class BrowserCleanupTest(unittest.IsolatedAsyncioTestCase):

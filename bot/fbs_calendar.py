@@ -1,6 +1,8 @@
 """Complete read-only extraction of FBS's scroll-rendered DayPilot calendar."""
 
 import asyncio
+import math
+from datetime import datetime, timedelta, timezone
 
 try:
     from .fbs_client import (
@@ -9,6 +11,8 @@ try:
         TimeSlot,
         add_free_windows,
         parse_event_title,
+        minutes_to_time,
+        time_to_minutes,
     )
 except ImportError:
     if __package__:
@@ -19,6 +23,8 @@ except ImportError:
         TimeSlot,
         add_free_windows,
         parse_event_title,
+        minutes_to_time,
+        time_to_minutes,
     )
 
 
@@ -56,10 +62,26 @@ ROWS = """scroll => {
 
 EVENTS = """scroll => {
     const origin = scroll.getBoundingClientRect().top;
+    const names = new Map();
+    const visit = rows => rows.forEach(row => {
+        names.set(row.id, row.name);
+        if (row.children) visit(row.children);
+    });
+    visit(window.dps.resources);
     return [...scroll.closest('#dps').querySelectorAll(
         'div.scheduler_bluewhite_event')].map(el => {
         const box = el.getBoundingClientRect();
-        return {title: el.getAttribute('title'), top: box.top - origin + scroll.scrollTop,
+        const title = el.getAttribute('title');
+        // The rendered DayPilot event points to its full dated model. Tooltip
+        // clock text alone cannot distinguish an empty interval from a closed day.
+        const data = el.event && el.event.data;
+        const matches = data ? window.dps.events.list.filter(e =>
+            e.id === data.id && e.resource === data.resource &&
+            String(e.start) === String(data.start) && String(e.end) === String(data.end)) : [];
+        const interval = matches.length === 1 ? [String(data.start), String(data.end)] : [null, null];
+        return {title, resource_name: data ? names.get(data.resource) : null,
+            start_date: interval[0], end_date: interval[1],
+            top: box.top - origin + scroll.scrollTop,
             bottom: box.bottom - origin + scroll.scrollTop, height: box.height};
     });
 }"""
@@ -82,14 +104,55 @@ def calendar_rooms(names, config, rows, events, event_count):
         ]
         if len(matches) != 1:
             raise LayoutChanged("Calendar event cannot be assigned to exactly one room")
+        if "resource_name" in event and event["resource_name"] != matches[0]:
+            raise LayoutChanged("Calendar model and rendered room disagree")
+        if "start_date" in event or "end_date" in event:
+            slot = dated_event_slot(event, slot.status, config)
+        elif time_to_minutes(slot.end) <= time_to_minutes(slot.start):
+            raise LayoutChanged(
+                "Calendar midnight interval requires full date boundaries"
+            )
         # Keep only interval/status fields, even in this internal result.
-        blocked[matches[0]].append(TimeSlot(slot.start, slot.end, slot.status))
+        if slot is not None:
+            blocked[matches[0]].append(TimeSlot(slot.start, slot.end, slot.status))
     return [
         RoomAvailability(
             name, add_free_windows(blocked[name], config.start_time, config.end_time)
         )
         for name in names
     ]
+
+
+def dated_event_slot(event, status, config):
+    """Intersect full widget timestamps with the requested Singapore-local window."""
+    try:
+        start = datetime.fromisoformat(event["start_date"])
+        end = datetime.fromisoformat(event["end_date"])
+        local_zone = timezone(timedelta(hours=8))
+        if start.tzinfo:
+            start = start.astimezone(local_zone).replace(tzinfo=None)
+        if end.tzinfo:
+            end = end.astimezone(local_zone).replace(tzinfo=None)
+        if end <= start:
+            raise ValueError()
+        day = datetime.strptime(config.date, "%d-%b-%Y")
+        start_minute = max(
+            time_to_minutes(config.start_time),
+            math.floor((start - day).total_seconds() / 60),
+        )
+        end_minute = min(
+            time_to_minutes(config.end_time),
+            math.ceil((end - day).total_seconds() / 60),
+        )
+        if start_minute >= end_minute:
+            return None
+        return TimeSlot(
+            minutes_to_time(start_minute), minutes_to_time(end_minute), status
+        )
+    except (ValueError, TypeError, KeyError):
+        raise LayoutChanged(
+            "Calendar event has missing or invalid full date boundaries"
+        ) from None
 
 
 async def read_complete_calendar(frame, names, config):

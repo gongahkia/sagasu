@@ -97,6 +97,10 @@ Sagasu asks for the booking purpose, then the co-booker. Pick a saved name or se
 
 Review the exact room, date, time, purpose and co-booker. **Validate only** checks the FBS form without submitting. **Confirm & book** performs the actual booking and accepts the displayed FBS acknowledgement/declaration. A review expires after 10 minutes. Questions expire after 15 minutes of inactivity; `/cancel` ends questions and discards pending reviews while keeping saved contacts. Back buttons let you change answers before review.
 
+Validation and booking use FBS’s specific-facility search, select the exact room, and read only that room’s calendar. Initial room discovery still uses your configured building/floor/type filters. A missing target never falls back to other rooms.
+
+Availability uses the calendar’s full dates as well as its clock labels: an unavailable period from midnight to the following midnight stays blocked. Booking selection interpolates half-hour boundaries within FBS’s hourly headers and scrolls the target into view. Sagasu verifies FBS retained the exact selection before clicking Make Booking and retries a lost selection once. Validation checks the selected room and full start/end datetimes on the FBS booking form. If final confirmation is attempted but cannot be verified in My Bookings, Sagasu disables that review and asks you to check FBS before retrying.
+
 `/book` starts the questions for your selected room. The old `/book purpose | email` shortcut remains supported. Room/time details are captured when the questions start, and old question buttons cannot modify a new setup. Favorite selection uses stable contact IDs, so removing one contact does not make an old button choose someone else. If a co-booker shares the same email as an existing saved person, saving updates that person's name instead of creating a duplicate.
 
 ## Remote sign-in with phone approval

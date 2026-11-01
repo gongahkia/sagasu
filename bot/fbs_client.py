@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 from dataclasses import asdict, dataclass, field
@@ -52,12 +53,54 @@ class FBSError(RuntimeError):
     """Base FBS client failure."""
 
 
+class CalendarSelectionLost(FBSError):
+    """The calendar did not retain exactly the requested room/time selection."""
+
+
+class BookingOutcomeUnknown(FBSError):
+    """Final confirmation was attempted but its result could not be verified."""
+
+
 class AuthenticationRequired(FBSError):
     """The saved browser session is absent or expired."""
 
 
 class LayoutChanged(FBSError):
     """The live FBS DOM no longer matches the expected structure."""
+
+
+def calendar_time_x(headers: list[dict], value: str, header_minutes: int) -> float:
+    """Map a time boundary inside an hourly (or cell) header to its screen x."""
+    minute = time_to_minutes(value)
+    if header_minutes <= 0:
+        raise LayoutChanged("Calendar header duration is invalid")
+    candidates = []
+    for header in headers:
+        try:
+            start = time_to_minutes(header["label"])
+        except ValueError:
+            continue
+        if start <= minute < start + header_minutes:
+            candidates.append((header, start))
+    # The final visible hour can provide its right edge for an exclusive end.
+    if not candidates:
+        for header in headers:
+            try:
+                start = time_to_minutes(header["label"])
+            except ValueError:
+                continue
+            if minute == start + header_minutes:
+                candidates.append((header, start))
+    if len(candidates) != 1:
+        raise LayoutChanged(f"Calendar time boundary is missing or ambiguous: {value}")
+    header, start = candidates[0]
+    if (
+        not math.isfinite(header["x"])
+        or not math.isfinite(header["width"])
+        or header["width"] <= 0
+    ):
+        raise LayoutChanged("Calendar time header has invalid geometry")
+    return header["x"] + header["width"] * (minute - start) / header_minutes
 
 
 class BookingUnavailable(FBSError):
@@ -828,7 +871,9 @@ class FBSClient:
             # A redirect can replace the page while the screenshot is taken.
             pass
 
-    async def search(self, config: SearchConfig) -> SearchResult:
+    async def search(
+        self, config: SearchConfig, *, room_name: str | None = None
+    ) -> SearchResult:
         page, frame = await self.ensure_authenticated()
         await self.progress("configuring availability search")
         await self._set_date(frame, config.date)
@@ -836,27 +881,46 @@ class FBSClient:
         await self._wait_for_idle(frame)
         await frame.locator("select#TimeTo_c1_ctl04").select_option(config.end_time)
         await self._wait_for_idle(frame)
-        await self._set_multi_select(
-            frame, "DropMultiBuildingList_c1", config.buildings
-        )
-        await self._set_multi_select(frame, "DropMultiFloorList_c1", config.floors)
-        await self._set_multi_select(
-            frame, "DropMultiFacilityTypeList_c1", config.facility_types
-        )
-        if config.capacity:
-            await frame.locator("select#DropCapacity_c1").select_option(
-                value=config.capacity
-            )
-        else:
+        if room_name:
+            await self.progress("searching only the requested facility")
+            for control in (
+                "DropMultiBuildingList_c1",
+                "DropMultiFloorList_c1",
+                "DropMultiFacilityTypeList_c1",
+                "DropMultiEquipmentList_c1",
+            ):
+                if (
+                    await frame.locator(f"#{control}_textValue").first.input_value()
+                ).strip():
+                    await self._set_multi_select(frame, control, ())
             await frame.locator("select#DropCapacity_c1").select_option(index=0)
-        await self._wait_for_idle(frame)
-        await self._set_multi_select(
-            frame, "DropMultiEquipmentList_c1", config.equipment
-        )
-
+            await self._wait_for_idle(frame)
+            await self._set_facility_keyword(frame, room_name)
+        else:
+            if (
+                await frame.locator("input#panel_SimpleSearch_c1").input_value()
+            ).strip():
+                await self._set_facility_keyword(frame, "")
+            await self._set_multi_select(
+                frame, "DropMultiBuildingList_c1", config.buildings
+            )
+            await self._set_multi_select(frame, "DropMultiFloorList_c1", config.floors)
+            await self._set_multi_select(
+                frame, "DropMultiFacilityTypeList_c1", config.facility_types
+            )
+            if config.capacity:
+                await frame.locator("select#DropCapacity_c1").select_option(
+                    value=config.capacity
+                )
+            else:
+                await frame.locator("select#DropCapacity_c1").select_option(index=0)
+            await self._wait_for_idle(frame)
+            await self._set_multi_select(
+                frame, "DropMultiEquipmentList_c1", config.equipment
+            )
         await self.progress("loading matching facilities")
         await frame.locator("table#GridResults_gv").wait_for(timeout=30000)
-        matching_rooms = await self._matching_room_names(frame)
+        matching_rooms = await self._matching_room_names(frame, only_room=room_name)
         if not matching_rooms:
             return SearchResult(config, [], datetime.now().astimezone().isoformat())
 
@@ -877,7 +941,7 @@ class FBSClient:
         Only ``submit=True`` clicks FBS's final CONFIRM control.
         """
 
-        result = await self.search(request.search)
+        result = await self.search(request.search, room_name=request.room)
         room = next((item for item in result.rooms if item.name == request.room), None)
         if not room or not room.is_free(
             request.search.start_time, request.search.end_time
@@ -893,23 +957,19 @@ class FBSClient:
             raise LayoutChanged("Availability frame disappeared")
 
         await self.progress("selecting requested room and timeslot")
-        await self._drag_timeslot(
-            frame,
-            request.room,
-            request.search.start_time,
-            request.search.end_time,
-        )
-        await frame.locator("a#btnMakeBooking").click()
-        booking_frame = await self._wait_for_frame("frameBookingDetails")
+        booking_frame = await self._prepare_booking_frame(frame, request)
         await booking_frame.locator("input#bookingFormControl1_TextboxPurpose_c1").fill(
             request.purpose
         )
         await booking_frame.locator(
             "select#bookingFormControl1_DropDownUsageType_c1"
         ).select_option(label=request.usage_type)
+        await self._wait_for_idle(booking_frame)
         await booking_frame.locator(
             "select#bookingFormControl1_DropDownSpaceBookingUsage_c1"
         ).select_option(label=request.booking_usage)
+        await self._wait_for_idle(booking_frame)
+        await self.progress("adding co-booker to booking form")
         await self._add_co_booker(booking_frame, request.co_booker)
 
         invite = booking_frame.locator(
@@ -923,6 +983,7 @@ class FBSClient:
             "input#bookingFormControl1_TermsAndConditionsCheckbox_c1"
         ).check()
 
+        await self._verify_booking_details(booking_frame, request)
         preview = {
             "status": "ready" if not submit else "submitting",
             "room": request.room,
@@ -939,10 +1000,45 @@ class FBSClient:
 
         await self.progress("submitting confirmed booking")
         confirm = booking_frame.locator("a#panel_UIButton2").first
-        await confirm.click()
-        await self.page.wait_for_timeout(2000)
-        preview.update(await self._verify_booking(request))
+        try:
+            await confirm.click()
+            await self.page.wait_for_timeout(2000)
+            preview.update(await self._verify_booking(request))
+        except Exception:
+            raise BookingOutcomeUnknown(
+                "Final confirmation was attempted, but its outcome could not be verified. "
+                "Check FBS My Bookings before creating another booking."
+            ) from None
         return preview
+
+    async def _verify_booking_details(
+        self, frame: Frame, request: BookingRequest
+    ) -> None:
+        """Check the server's selected room/datetimes before any final confirmation."""
+        labels = frame.get_by_text(request.room, exact=True)
+        if not any([await label.is_visible() for label in await labels.all()]):
+            raise BookingUnavailable(
+                "FBS booking details do not show the requested room. Nothing was confirmed."
+            )
+        day = datetime.strptime(request.search.date, "%d-%b-%Y").strftime("%Y-%m-%d")
+        for suffix, time_value in (
+            ("Start", request.search.start_time),
+            ("End", request.search.end_time),
+        ):
+            value = await frame.locator(
+                f"select#bookingFormControl1_DropDown{suffix}Time_c1"
+            ).input_value()
+            try:
+                actual = datetime.strptime(value, "%m/%d/%Y %I:%M:%S %p")
+            except ValueError:
+                raise LayoutChanged(
+                    "FBS booking details contain an unreadable date/time. Nothing was confirmed."
+                ) from None
+            expected = datetime.fromisoformat(f"{day}T{time_value}:00")
+            if actual != expected:
+                raise BookingUnavailable(
+                    "FBS booking details do not match the requested date/time. Nothing was confirmed."
+                )
 
     async def _verify_booking(self, request: BookingRequest) -> dict:
         """Verify a submitted booking against FBS's My Bookings table."""
@@ -1045,11 +1141,15 @@ class FBSClient:
 
     async def _wait_for_idle(self, frame: Frame) -> None:
         await frame.wait_for_function(
-            """() => [...document.querySelectorAll('#__updateProgress__')].every((el) => {
+            """() => {
+                const manager = window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager;
+                if (manager && manager.getInstance().get_isInAsyncPostBack()) return false;
+                return [...document.querySelectorAll('#__updateProgress__')].every((el) => {
                 const style = window.getComputedStyle(el);
                 return style.display === 'none' || style.visibility === 'hidden' ||
                     style.pointerEvents === 'none' || el.getBoundingClientRect().height === 0;
-            })""",
+                });
+            }""",
             timeout=60000,
         )
         await frame.wait_for_timeout(250)
@@ -1065,31 +1165,55 @@ class FBSClient:
                 result.append(value)
         return result
 
-    async def _matching_room_names(self, frame: Frame) -> list[str]:
+    async def _set_facility_keyword(self, frame: Frame, room_name: str) -> None:
+        field = frame.locator("input#panel_SimpleSearch_c1")
+        if not await field.is_visible():
+            watermark = frame.locator("#panel_SimpleSearch input:visible")
+            if not await watermark.count():
+                watermark = field.locator("xpath=..").locator("input:visible")
+            await watermark.first.click()
+        await field.wait_for(state="visible", timeout=10000)
+        await field.fill(room_name)
+        await frame.locator("a#panel_buttonSimpleSearch").click()
+        await self._wait_for_idle(frame)
+
+    async def _matching_room_names(
+        self, frame: Frame, *, only_room: str | None = None
+    ) -> list[str]:
         pagination = frame.locator('table#GridResults_gv a[href*="Page$"]')
         if await pagination.count():
             raise LayoutChanged(
                 "FBS room results are paginated; complete discovery is required"
             )
         names = await self._room_names(frame)
-        if not names:
-            return names
+        if not names or (only_room and only_room not in names):
+            return []
         checkboxes = frame.locator('table#GridResults_gv input[type="checkbox"]')
         if len(set(names)) != len(names) or await checkboxes.count() != len(names):
             raise LayoutChanged(
                 "Matching facilities do not have unique selection controls"
             )
         async with asyncio.timeout(90):
-            await self.progress("selecting all matching facilities")
-            for checkbox in await checkboxes.all():
-                await checkbox.check(timeout=10000)
+            await self.progress(
+                "selecting the requested facility only"
+                if only_room
+                else "selecting all matching facilities"
+            )
+            for name, checkbox in zip(names, await checkboxes.all()):
+                if only_room:
+                    await checkbox.set_checked(name == only_room, timeout=10000)
+                else:
+                    await checkbox.check(timeout=10000)
             await self._wait_for_idle(frame)
         selected = await checkboxes.evaluate_all(
             "(els) => els.filter(el => el.checked).length"
         )
-        if selected != len(names) or await self._room_names(frame) != names:
-            raise LayoutChanged("Not all matching facilities are selected")
-        return names
+        expected = 1 if only_room else len(names)
+        if selected != expected or await self._room_names(frame) != names:
+            raise LayoutChanged(
+                "The requested facility selection could not be verified"
+            )
+        return [only_room] if only_room else names
 
     async def _read_availability(
         self, frame: Frame, room_names: list[str], config: SearchConfig
@@ -1104,47 +1228,287 @@ class FBSClient:
         await self._wait_for_idle(frame)
         return await read_complete_calendar(frame, room_names, config)
 
-    async def _drag_timeslot(
-        self, frame: Frame, room_name: str, start_time: str, end_time: str
-    ) -> None:
-        headers = frame.locator("div.scheduler_bluewhite_rowheader_inner")
-        row = None
-        for candidate in await headers.all():
-            if (await candidate.inner_text()).strip() == room_name:
-                row = candidate
-                break
-        if not row:
-            raise LayoutChanged(f"Calendar row not found for {room_name}")
-        row_box = await row.bounding_box()
-        if not row_box:
-            raise LayoutChanged(f"Calendar row is not visible for {room_name}")
+    async def _calendar_headers(self, frame: Frame) -> tuple[list[dict], int]:
+        metadata = await frame.evaluate(
+            """() => {
+            const s = window.dps;
+            const headers = s && s.timeHeaders;
+            return {group: headers && headers.length ? headers[headers.length - 1].groupBy : null,
+                cell: s && s.cellDuration};
+        }"""
+        )
+        duration = (
+            60
+            if metadata["group"] == "Hour"
+            else metadata["cell"] if metadata["group"] == "Cell" else None
+        )
+        if not isinstance(duration, (int, float)) or duration <= 0:
+            raise LayoutChanged("Calendar time-header scale is unsupported")
+        headers = []
+        for element in await frame.locator(
+            "#dps .scheduler_bluewhite_timeheadercol"
+        ).all():
+            label = (await element.inner_text()).strip()
+            box = await element.bounding_box()
+            if box and box["width"] > 0:
+                headers.append({"label": label, **box})
+        return headers, duration
 
-        start_box = await self._time_header_box(frame, start_time)
-        end_box = await self._time_header_box(frame, end_time)
-        start_x = start_box["x"] + 2
-        end_x = end_box["x"] - 2
+    async def _calendar_row_box(self, frame: Frame, scroll, room_name: str) -> dict:
+        await scroll.evaluate("el => {el.scrollTop = 0;}")
+        for _ in range(200):
+            await frame.wait_for_timeout(250)
+            view = await scroll.bounding_box()
+            metrics = await scroll.evaluate(
+                "el => ({top:el.scrollTop, height:el.clientHeight, full:el.scrollHeight})"
+            )
+            if not view or metrics["height"] <= 0:
+                raise LayoutChanged("Calendar scroll area is not visible")
+            matches = []
+            for row in await frame.locator(
+                "#dps .scheduler_bluewhite_rowheader_inner"
+            ).all():
+                if (await row.inner_text()).strip() == room_name:
+                    box = await row.bounding_box()
+                    if box and box["height"] > 0:
+                        matches.append(box)
+            if len(matches) > 1:
+                raise LayoutChanged("Requested calendar room is ambiguous")
+            if matches:
+                box = matches[0]
+                center = box["y"] + box["height"] / 2
+                margin = min(40, metrics["height"] / 3)
+                top_safe = center > view["y"] + margin or metrics["top"] <= 0
+                bottom_safe = (
+                    center < view["y"] + metrics["height"] - margin
+                    or metrics["top"] >= metrics["full"] - metrics["height"] - 1
+                )
+                if top_safe and bottom_safe:
+                    return box
+                target = metrics["top"] + center - (view["y"] + metrics["height"] / 2)
+            else:
+                target = metrics["top"] + max(1, metrics["height"] * 0.75)
+            target = max(0, min(metrics["full"] - metrics["height"], target))
+            if abs(target - metrics["top"]) < 1:
+                break
+            await scroll.evaluate("(el, top) => {el.scrollTop = top;}", target)
+        raise LayoutChanged(f"Calendar row could not be brought into view: {room_name}")
+
+    async def _selection_snapshot(self, frame: Frame) -> list[dict]:
+        result = await frame.evaluate(
+            """() => {
+            const s = window.dps;
+            if (!s || !Array.isArray(s.resources) || !s.events ||
+                !Array.isArray(s.events.list)) return null;
+            const manager = window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager;
+            if (manager && manager.getInstance().get_isInAsyncPostBack()) return [];
+            const names = new Map();
+            const visit = rows => rows.forEach(row => {
+                if (row.children && row.children.length) visit(row.children);
+                else names.set(String(row.id), row.name);
+            });
+            visit(s.resources);
+            // range.all() is only the transient mouse selection. FBS clears it
+            // after its postback and renders committed selections as events.
+            // Inspect only the observed FBS selection status and tooltip fields;
+            // never export booking titles, attendees or the rest of the tag.
+            return s.events.list.filter(e => Array.isArray(e.tag) &&
+                String(e.tag[7]) === '10' &&
+                /^\\d{2}:\\d{2} - \\d{2}:\\d{2} \\(selected\\)$/.test(e.tag[10])
+            ).map(e => ({
+                room: names.get(String(e.resource)) || null,
+                start: String(e.start), end: String(e.end),
+            }));
+        }"""
+        )
+        if not isinstance(result, list):
+            raise LayoutChanged(
+                "FBS calendar selection cannot be verified; Make Booking was not clicked."
+            )
+        return result
+
+    async def _verify_calendar_selection(
+        self, frame: Frame, room: str, start: str, end: str, date: str | None = None
+    ) -> None:
+        expected_day = (
+            datetime.strptime(date, "%d-%b-%Y").strftime("%Y-%m-%d") if date else None
+        )
+
+        def matches(ranges):
+            if len(ranges) != 1:
+                return False
+            selection = ranges[0]
+            try:
+                actual_start = datetime.fromisoformat(selection["start"])
+                actual_end = datetime.fromisoformat(selection["end"])
+            except (KeyError, ValueError, TypeError):
+                return False
+            return (
+                selection.get("room") == room
+                and actual_start.strftime("%H:%M:%S") == start + ":00"
+                and actual_end.strftime("%H:%M:%S") == end + ":00"
+                and actual_start.date() == actual_end.date()
+                and (
+                    expected_day is None
+                    or actual_start.strftime("%Y-%m-%d") == expected_day
+                )
+            )
+
+        # Require stable server-rendered selected slots after mouse-up. The
+        # transient green drag preview is not evidence of server acceptance.
+        consecutive = 0
+        for _ in range(120):
+            if matches(await self._selection_snapshot(frame)):
+                consecutive += 1
+                if consecutive >= 2:
+                    return
+            else:
+                consecutive = 0
+            await frame.wait_for_timeout(250)
+        raise CalendarSelectionLost(
+            "FBS did not retain the requested room and timeslot. No booking was submitted. "
+            "Start a fresh search and try validation again."
+        )
+
+    async def _prepare_booking_frame(
+        self, frame: Frame, request: BookingRequest
+    ) -> Frame:
+        for attempt in range(2):
+            try:
+                # A rejected previous attempt leaves a toast behind. Dismiss it
+                # before retrying so it cannot be mistaken for a new rejection.
+                dismiss = frame.locator(".error:visible").get_by_text(
+                    re.compile(r"^dismiss$", re.I)
+                )
+                for control in await dismiss.all():
+                    await control.click()
+                await self._drag_timeslot(
+                    frame,
+                    request.room,
+                    request.search.start_time,
+                    request.search.end_time,
+                    date=request.search.date,
+                )
+                button = frame.locator("a#btnMakeBooking")
+                # Moving to the toolbar can trigger scrolling or a late mouse
+                # handler. Verify once more after that movement, before clicking.
+                await button.hover()
+                await self._verify_calendar_selection(
+                    frame,
+                    request.room,
+                    request.search.start_time,
+                    request.search.end_time,
+                    request.search.date,
+                )
+                await button.click()
+                for _ in range(60):
+                    details = self.page.frame(name="frameBookingDetails")
+                    if (
+                        details
+                        and await details.locator(
+                            "input#bookingFormControl1_TextboxPurpose_c1"
+                        ).is_visible()
+                    ):
+                        return details
+                    current = self.page.frame(name="frameContent")
+                    if current:
+                        errors = await current.locator(
+                            ".error:visible"
+                        ).all_text_contents()
+                        if any(
+                            "click and drag to select timeslot" in error.casefold()
+                            for error in errors
+                        ):
+                            raise CalendarSelectionLost(
+                                "FBS rejected the calendar selection before opening booking details. No booking was submitted."
+                            )
+                    await self.page.wait_for_timeout(500)
+                raise LayoutChanged(
+                    "FBS did not open booking details after Make Booking. No final confirmation was attempted."
+                )
+            except CalendarSelectionLost:
+                if attempt:
+                    raise
+                await self.progress(
+                    "FBS cleared the selection; retrying the room/time selection once"
+                )
+                frame = self.page.frame(name="frameContent")
+                if not frame:
+                    raise LayoutChanged(
+                        "FBS calendar disappeared during selection recovery"
+                    ) from None
+                clear = frame.get_by_text(re.compile(r"^clear selection$", re.I))
+                if await clear.count():
+                    await clear.first.click()
+                    await self._wait_for_idle(frame)
+        raise CalendarSelectionLost(
+            "FBS calendar selection failed before booking preparation."
+        )
+
+    async def _drag_timeslot(
+        self,
+        frame: Frame,
+        room_name: str,
+        start_time: str,
+        end_time: str,
+        *,
+        date: str | None = None,
+    ) -> None:
+        if not self.page:
+            raise FBSError("Browser page is unavailable")
+        scroll = frame.locator("#dps .scheduler_bluewhite_scrollable")
+        if await scroll.count() != 1:
+            raise LayoutChanged("Calendar scroll area is not uniquely identifiable")
+        row_box = await self._calendar_row_box(frame, scroll, room_name)
+        # Locator.bounding_box uses main-page coordinates, including iframe offsets.
+        # FBS labels hours but has half-hour cells; interpolate within each hour.
+        for _ in range(4):
+            headers, duration = await self._calendar_headers(frame)
+            start_x = calendar_time_x(headers, start_time, duration) + 2
+            end_x = calendar_time_x(headers, end_time, duration) - 2
+            view = await scroll.bounding_box()
+            metrics = await scroll.evaluate(
+                "el => ({left:el.scrollLeft, width:el.clientWidth, full:el.scrollWidth})"
+            )
+            if not view or end_x <= start_x or end_x - start_x > metrics["width"] - 8:
+                raise LayoutChanged(
+                    "Requested calendar range does not fit the visible grid"
+                )
+            margin = min(40, metrics["width"] / 4)
+            left_safe = start_x >= view["x"] + margin or metrics["left"] <= 0
+            right_safe = (
+                end_x <= view["x"] + metrics["width"] - margin
+                or metrics["left"] >= metrics["full"] - metrics["width"] - 1
+            )
+            if (
+                left_safe
+                and right_safe
+                and view["x"] + 2 <= start_x < end_x <= view["x"] + metrics["width"] - 2
+            ):
+                break
+            target = (
+                metrics["left"]
+                + (start_x + end_x) / 2
+                - (view["x"] + metrics["width"] / 2)
+            )
+            target = max(0, min(metrics["full"] - metrics["width"], target))
+            await scroll.evaluate("(el, left) => {el.scrollLeft = left;}", target)
+            await frame.wait_for_timeout(250)
+        else:
+            raise LayoutChanged("Calendar time range could not be brought into view")
         y = row_box["y"] + row_box["height"] / 2
-        if end_x <= start_x:
-            raise LayoutChanged("Unable to calculate the calendar drag range")
         await self.page.mouse.move(start_x, y)
         await self.page.mouse.down()
-        await self.page.mouse.move(end_x, y, steps=20)
-        await self.page.mouse.up()
-        await frame.wait_for_timeout(1200)
-
-    async def _time_header_box(self, frame: Frame, value: str) -> dict:
-        selectors = [
-            "div.scheduler_bluewhite_timeheader_cell_inner",
-            "div.scheduler_bluewhite_timeheadergroup_inner",
-        ]
-        for selector in selectors:
-            locator = frame.locator(selector)
-            for candidate in await locator.all():
-                if (await candidate.inner_text()).strip() == value:
-                    box = await candidate.bounding_box()
-                    if box:
-                        return box
-        raise LayoutChanged(f"Calendar time header not found: {value}")
+        try:
+            await frame.wait_for_timeout(100)
+            await self.page.mouse.move(end_x, y, steps=20)
+            await frame.wait_for_timeout(100)
+        finally:
+            await self.page.mouse.up()
+        await self._wait_for_idle(frame)
+        await self._verify_calendar_selection(
+            frame, room_name, start_time, end_time, date
+        )
 
     async def _wait_for_frame(self, name: str) -> Frame:
         if not self.page:
@@ -1161,36 +1525,54 @@ class FBSClient:
         search_input = frame.locator(
             "input#bookingFormControl1_DialogSearchCoBooker_searchPanel_textBox_c1"
         )
+        # This legacy FBS control displays a watermark input and hides its real
+        # textbox until the visible watermark is focused.
+        if not await search_input.is_visible():
+            watermark = frame.locator(
+                "#bookingFormControl1_DialogSearchCoBooker_searchPanel_textBox input:visible"
+            ).first
+            await watermark.click(timeout=15000)
         await search_input.wait_for(state="visible", timeout=15000)
         await search_input.fill(query)
+        await self.progress("searching for the requested co-booker")
         await frame.locator(
             "a#bookingFormControl1_DialogSearchCoBooker_searchPanel_buttonSearch"
         ).click()
+        await self._wait_for_idle(frame)
 
         result_link = frame.locator(
-            "#bookingFormControl1_DialogSearchCoBooker_searchPanel_gridView_gv"
+            "table#bookingFormControl1_DialogSearchCoBooker_searchPanel_gridView_gv"
         ).get_by_text(query, exact=False)
         await result_link.first.wait_for(timeout=20000)
+        selected_label = (await result_link.first.inner_text()).strip()
+        selected_name = re.sub(
+            r"\s*\(" + re.escape(query) + r"\)\s*$", "", selected_label, flags=re.I
+        ).strip()
         row = result_link.first.locator("xpath=ancestor::tr[1]")
         checkbox = row.locator('input[type="checkbox"]')
         if await checkbox.count() == 0:
             raise LayoutChanged("Co-booker result checkbox was not found")
         await checkbox.check()
+        await self.progress("adding the matched co-booker")
         await frame.locator(
             "a#bookingFormControl1_DialogSearchCoBooker_dialogBox_b1"
         ).click()
 
-        grid = frame.locator("#bookingFormControl1_GridCoBookers_gv")
+        # FBS duplicates this table id for its header/body rendering. Match the
+        # email or the name captured from that exact email search result.
+        identity = re.compile(
+            "|".join(re.escape(value) for value in {query, selected_name} if value),
+            re.I,
+        )
+        grid = (
+            frame.locator("table#bookingFormControl1_GridCoBookers_gv:visible")
+            .filter(has_text=identity)
+            .first
+        )
         await grid.wait_for(timeout=15000)
-        added = grid.get_by_text(query, exact=False)
-        if await added.count() == 0:
-            # FBS may display a name rather than an email after selection.
-            rows = grid.locator("tr")
-            if await rows.count() < 2:
-                raise FBSError(f"Co-booker was not added: {query}")
-            added_row = rows.nth(1)
-        else:
-            added_row = added.first.locator("xpath=ancestor::tr[1]")
+        added = grid.get_by_text(identity).first
+        await added.wait_for(timeout=15000)
+        added_row = added.locator("xpath=ancestor::tr[1]")
         added_checkbox = added_row.locator('input[type="checkbox"]')
         if await added_checkbox.count():
             await added_checkbox.check()

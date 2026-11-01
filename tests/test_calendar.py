@@ -24,6 +24,46 @@ class CalendarCoverageTest(unittest.TestCase):
             all(slot.details is None for room in rooms for slot in room.timeslots)
         )
 
+    def test_midnight_to_next_midnight_unavailable_is_not_advertised_as_free(self):
+        event = {
+            **self.event,
+            "title": "(00:00-00:00) (not available)",
+            "start_date": "2026-11-01T00:00:00",
+            "end_date": "2026-11-02T00:00:00",
+        }
+        rooms = calendar_rooms(["A", "B"], self.config, self.rows, [event], 1)
+        self.assertFalse(rooms[1].is_free("08:00", "22:00"))
+        self.assertEqual(
+            [(slot.start, slot.end, slot.status) for slot in rooms[1].timeslots],
+            [("08:00", "22:00", "unavailable")],
+        )
+
+    def test_previous_day_booking_only_blocks_its_overlap_with_requested_date(self):
+        event = {
+            **self.event,
+            "title": "Booking Time: 23:00-09:00",
+            "start_date": "2026-10-31T23:00:00",
+            "end_date": "2026-11-01T09:00:00",
+        }
+        rooms = calendar_rooms(["A", "B"], self.config, self.rows, [event], 1)
+        self.assertFalse(rooms[1].is_free("08:00", "09:00"))
+        self.assertTrue(rooms[1].is_free("09:00", "22:00"))
+
+    def test_model_resource_mismatch_is_rejected(self):
+        event = {**self.event, "resource_name": "A"}
+        with self.assertRaises(LayoutChanged):
+            calendar_rooms(["A", "B"], self.config, self.rows, [event], 1)
+
+    def test_missing_or_nonpositive_full_dates_are_rejected(self):
+        for start, end in [
+            (None, None),
+            ("invalid", "invalid"),
+            ("2026-11-01T00:00:00", "2026-11-01T00:00:00"),
+        ]:
+            event = {**self.event, "start_date": start, "end_date": end}
+            with self.assertRaises(LayoutChanged):
+                calendar_rooms(["A", "B"], self.config, self.rows, [event], 1)
+
     def test_second_event_line_in_expanded_room_row_stays_busy(self):
         rows = {"A": (0, 25), "B": (300, 350)}
         second = {

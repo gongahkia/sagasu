@@ -34,6 +34,7 @@ try:
         AuthenticationRequired,
         BookingRequest,
         BookingUnavailable,
+        BookingOutcomeUnknown,
         FBSError,
         LayoutChanged,
         SearchConfig,
@@ -60,6 +61,7 @@ except ImportError:
         AuthenticationRequired,
         BookingRequest,
         BookingUnavailable,
+        BookingOutcomeUnknown,
         FBSError,
         LayoutChanged,
         SearchConfig,
@@ -699,6 +701,11 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 "🧪 Validation passed through the complete pre-confirmation flow. "
                 "No booking was submitted."
             )
+    except BookingOutcomeUnknown as error:
+        drafts.pop(token, None)
+        await status.edit_text(
+            f"⚠️ {error} This review has been disabled to prevent a repeated submission."
+        )
     except BookingUnavailable as error:
         drafts.pop(token, None)
         await status.edit_text(f"⚠️ Availability changed: {error}")
