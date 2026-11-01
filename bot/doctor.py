@@ -243,12 +243,12 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
                 ),
             )
         )
-    except ConfigError:
+    except ConfigError as error:
         add(
             Check(
                 "config.owner",
                 "fail",
-                "Owner ID must be a positive numeric Telegram user ID.",
+                str(error),
             )
         )
     for name, target in (

@@ -9,7 +9,14 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .config import BROWSERS, ConfigError, DEFAULT_ENV, Settings, TEMPLATE
+from .config import (
+    BROWSERS,
+    ConfigError,
+    DEFAULT_ENV,
+    Settings,
+    TEMPLATE,
+    TOKEN_PATTERN,
+)
 from .console import Reporter, configure_logging
 from .runtime import AlreadyRunning, InstanceLock
 
@@ -100,7 +107,7 @@ def parser():
         "--timeout",
         type=int,
         default=600,
-        help="Manual login deadline, 1–1800 seconds (default: 600)",
+        help="Sign-in and MFA deadline, 1–1800 seconds (default: 600)",
     )
     doctor = commands.add_parser(
         "doctor",
@@ -162,10 +169,13 @@ def print_values(values, as_json=False):
 
 async def login(settings, reporter, timeout):
     from .fbs_client import FBSClient
+    from .auth import owner_auth_notifier
+    from contextlib import AsyncExitStack
+    from telegram import Bot
 
     with InstanceLock(settings.profile):
         reporter.write(
-            "Complete SMU password entry and Microsoft MFA in the browser. No credentials belong in the terminal."
+            "Using configured SMU credentials when available. Approve Microsoft MFA when prompted; never send your password to the bot."
         )
         with reporter.progress("Opening private FBS login") as progress:
 
@@ -177,9 +187,29 @@ async def login(settings, reporter, timeout):
             os.environ["SAGASU_AUTH_TIMEOUT_MS"] = str(timeout * 1000)
             try:
                 async with asyncio.timeout(timeout):
-                    async with FBSClient(
-                        keep_alive=False, profile_path=settings.profile, progress=update
-                    ) as client:
+                    async with AsyncExitStack() as stack:
+                        notify = None
+                        if (
+                            TOKEN_PATTERN.fullmatch(settings.token)
+                            and settings.owner_id
+                        ):
+                            settings.validate()
+                            telegram = await stack.enter_async_context(
+                                Bot(settings.token)
+                            )
+                            notify = owner_auth_notifier(telegram)
+                        if settings.public()["headless"] and notify is None:
+                            raise ConfigError(
+                                "Headless login requires a valid BOT_TOKEN and TELEGRAM_OWNER_ID for private MFA prompts."
+                            )
+                        client = await stack.enter_async_context(
+                            FBSClient(
+                                keep_alive=False,
+                                profile_path=settings.profile,
+                                progress=update,
+                                auth_notify=notify,
+                            )
+                        )
                         await client.ensure_authenticated()
                 progress.finish(
                     "Authenticated FBS controls verified; private session saved."
@@ -195,6 +225,7 @@ def run(settings, reporter):
     from .bot import build_application
     from .fbs_client import close_shared_browser
 
+    reporter.banner()
     settings.persistence.parent.mkdir(parents=True, exist_ok=True)
     with InstanceLock(settings.profile):
         if not settings.owner_id:
@@ -319,8 +350,8 @@ def main(argv=None):
             if as_json:
                 print(json.dumps(report, indent=2))
             return 0 if report["ok"] else 1
-        if args.command == "run":
-            settings.validate()
+        if args.command in {"run", "login"}:
+            settings.validate(require_token=args.command == "run")
         settings.activate()
         if args.command == "login":
             asyncio.run(login(settings, reporter, args.timeout))

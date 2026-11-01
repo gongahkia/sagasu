@@ -21,6 +21,7 @@ from telegram.ext import (
 )
 
 try:
+    from .auth import owner_auth_notifier
     from .fbs_client import (
         AuthenticationRequired,
         BookingRequest,
@@ -35,7 +36,9 @@ try:
 except ImportError:
     if __package__:
         raise
-    from fbs_client import (
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from bot.auth import owner_auth_notifier
+    from bot.fbs_client import (
         AuthenticationRequired,
         BookingRequest,
         BookingUnavailable,
@@ -110,7 +113,11 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         search_config = search_config_from_bot(
             context.user_data.get("scrape_config") or {}
         )
-        scrape_task = asyncio.create_task(search_fbs(search_config, progress))
+        scrape_task = asyncio.create_task(
+            search_fbs(
+                search_config, progress, auth_notify=owner_auth_notifier(context.bot)
+            )
+        )
         _ACTIVE_SEARCHES[callback_query.from_user.id] = scrape_task
         try:
             result = await scrape_task
@@ -694,7 +701,12 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
 
     try:
         request = BookingRequest.from_mapping(draft["request"])
-        result = await execute_booking(request, submit=submit, progress=progress)
+        result = await execute_booking(
+            request,
+            submit=submit,
+            progress=progress,
+            auth_notify=owner_auth_notifier(context.bot),
+        )
         if submit:
             drafts.pop(token, None)
             await status.edit_text(

@@ -36,7 +36,7 @@ sagasu run
 | `sagasu doctor --offline` | Check local setup/browser startup; skip service requests and token verification. |
 | `sagasu doctor --session` | Also check the actual saved FBS session with the bot stopped. No manual login or credential submission. |
 | `sagasu doctor --json` | Structured report on stdout, exit 1 if a health check fails. |
-| `sagasu login` | Open the bot's own profile and wait for manual SMU password/MFA, then save the authenticated session. Does not require a Telegram token. |
+| `sagasu login` | Open the bot's own profile and use configured credentials (or manual entry) and wait for MFA approval, then save the authenticated session. Does not require a Telegram token. |
 | `sagasu config init` | Create a private configuration template without overwriting anything. |
 | `sagasu config show --json` | Inspect configuration with token and owner ID redacted. |
 | `sagasu paths` | Show environment-file, browser-profile, and Telegram state paths. |
@@ -81,11 +81,36 @@ Relevant settings:
 - `SAGASU_BROWSER_PROFILE`: private browser profile override.
 - `SAGASU_STATE_PATH`: private Telegram persistence-file override.
 - `SAGASU_AUTH_TIMEOUT_MS`: interactive authentication timeout, 1000–1800000 ms.
-- `SMU_LOGIN_EMAIL`: optional username prefill; passwords and MFA stay manual.
+- `SMU_LOGIN_EMAIL`: optional username prefill.
+- `SMU_LOGIN_PASSWORD`: optional password autofill, read from private configuration; requires an email and owner ID. Omit it to type the password yourself.
+- `SAGASU_HEADLESS=true`: run Chromium without a desktop. Saved sessions and automatic credentials work in this mode; `doctor --session` still never submits credentials.
 
 Session-only cookies are atomically saved as `.sagasu-session.json` inside the browser profile with mode 0600, then restored before FBS navigation. Original expiration values are preserved; SMU can still expire/revoke the session and require MFA. Browser profile and Telegram state contain private data and must not be committed or uploaded. `login`, `run`, and session checks take the same kernel lock to prevent concurrent profile use. Stop the bot before renewing login or running `doctor --session`. The persistent lock file is intentionally not deleted; the operating system releases ownership when the process exits.
 
 The CLI does not reuse the removed public scraper's profile. If you encounter FBS/Microsoft login after migration, complete it in the bot's own Chrome window.
+
+## Remote sign-in with phone approval
+
+Configure these on the host running Sagasu, using a private `.env` or the host's secret store:
+
+```dotenv
+BOT_TOKEN=your-bot-token
+TELEGRAM_OWNER_ID=your-numeric-id
+SMU_LOGIN_EMAIL=your.name@smu.edu.sg
+SMU_LOGIN_PASSWORD='your-private-password'
+SAGASU_BROWSER_CHANNEL=chromium
+SAGASU_HEADLESS=true
+```
+
+Keep `.env` readable only by your account (`chmod 600 .env` on Linux/macOS). Quote password values containing `#` or spaces; dotenv interpolation is disabled. Passwords are excluded from config output and redacted from logs. Never send passwords or one-time verification codes to Telegram. Browser profiles and saved sessions are also private credentials.
+
+Start the bot with `sagasu run`. Open its **private Telegram chat** and send `/start` before searching; Telegram must allow the bot to message you. When FBS needs renewal, Sagasu fills credentials only on supported HTTPS Microsoft sign-in origins, chooses password sign-in when offered, and selects Microsoft Authenticator push approval. It sends a new private message to `TELEGRAM_OWNER_ID`, including Microsoft's [matching number](https://learn.microsoft.com/en-us/entra/identity/authentication/how-to-mfa-number-match). Open Authenticator and approve the sign-in you just initiated. Search or booking validation continues after Microsoft returns to FBS. Numbers that appear late or change generate an updated notification; identical prompts are sent once per login attempt. Numbers are kept out of shared search-progress messages.
+
+`sagasu login` can also use this flow when a valid bot token and owner ID are configured. Stop a running bot first because both commands lock the same profile. Without headless mode or configured credentials, the browser still allows manual login. `doctor` never sends MFA notifications or enters credentials.
+
+The host needs Python, Playwright's Chromium and its operating-system libraries, network access to FBS/Microsoft/Telegram, and persistent storage for the browser profile. Only one Sagasu instance should use the profile and bot token. A desktop is unnecessary for an Authenticator push flow; a CAPTCHA, forced password change, unsupported verification method, or SMU policy requiring a managed device can still require interactive access. Password rejection/denial stops the attempt; Sagasu does not repeatedly submit passwords or automatically resend MFA pushes. Authentication waits for `SAGASU_AUTH_TIMEOUT_MS` (10 minutes by default), then reports failure; start a new search when ready.
+
+The supplied Unicode banner appears on interactive `run` startup. Quiet mode and redirected output omit it; narrow or non-Unicode terminals show `SAGASU`.
 
 ## Rattles attribution
 

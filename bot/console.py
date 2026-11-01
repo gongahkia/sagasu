@@ -13,6 +13,15 @@ from pathlib import Path
 from ._vendor.rattles import LINE, PRESETS
 
 
+BANNER = """┌────┐┐     ┌───┐┐     ┌────┐┐   ┌───┐┐     ┌────┐┐   ┌──┐┐┌──┐┐
+┌─┘▓▓▓▓││   ┌─┘▓▓▓└─┐┐ ┌─┘▓▓▓▓││ ┌─┘▓▓▓└─┐┐ ┌─┘▓▓▓▓││   │▓▓│││▓▓││
+│░░────┴┐┐  │░░┐-┌░░││ │░░┌───┘└ │░░┐-┌░░││ │░░────┴┐┐  │░░│││░░││
+└─┐▓▓▓▓▓└┐┐ │▓▓└─┘▓▓││ │▓▓││┬──┐ │▓▓└─┘▓▓││ └─┐▓▓▓▓▓└┐┐ │▓▓│││▓▓││
+┌─└───┐░░││ │░░░░░░░││ │░░└─┘░┌│ │░░░░░░░││ ┌─└───┐░░││ │░░└─┘░░││
+│▒▒▒▒▒▒▒┌┘└ │▒▒┌─┐▒▒││ └─┐▒▒▒▒││ │▒▒┌─┐▒▒││ │▒▒▒▒▒▒▒┌┘└ └─┐▒▒▒┌─┘
+└───────┘└  └──┘└└──┘└   └────┘└ └──┘└└──┘└ └───────┘└    └───┘└"""
+
+
 class Reporter:
     def __init__(self, *, stream=None, spinner="dots", no_color=False, quiet=False):
         self.stream = stream or sys.stderr
@@ -22,6 +31,7 @@ class Reporter:
             and os.environ.get("TERM") != "dumb"
             and not os.environ.get("CI")
         )
+        self.tty = tty
         self.animated = tty and spinner != "none" and not quiet
         self.color = tty and not no_color and "NO_COLOR" not in os.environ
         self.rattle = PRESETS.get(spinner, LINE)
@@ -31,6 +41,20 @@ class Reporter:
             self.rattle = LINE
         self.lock = threading.RLock()
         self.active = None
+
+    def banner(self):
+        if not self.tty or self.quiet:
+            return
+        banner = BANNER
+        try:
+            banner.encode(self.stream.encoding or "utf-8")
+        except (UnicodeError, LookupError):
+            banner = "SAGASU"
+        if shutil.get_terminal_size((80, 24)).columns < max(
+            map(len, banner.splitlines())
+        ):
+            banner = "SAGASU"
+        self.write(banner)
 
     def write(self, message, *, error=False):
         if self.quiet and not error:

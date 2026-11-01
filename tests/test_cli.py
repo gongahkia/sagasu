@@ -47,6 +47,17 @@ class CliTest(unittest.TestCase):
             self.assertEqual(main([]), 0)
         self.assertIn("doctor", output.getvalue())
 
+    def test_historical_script_entrypoint_still_shows_help(self):
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [sys.executable, str(root / "bot/bot.py"), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("sagasu", result.stdout)
+
     def test_version(self):
         with contextlib.redirect_stdout(io.StringIO()) as output:
             with self.assertRaises(SystemExit) as error:
@@ -92,6 +103,49 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertNotIn(TOKEN, stdout + stderr)
         self.assertEqual(json.loads(stdout)["bot_token"], "configured (redacted)")
+
+    def test_password_is_loaded_literally_and_redacted_in_config(self):
+        with self.path.open("a") as stream:
+            stream.write(
+                "SMU_LOGIN_EMAIL=test@smu.edu.sg\nSMU_LOGIN_PASSWORD='private${VAR}#test'\nSAGASU_HEADLESS=true\n"
+            )
+        settings = Settings.load(self.path)
+        settings.validate()
+        self.assertEqual(settings.values["SMU_LOGIN_PASSWORD"], "private${VAR}#test")
+        self.assertNotIn("private${VAR}#test", repr(settings))
+        code, stdout, stderr = self.invoke("config", "show", "--json")
+        self.assertEqual(code, 0)
+        self.assertNotIn("private${VAR}#test", stdout + stderr)
+        self.assertTrue(json.loads(stdout)["password_autofill"])
+        self.assertTrue(json.loads(stdout)["headless"])
+
+    def test_password_autofill_requires_email_and_owner(self):
+        for values in (
+            "SMU_LOGIN_PASSWORD=private\n",
+            "SMU_LOGIN_PASSWORD=private\nSMU_LOGIN_EMAIL=test@smu.edu.sg\n",
+        ):
+            self.path.write_text(values)
+            with self.assertRaisesRegex(ConfigError, "requires"):
+                Settings.load(self.path).validate(require_token=False)
+
+    def test_banner_omitted_for_redirected_output_and_ascii_fallback(self):
+        from bot.console import BANNER
+
+        output = io.StringIO()
+        Reporter(stream=output).banner()
+        self.assertEqual(output.getvalue(), "")
+        with patch.dict(os.environ, {"TERM": "xterm"}):
+
+            class Terminal(io.StringIO):
+                def isatty(self):
+                    return True
+
+            output = Terminal()
+            Reporter(stream=output).banner()
+            self.assertIn(BANNER, output.getvalue())
+            output = Terminal()
+            Reporter(stream=output, quiet=True).banner()
+            self.assertEqual(output.getvalue(), "")
 
     def test_config_init_is_private_and_never_overwrites(self):
         self.path.unlink()

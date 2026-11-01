@@ -98,7 +98,13 @@ class Settings:
             if value is not None
             and (
                 key.startswith("SAGASU_")
-                or key in {"BOT_TOKEN", "TELEGRAM_OWNER_ID", "SMU_LOGIN_EMAIL", "SMU_LOGIN_PASSWORD"}
+                or key
+                in {
+                    "BOT_TOKEN",
+                    "TELEGRAM_OWNER_ID",
+                    "SMU_LOGIN_EMAIL",
+                    "SMU_LOGIN_PASSWORD",
+                }
             )
         }
         return cls(
