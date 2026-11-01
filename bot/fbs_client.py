@@ -302,6 +302,33 @@ class FBSClient:
         self.context: BrowserContext | None = None
         self.page: Page | None = None
 
+    def _configure_password_manager(self) -> None:
+        """Disable Chrome credential UI in our private profile, preserving other prefs."""
+        directory = self.profile_path / "Default"
+        path = directory / "Preferences"
+        temporary = None
+        try:
+            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            values = json.loads(path.read_text()) if path.exists() else {}
+            if not isinstance(values, dict) or not isinstance(
+                values.get("profile", {}), dict
+            ):
+                raise ValueError()
+            values["credentials_enable_service"] = False
+            values["credentials_enable_autosignin"] = False
+            values.setdefault("profile", {})["password_manager_enabled"] = False
+            with NamedTemporaryFile(mode="w", dir=directory, delete=False) as stream:
+                temporary = Path(stream.name)
+                json.dump(values, stream)
+            temporary.replace(path)
+        except (OSError, ValueError, TypeError):
+            raise FBSError(
+                "Could not configure the private browser profile. Close other browsers using it and check its permissions/preferences."
+            ) from None
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+
     async def __aenter__(self) -> "FBSClient":
         global _SHARED_CONTEXT, _SHARED_PLAYWRIGHT
         await _BROWSER_LOCK.acquire()
@@ -324,6 +351,7 @@ class FBSClient:
                     _SHARED_CONTEXT = None
                     _SHARED_PLAYWRIGHT = None
             self.profile_path.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self._configure_password_manager()
             self._playwright = await async_playwright().start()
             self.context = await self._playwright.chromium.launch_persistent_context(
                 str(self.profile_path),
@@ -482,6 +510,7 @@ class FBSClient:
         started = asyncio.get_running_loop().time()
         previous_state = None
         email_submitted = password_submitted = method_selected = False
+        email_submissions = 0
         cancelled_passkey = False
         notifications = set()
         timeout_ms = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", str(AUTH_TIMEOUT_MS)))
@@ -501,7 +530,8 @@ class FBSClient:
                 await self.page.wait_for_timeout(750)
                 continue
             state, prompt = await self._classify_auth_state()
-            if state != previous_state:
+            state_changed = state != previous_state
+            if state_changed:
                 await self._capture_auth_state(state)
                 # Number matching is sent privately to the owner, never to a group/search message.
                 await self.progress(
@@ -527,23 +557,35 @@ class FBSClient:
                 raise AuthenticationRequired(prompt)
 
             trusted = self._trusted_login_url(self.page.url)
-            if state == "email" and not email_submitted and trusted:
+            if state == "email" and trusted:
                 login_email = os.getenv("SMU_LOGIN_EMAIL", "").strip()
-                if login_email:
-                    await self.page.locator(
-                        'input[name="loginfmt"]:visible, input[type="email"]:visible'
-                    ).first.fill(login_email)
+                field = self.page.locator(
+                    'input[name="loginfmt"]:visible, input[type="email"]:visible'
+                ).first
+                if login_email and (
+                    not email_submitted or not (await field.input_value()).strip()
+                ):
+                    if email_submissions >= 2:
+                        await self._stop_reset_login()
+                    if email_submitted:
+                        await self.progress(
+                            "Microsoft restarted sign-in; restoring your email once"
+                        )
+                    await field.fill(login_email)
                     await self.page.locator(
                         'input[type="submit"]:visible, button[type="submit"]:visible'
                     ).first.click()
                     email_submitted = True
-                elif self.headless:
+                    email_submissions += 1
+                elif not login_email and self.headless:
                     raise AuthenticationRequired(
                         "Set SMU_LOGIN_EMAIL for headless sign-in."
                     )
-            elif state == "password" and not password_submitted and trusted:
+            elif state == "password" and trusted:
+                if password_submitted and state_changed:
+                    await self._stop_reset_login()
                 password = os.getenv("SMU_LOGIN_PASSWORD", "")
-                if password:
+                if password and not password_submitted:
                     await self.page.locator(
                         'input[type="password"]:visible'
                     ).first.fill(password)
@@ -551,7 +593,7 @@ class FBSClient:
                         'input[type="submit"]:visible, button[type="submit"]:visible'
                     ).first.click()
                     password_submitted = True
-                elif self.headless:
+                elif not password and self.headless:
                     raise AuthenticationRequired(
                         "Set SMU_LOGIN_PASSWORD for headless password sign-in."
                     )
@@ -564,8 +606,13 @@ class FBSClient:
                 yes = self.page.locator("#idSIButton9:visible").first
                 if await yes.count():
                     await yes.click()
-            elif state == "password_choice" and trusted and not password_submitted:
-                await self.page.get_by_text("Use my password", exact=True).click()
+            elif state == "password_choice" and trusted:
+                if not password_submitted:
+                    await self.page.get_by_text("Use my password", exact=True).click()
+                elif not method_selected:
+                    method_selected = await self._select_authenticator()
+                    if not method_selected:
+                        await self._stop_reset_login()
             elif state == "account" and trusted and not email_submitted:
                 email = os.getenv("SMU_LOGIN_EMAIL", "").strip()
                 if email:
@@ -590,14 +637,7 @@ class FBSClient:
                     if await alternate.count() and await alternate.first.is_visible():
                         await alternate.first.click()
             elif state == "method_picker" and trusted and not method_selected:
-                authenticator = self.page.get_by_text(
-                    re.compile(r"Microsoft Authenticator|Approve a request", re.I)
-                )
-                for option in await authenticator.all():
-                    if await option.is_visible():
-                        await option.click()
-                        method_selected = True
-                        break
+                method_selected = await self._select_authenticator()
                 if not method_selected and self.headless:
                     message = "Microsoft did not offer Authenticator push approval. This sign-in needs an interactive browser or an SMU-supported authentication method."
                     if self.auth_notify:
@@ -610,6 +650,29 @@ class FBSClient:
         if self.auth_notify:
             await self.auth_notify(message)
         raise AuthenticationRequired(message)
+
+    async def _stop_reset_login(self) -> None:
+        message = (
+            "Microsoft restarted sign-in instead of reaching MFA. "
+            "Sagasu stopped rather than resubmitting your password. "
+            "Retry once with sagasu login in a visible browser; if this repeats, "
+            "check that Microsoft offers Authenticator for your SMU account."
+        )
+        if self.auth_notify:
+            await self.auth_notify(message)
+        raise AuthenticationRequired(message)
+
+    async def _select_authenticator(self) -> bool:
+        if not self.page:
+            return False
+        options = self.page.get_by_text(
+            re.compile(r"Microsoft Authenticator|Approve a request", re.I)
+        )
+        for option in await options.all():
+            if await option.is_visible():
+                await option.click()
+                return True
+        return False
 
     async def _classify_auth_state(self) -> tuple[str, str]:
         if not self.page:

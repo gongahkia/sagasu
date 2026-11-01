@@ -91,6 +91,65 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
             "Enter number 42.", [c.args[0] for c in client.progress.await_args_list]
         )
 
+    async def test_empty_email_after_password_is_recovered_once(self):
+        client = self.flow(
+            [
+                ("email", "email"),
+                ("password", "password"),
+                ("email", "email"),
+                ("authenticator", "Enter number 42."),
+            ]
+        )
+        field = client.page.locator(
+            'input[name="loginfmt"]:visible, input[type="email"]:visible'
+        ).first
+        field.input_value = AsyncMock(return_value="")
+        await client._complete_interactive_authentication()
+        self.assertEqual(field.fill.await_count, 2)
+        client.fields['input[type="password"]:visible'].fill.assert_awaited_once()
+        client.auth_notify.assert_awaited_once_with("Enter number 42.")
+
+    async def test_unchanged_email_screen_does_not_submit_again(self):
+        client = self.flow([("email", "email"), ("email", "email")])
+        field = client.page.locator(
+            'input[name="loginfmt"]:visible, input[type="email"]:visible'
+        ).first
+        field.input_value = AsyncMock(return_value="test@smu.edu.sg")
+        await client._complete_interactive_authentication()
+        field.fill.assert_awaited_once()
+
+    async def test_repeated_empty_email_stops_and_notifies_owner(self):
+        client = self.flow([("email", "email")] * 3)
+        field = client.page.locator(
+            'input[name="loginfmt"]:visible, input[type="email"]:visible'
+        ).first
+        field.input_value = AsyncMock(return_value="")
+        with self.assertRaisesRegex(AuthenticationRequired, "restarted sign-in"):
+            await client._complete_interactive_authentication()
+        self.assertEqual(field.fill.await_count, 2)
+        client.auth_notify.assert_awaited_once()
+
+    async def test_return_to_password_after_redirect_stops_without_resubmission(self):
+        client = self.flow(
+            [
+                ("password", "password"),
+                ("sign_in", "redirect"),
+                ("password", "password"),
+            ]
+        )
+        with self.assertRaisesRegex(AuthenticationRequired, "resubmitting"):
+            await client._complete_interactive_authentication()
+        client.fields['input[type="password"]:visible'].fill.assert_awaited_once()
+
+    async def test_password_choice_after_password_selects_authenticator(self):
+        client = self.flow(
+            [("password", "password"), ("password_choice", "choose method")]
+        )
+        client._select_authenticator = AsyncMock(return_value=True)
+        await client._complete_interactive_authentication()
+        client._select_authenticator.assert_awaited_once()
+        self.assertNotIn("Use my password", client.fields)
+
     async def test_number_appearing_late_or_changing_sends_updated_notification(self):
         client = self.flow(
             [

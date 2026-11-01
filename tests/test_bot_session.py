@@ -10,6 +10,43 @@ from bot.fbs_client import AuthenticationRequired, FBSError, FBSClient
 
 
 class SessionTest(unittest.IsolatedAsyncioTestCase):
+    def test_password_manager_disabled_without_losing_other_preferences(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = FBSClient(profile_path=Path(directory))
+            profile = Path(directory) / "Default"
+            profile.mkdir()
+            preferences = profile / "Preferences"
+            preferences.write_text(
+                json.dumps(
+                    {
+                        "profile": {"existing": "keep"},
+                        "unrelated": {"keep": True},
+                        "credentials_enable_service": True,
+                    }
+                )
+            )
+            client._configure_password_manager()
+            result = json.loads(preferences.read_text())
+            self.assertFalse(result["credentials_enable_service"])
+            self.assertFalse(result["credentials_enable_autosignin"])
+            self.assertFalse(result["profile"]["password_manager_enabled"])
+            self.assertEqual(result["profile"]["existing"], "keep")
+            self.assertEqual(result["unrelated"], {"keep": True})
+            if os.name != "nt":
+                self.assertEqual(preferences.stat().st_mode & 0o777, 0o600)
+
+    def test_invalid_preferences_not_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            client = FBSClient(profile_path=Path(directory))
+            profile = Path(directory) / "Default"
+            profile.mkdir()
+            preferences = profile / "Preferences"
+            preferences.write_text("private corrupted preferences")
+            with self.assertRaises(FBSError) as error:
+                client._configure_password_manager()
+            self.assertNotIn("private corrupted", str(error.exception))
+            self.assertEqual(preferences.read_text(), "private corrupted preferences")
+
     async def test_private_session_cookies_keep_original_expiry(self):
         with tempfile.TemporaryDirectory() as directory:
             client = FBSClient(profile_path=Path(directory))
