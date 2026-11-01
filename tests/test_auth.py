@@ -72,6 +72,26 @@ class AuthBrowserFormTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(await self.client.page.evaluate("window.submitted"))
 
+    async def test_passkey_resume_supports_current_and_legacy_microsoft_pages(self):
+        resume = "https://login.microsoftonline.com/tenant/resume?ctx=fixture"
+        for config in (
+            {"fEnableDirectFidoCancelToCredPicker": True, "urlResume": resume},
+            {
+                "acmaInitialConfig": {
+                    "serverFeatureFlags": {"fEnableDirectFidoCancelToCredPicker": True}
+                },
+                "acmaInitialResponse": {"_links": {"resume": {"href": resume}}},
+            },
+        ):
+            await self.client.page.evaluate("config => window.$Config = config", config)
+            self.assertEqual(await self.client._passkey_resume_url(), resume)
+
+    async def test_passkey_resume_does_not_follow_untrusted_page_configuration(self):
+        await self.client.page.evaluate(
+            "window.$Config = {fEnableDirectFidoCancelToCredPicker: true, urlResume: 'https://example.invalid/collect'}"
+        )
+        self.assertIsNone(await self.client._passkey_resume_url())
+
 
 class AuthTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -334,6 +354,22 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         await client._complete_interactive_authentication()
         client.page.goto.assert_not_awaited()
         client.page.keyboard.press.assert_awaited_once_with("Escape")
+
+    async def test_headless_bridge_prefers_resume_over_account_reset_url(self):
+        resume = "https://login.microsoftonline.com/tenant/resume?ctx=private"
+        cancel = "https://login.microsoftonline.com/tenant/reprocess?ctx=private"
+        client = self.flow(
+            [("webauthn", "passkey"), ("password_choice", "password")],
+            url="https://login.microsoft.com/tenant/bridge/fido?resumeUrl="
+            + quote(resume, safe="")
+            + "&cancelUrl="
+            + quote(cancel, safe=""),
+        )
+        await client._complete_interactive_authentication()
+        client.page.goto.assert_awaited_once_with(
+            resume, wait_until="domcontentloaded", timeout=30000
+        )
+        client.fields["Use my password"].click.assert_awaited_once()
 
     async def test_passkey_continuation_rejects_untrusted_origin(self):
         client = self.flow([("webauthn", "passkey")])

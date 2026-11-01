@@ -700,16 +700,10 @@ class FBSClient:
             elif state == "webauthn" and trusted:
                 # Current Microsoft pages provide a continuation to the method picker.
                 # The bridge's cancelUrl can instead reset login to the email screen.
-                resume = await self.page.evaluate(
-                    """() => {
-                        const config = window.$Config || window.ServerData;
-                        return config?.fEnableDirectFidoCancelToCredPicker &&
-                            typeof config.urlResume === 'string' ? config.urlResume : null;
-                    }"""
-                )
-                cancel = parse_qs(urlparse(self.page.url).query).get("cancelUrl", [""])[
-                    0
-                ]
+                resume = await self._passkey_resume_url()
+                bridge_parameters = parse_qs(urlparse(self.page.url).query)
+                resume = resume or bridge_parameters.get("resumeUrl", [""])[0]
+                cancel = bridge_parameters.get("cancelUrl", [""])[0]
                 if resume and self._trusted_login_url(resume):
                     if resume in resumed_passkeys or len(resumed_passkeys) >= 2:
                         await self._stop_reset_login()
@@ -747,6 +741,26 @@ class FBSClient:
         if self.auth_notify:
             await self.auth_notify(message)
         raise AuthenticationRequired(message)
+
+    async def _passkey_resume_url(self) -> str | None:
+        """Read Microsoft's supplied method-picker continuation without calling its APIs."""
+        resume = await self.page.evaluate(
+            """() => {
+                const config = window.$Config || window.ServerData;
+                if (config?.fEnableDirectFidoCancelToCredPicker &&
+                    typeof config.urlResume === 'string') return config.urlResume;
+                if (config?.acmaInitialConfig?.serverFeatureFlags?.fEnableDirectFidoCancelToCredPicker) {
+                    const href = config.acmaInitialResponse?._links?.resume?.href;
+                    if (typeof href === 'string') return href;
+                }
+                return null;
+            }"""
+        )
+        return (
+            resume
+            if isinstance(resume, str) and self._trusted_login_url(resume)
+            else None
+        )
 
     async def _submit_login_field(self, selector: str, value: str, kind: str) -> None:
         """Commit field changes and verify them before submitting a Microsoft form."""
