@@ -708,7 +708,7 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
         )
     except BookingUnavailable as error:
         drafts.pop(token, None)
-        await status.edit_text(f"⚠️ Availability changed: {error}")
+        await status.edit_text(f"⚠️ Booking cannot proceed: {error}")
     except FBSError as error:
         await status.edit_text(f"⚠️ Booking failed safely before completion: {error}")
 

@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import AsyncMock, Mock
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, Mock, patch
 
 from bot.fbs_client import (
     BookingRequest,
@@ -14,6 +15,8 @@ from bot.fbs_client import (
     SearchResult,
     TimeSlot,
     calendar_time_x,
+    execute_booking,
+    require_future_booking,
 )
 
 
@@ -143,7 +146,8 @@ class CalendarDragTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ValidationBoundaryTest(unittest.IsolatedAsyncioTestCase):
-    async def test_validate_only_never_clicks_final_confirmation(self):
+    @patch("bot.fbs_client.require_future_booking")
+    async def test_validate_only_never_clicks_final_confirmation(self, future):
         client = FBSClient()
         client._wait_for_idle = AsyncMock()
         search = SearchConfig("02-Nov-2026", "18:00", "19:00")
@@ -199,6 +203,62 @@ class ValidationBoundaryTest(unittest.IsolatedAsyncioTestCase):
             await client.book(request, submit=True)
         self.assertEqual(client.search.await_args.kwargs, {"room_name": request.room})
         controls["a#panel_UIButton2"].click.assert_awaited_once()
+        controls.clear()
+        future.side_effect = [
+            None,
+            None,
+            BookingUnavailable("start passed during form"),
+        ]
+        with self.assertRaisesRegex(BookingUnavailable, "start passed during form"):
+            await client.book(request, submit=True)
+        self.assertNotIn("a#panel_UIButton2", controls)
+
+
+class BookingClockTest(unittest.TestCase):
+    def test_past_start_is_rejected_even_if_end_is_still_in_future(self):
+        config = SearchConfig("01-Nov-2026", "11:00", "13:30")
+        # 05:00 UTC is 13:00 SGT, during the requested window.
+        now = datetime(2026, 11, 1, 5, tzinfo=timezone.utc)
+        with self.assertRaisesRegex(BookingUnavailable, "11:00 SGT.*already passed"):
+            require_future_booking(config, now=now)
+
+    def test_singapore_date_rollover_and_exact_start_are_rejected(self):
+        config = SearchConfig("01-Nov-2026", "23:00", "23:30")
+        for now in (
+            datetime(2026, 11, 1, 15, 0, tzinfo=timezone.utc),
+            datetime(2026, 11, 1, 16, 1, tzinfo=timezone.utc),
+        ):
+            with self.subTest(now=now), self.assertRaises(BookingUnavailable):
+                require_future_booking(config, now=now)
+
+    def test_future_start_is_accepted_using_singapore_time(self):
+        require_future_booking(
+            SearchConfig("02-Nov-2026", "00:00", "00:30"),
+            now=datetime(2026, 11, 1, 15, 59, 59, tzinfo=timezone.utc),
+        )
+
+
+class ExpiredBookingTest(unittest.IsolatedAsyncioTestCase):
+    async def test_validate_and_submit_reject_before_browser_launch_or_search(self):
+        request = BookingRequest(
+            SearchConfig("01-Nov-2026", "11:00", "13:30"),
+            "Room A",
+            "Meeting",
+            "friend@smu.edu.sg",
+        )
+        with patch("bot.fbs_client.datetime", wraps=datetime) as clock:
+            clock.now.return_value = datetime(2026, 11, 1, 5, tzinfo=timezone.utc)
+            for submit in (False, True):
+                with self.subTest(submit=submit):
+                    with patch("bot.fbs_client.FBSClient") as browser:
+                        with self.assertRaises(BookingUnavailable):
+                            await execute_booking(request, submit=submit)
+                        browser.assert_not_called()
+                    client = FBSClient()
+                    client.search = AsyncMock()
+                    with self.assertRaises(BookingUnavailable):
+                        await client.book(request, submit=submit)
+                    client.search.assert_not_awaited()
 
 
 class BookingDetailsTest(unittest.IsolatedAsyncioTestCase):
@@ -285,6 +345,55 @@ class CoBookerControlTest(unittest.IsolatedAsyncioTestCase):
 
 
 class SelectionRetentionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_server_policy_rejections_are_not_retried_as_lost_selections(self):
+        for reason in (
+            "DISMISS Unable to proceed: You are not allowed to make bookings for past booking slots.",
+            "DISMISS Unable to proceed: Maximum booking duration exceeded.",
+        ):
+            with self.subTest(reason=reason):
+                client = FBSClient(progress=AsyncMock())
+                client._drag_timeslot = AsyncMock()
+                client._verify_calendar_selection = AsyncMock()
+                button = Mock(hover=AsyncMock(), click=AsyncMock())
+                errors = Mock(all_text_contents=AsyncMock(return_value=[reason]))
+                errors.get_by_text.return_value.all = AsyncMock(return_value=[])
+                frame = Mock()
+                frame.locator.side_effect = lambda selector: (
+                    errors if selector == ".error:visible" else button
+                )
+                client.page = Mock(wait_for_timeout=AsyncMock())
+                client.page.frame.side_effect = lambda name: (
+                    None if name == "frameBookingDetails" else frame
+                )
+                request = BookingRequest(
+                    SearchConfig("02-Nov-2026", "14:00", "15:00"),
+                    "Room A",
+                    "Meeting",
+                    "friend@smu.edu.sg",
+                )
+                with self.assertRaises(BookingUnavailable) as error:
+                    await client._prepare_booking_frame(frame, request)
+                client._drag_timeslot.assert_awaited_once()
+                button.click.assert_awaited_once()
+                client.page.wait_for_timeout.assert_not_awaited()
+                self.assertNotIn("DISMISS", str(error.exception))
+                self.assertIn("No booking was submitted", str(error.exception))
+
+    async def test_rejection_during_selection_is_reported_immediately(self):
+        client = FBSClient()
+        client._selection_snapshot = AsyncMock(return_value=[])
+        frame = Mock(wait_for_timeout=AsyncMock())
+        frame.locator.return_value.all_text_contents = AsyncMock(
+            return_value=[
+                "You are not allowed to make bookings for past booking slots."
+            ]
+        )
+        with self.assertRaisesRegex(BookingUnavailable, "start time has passed"):
+            await client._verify_calendar_selection(
+                frame, "Room A", "14:00", "15:00", "02-Nov-2026"
+            )
+        frame.wait_for_timeout.assert_not_awaited()
+
     async def test_requires_two_stable_exact_selection_snapshots(self):
         client = FBSClient()
         right = [
@@ -297,6 +406,7 @@ class SelectionRetentionTest(unittest.IsolatedAsyncioTestCase):
         client._selection_snapshot = AsyncMock(
             side_effect=[[], right, [], right, right]
         )
+        client._check_calendar_errors = AsyncMock()
         frame = Mock(wait_for_timeout=AsyncMock())
         await client._verify_calendar_selection(
             frame, "Room A", "14:00", "15:00", "02-Nov-2026"
@@ -318,6 +428,7 @@ class SelectionRetentionTest(unittest.IsolatedAsyncioTestCase):
         ]:
             client = FBSClient()
             client._selection_snapshot = AsyncMock(return_value=ranges)
+            client._check_calendar_errors = AsyncMock()
             with self.subTest(ranges=ranges), self.assertRaises(CalendarSelectionLost):
                 await client._verify_calendar_selection(
                     Mock(wait_for_timeout=AsyncMock()),

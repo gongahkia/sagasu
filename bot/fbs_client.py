@@ -14,7 +14,7 @@ import math
 import os
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Awaitable, Callable, Iterable
@@ -41,6 +41,7 @@ FBS_URL = "https://fbs.intranet.smu.edu.sg/home"
 PROFILE_PATH = DEFAULT_PROFILE
 AUTH_TIMEOUT_MS = 600000
 AUTH_ARTIFACT_DIR = DEFAULT_ARTIFACTS
+FBS_TIMEZONE = timezone(timedelta(hours=8), "SGT")
 logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str], Awaitable[None]]
@@ -227,6 +228,23 @@ class BookingRequest:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def require_future_booking(
+    config: SearchConfig, *, now: datetime | None = None
+) -> None:
+    """FBS rejects an entire booking if its start is already in the past."""
+    start = datetime.strptime(
+        f"{config.date} {config.start_time}", "%d-%b-%Y %H:%M"
+    ).replace(tzinfo=FBS_TIMEZONE)
+    current = now if now is not None else datetime.now(FBS_TIMEZONE)
+    if current.tzinfo is None:
+        raise ValueError("Booking clock must include a timezone")
+    if start <= current:
+        raise BookingUnavailable(
+            f"The requested start ({config.date}, {config.start_time} SGT) has already passed. "
+            "Choose a future start time in /config, then search again. No booking was submitted."
+        )
 
 
 def time_to_minutes(value: str) -> int:
@@ -941,7 +959,9 @@ class FBSClient:
         Only ``submit=True`` clicks FBS's final CONFIRM control.
         """
 
+        require_future_booking(request.search)
         result = await self.search(request.search, room_name=request.room)
+        require_future_booking(request.search)
         room = next((item for item in result.rooms if item.name == request.room), None)
         if not room or not room.is_free(
             request.search.start_time, request.search.end_time
@@ -984,6 +1004,7 @@ class FBSClient:
         ).check()
 
         await self._verify_booking_details(booking_frame, request)
+        require_future_booking(request.search)
         preview = {
             "status": "ready" if not submit else "submitting",
             "room": request.room,
@@ -1358,6 +1379,7 @@ class FBSClient:
         # transient green drag preview is not evidence of server acceptance.
         consecutive = 0
         for _ in range(120):
+            await self._check_calendar_errors(frame)
             if matches(await self._selection_snapshot(frame)):
                 consecutive += 1
                 if consecutive >= 2:
@@ -1369,6 +1391,26 @@ class FBSClient:
             "FBS did not retain the requested room and timeslot. No booking was submitted. "
             "Start a fresh search and try validation again."
         )
+
+    async def _check_calendar_errors(self, frame: Frame) -> None:
+        errors = await frame.locator(".error:visible").all_text_contents()
+        for text in errors:
+            reason = re.sub(r"^\s*dismiss\b", "", text, flags=re.I)
+            reason = " ".join(reason.split())
+            if not reason:
+                continue
+            if "click and drag to select timeslot" in reason.casefold():
+                raise CalendarSelectionLost(
+                    "FBS rejected the calendar selection before opening booking details. No booking was submitted."
+                )
+            if "past booking slots" in reason.casefold():
+                raise BookingUnavailable(
+                    "FBS rejected this timeslot because its start time has passed. "
+                    "Choose a future start time in /config, then search again. No booking was submitted."
+                )
+            raise BookingUnavailable(
+                f"FBS rejected the selected timeslot: {reason[:1200]} No booking was submitted."
+            )
 
     async def _prepare_booking_frame(
         self, frame: Frame, request: BookingRequest
@@ -1412,16 +1454,7 @@ class FBSClient:
                         return details
                     current = self.page.frame(name="frameContent")
                     if current:
-                        errors = await current.locator(
-                            ".error:visible"
-                        ).all_text_contents()
-                        if any(
-                            "click and drag to select timeslot" in error.casefold()
-                            for error in errors
-                        ):
-                            raise CalendarSelectionLost(
-                                "FBS rejected the calendar selection before opening booking details. No booking was submitted."
-                            )
+                        await self._check_calendar_errors(current)
                     await self.page.wait_for_timeout(500)
                 raise LayoutChanged(
                     "FBS did not open booking details after Make Booking. No final confirmation was attempted."
@@ -1626,6 +1659,7 @@ async def execute_booking(
     auth_notify: ProgressCallback | None = None,
 ) -> dict:
     try:
+        require_future_booking(request.search)
         async with FBSClient(progress=progress, auth_notify=auth_notify) as client:
             return await client.book(request, submit=submit)
     except FBSError:
