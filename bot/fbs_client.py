@@ -8,11 +8,14 @@ SMU password.  Booking submission is opt-in through ``submit=True`` only.
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import os
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Awaitable, Callable, Iterable
 
 from playwright.async_api import (
@@ -25,20 +28,18 @@ from playwright.async_api import (
 )
 
 
+try:
+    from .config import DEFAULT_ARTIFACTS, DEFAULT_PROFILE
+except ImportError:
+    if __package__:
+        raise
+    from config import DEFAULT_ARTIFACTS, DEFAULT_PROFILE
+
 FBS_URL = "https://fbs.intranet.smu.edu.sg/home"
-PROFILE_PATH = Path(
-    os.getenv(
-        "SAGASU_BROWSER_PROFILE",
-        str(Path(__file__).resolve().parent / ".fbs-profile"),
-    )
-)
-AUTH_TIMEOUT_MS = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", "600000"))
-AUTH_ARTIFACT_DIR = Path(
-    os.getenv(
-        "SAGASU_AUTH_ARTIFACT_DIR",
-        str(Path(__file__).resolve().parents[1] / "artifacts" / "auth"),
-    )
-)
+PROFILE_PATH = DEFAULT_PROFILE
+AUTH_TIMEOUT_MS = 600000
+AUTH_ARTIFACT_DIR = DEFAULT_ARTIFACTS
+logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str], Awaitable[None]]
 _BROWSER_LOCK = asyncio.Lock()
@@ -256,8 +257,21 @@ def add_free_windows(
     return result
 
 
-async def _noop_progress(_stage: str) -> None:
-    return None
+async def _noop_progress(stage: str) -> None:
+    logger.info("FBS: %s", stage)
+
+
+async def close_shared_browser():
+    global _SHARED_CONTEXT, _SHARED_PLAYWRIGHT
+    async with _BROWSER_LOCK:
+        context, playwright = _SHARED_CONTEXT, _SHARED_PLAYWRIGHT
+        _SHARED_CONTEXT = _SHARED_PLAYWRIGHT = None
+        try:
+            if context:
+                await asyncio.wait_for(context.close(), timeout=15)
+        finally:
+            if playwright:
+                await asyncio.wait_for(playwright.stop(), timeout=15)
 
 
 class FBSClient:
@@ -274,7 +288,9 @@ class FBSClient:
         self.headless = headless
         self.progress = progress or _noop_progress
         self.keep_alive = keep_alive
-        self.profile_path = profile_path or PROFILE_PATH
+        self.profile_path = Path(
+            profile_path or os.getenv("SAGASU_BROWSER_PROFILE", str(PROFILE_PATH))
+        ).expanduser()
         self._playwright = None
         self.context: BrowserContext | None = None
         self.page: Page | None = None
@@ -314,6 +330,7 @@ class FBSClient:
                 if self.context.pages
                 else await self.context.new_page()
             )
+            await self._restore_session()
             if self.keep_alive:
                 _SHARED_PLAYWRIGHT = self._playwright
                 _SHARED_CONTEXT = self.context
@@ -329,6 +346,53 @@ class FBSClient:
             finally:
                 _BROWSER_LOCK.release()
             raise
+
+    @property
+    def session_path(self):
+        return self.profile_path / ".sagasu-session.json"
+
+    async def _restore_session(self):
+        if not self.session_path.exists():
+            return
+        try:
+            cookies = json.loads(self.session_path.read_text(encoding="utf-8"))
+            if not isinstance(cookies, list):
+                raise ValueError()
+            await asyncio.wait_for(self.context.add_cookies(cookies), timeout=15)
+        except Exception:
+            if not self.interactive:
+                raise AuthenticationRequired(
+                    "Saved session is unreadable. Renew it with sagasu login."
+                ) from None
+            logger.warning(
+                "Saved session could not be restored; complete login locally to renew it."
+            )
+
+    async def _save_session(self):
+        temporary = None
+        try:
+            cookies = await asyncio.wait_for(self.context.cookies(), timeout=15)
+            with NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                prefix=".sagasu-session-",
+                suffix=".tmp",
+                dir=self.profile_path,
+                delete=False,
+            ) as stream:
+                temporary = Path(stream.name)
+                json.dump(
+                    [cookie for cookie in cookies if cookie.get("expires") == -1],
+                    stream,
+                )
+            temporary.replace(self.session_path)
+        except Exception:
+            raise FBSError(
+                "Private session could not be saved. Check browser-profile permissions."
+            ) from None
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
     async def __aexit__(self, exc_type, exc, traceback) -> None:
         try:
@@ -380,6 +444,7 @@ class FBSClient:
         await frame.wait_for_selector(
             "input#DateBookingFrom_c1_textDate", timeout=30000
         )
+        await self._save_session()
         return self.page, frame
 
     async def _complete_interactive_authentication(self) -> None:
@@ -388,7 +453,8 @@ class FBSClient:
         started = asyncio.get_running_loop().time()
         previous_state = None
         email_submitted = False
-        while (asyncio.get_running_loop().time() - started) * 1000 < AUTH_TIMEOUT_MS:
+        timeout_ms = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", str(AUTH_TIMEOUT_MS)))
+        while (asyncio.get_running_loop().time() - started) * 1000 < timeout_ms:
             if await self.page.locator("iframe#frameBottom").count():
                 await self.progress(
                     "Microsoft authentication complete; continuing scrape"
@@ -500,9 +566,12 @@ class FBSClient:
 
         if not self.page or state == "password":
             return
-        AUTH_ARTIFACT_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+        artifact_dir = Path(
+            os.getenv("SAGASU_AUTH_ARTIFACT_DIR", str(AUTH_ARTIFACT_DIR))
+        )
+        artifact_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        path = AUTH_ARTIFACT_DIR / f"{stamp}-{state}.png"
+        path = artifact_dir / f"{stamp}-{state}.png"
         try:
             await self.page.screenshot(
                 path=str(path),
@@ -913,7 +982,10 @@ async def search_fbs(
     except FBSError:
         raise
     except Exception as error:
-        raise FBSError(f"Unexpected FBS search failure: {error}") from error
+        logger.debug("Unexpected search failure (%s)", type(error).__name__)
+        raise FBSError(
+            "FBS search failed. Run sagasu doctor to check connectivity, browser setup and configuration."
+        ) from None
 
 
 async def execute_booking(
@@ -928,4 +1000,7 @@ async def execute_booking(
     except FBSError:
         raise
     except Exception as error:
-        raise FBSError(f"Unexpected FBS booking failure: {error}") from error
+        logger.debug("Unexpected booking failure (%s)", type(error).__name__)
+        raise FBSError(
+            "The booking outcome could not be confirmed. Check FBS My Bookings before retrying."
+        ) from None

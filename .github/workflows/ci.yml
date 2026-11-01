@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+          python -m pip install -e ".[dev]"
 
       - name: Check installed packages
         run: python -m pip check
@@ -42,6 +42,13 @@ jobs:
 
           print("bot modules imported successfully")
           PY
+
+      - name: Check CLI entrypoints
+        run: |
+          sagasu --help
+          sagasu --version
+          python -m bot --help
+          python -m bot.bot --help
 
       - name: Run unit tests
         run: python -m unittest discover -v

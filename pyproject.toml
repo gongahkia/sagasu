@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sagasu"
+dynamic = ["version", "dependencies"]
+description = "Personal Telegram assistant for SMU room searches and confirmed bookings"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = ["pre-commit>=4,<5"]
+
+[project.scripts]
+sagasu = "bot.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "bot.__version__"}
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+include = ["bot*"]
+
+[tool.setuptools.package-data]
+"bot._vendor" = ["licenses/*.txt"]

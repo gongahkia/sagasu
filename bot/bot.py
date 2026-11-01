@@ -1,11 +1,13 @@
 import asyncio
+import logging
+import sys
+from pathlib import Path
 import os
 import re
 import secrets
 import time
 from datetime import datetime, timedelta
 from html import escape
-from dotenv import load_dotenv
 from telegram.constants import ParseMode
 from telegram.ext import MessageHandler, filters
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -46,17 +48,8 @@ except ImportError:
     )
 
 
-def read_token_env():
-    """
-    read bot token from a .env file
-    """
-    load_dotenv()
-    bot_token = os.getenv("BOT_TOKEN")
-    if not bot_token:
-        print("One or more credentials are missing in the .env file")
-        return None
-    else:
-        return bot_token
+logger = logging.getLogger(__name__)
+_ACTIVE_SEARCHES = {}
 
 
 async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -97,7 +90,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("Running the scraping script...")
+    logger.info("Searching FBS for available rooms")
 
     try:
         cancel_kb = InlineKeyboardMarkup(
@@ -108,23 +101,24 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
         async def progress(stage):
+            logger.info("FBS: %s", stage)
             try:
                 await status_msg.edit_text(f"⏳ {stage}…", reply_markup=cancel_kb)
             except Exception as e:
-                print(f"progress edit failed: {e}")
+                logger.debug("Telegram progress update failed (%s)", type(e).__name__)
 
         search_config = search_config_from_bot(
             context.user_data.get("scrape_config") or {}
         )
         scrape_task = asyncio.create_task(search_fbs(search_config, progress))
-        context.user_data["scrape_task"] = scrape_task
+        _ACTIVE_SEARCHES[callback_query.from_user.id] = scrape_task
         try:
             result = await scrape_task
         except asyncio.CancelledError:
             await status_msg.edit_text("🛑 Scrape cancelled.")
             return
         finally:
-            context.user_data.pop("scrape_task", None)
+            _ACTIVE_SEARCHES.pop(callback_query.from_user.id, None)
 
         context.user_data["last_search"] = result.to_dict()
         rooms = result.bookable_rooms
@@ -169,7 +163,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     except FBSError as e:
         await callback_query.message.reply_text(f"⚠️ FBS operation failed: {e}")
     except Exception as e:
-        print(f"Error during scraping: {e}")
+        logger.error("FBS search failed (%s)", type(e).__name__)
         await callback_query.message.reply_text(
             "An error occurred during the scraping process. Report the issue @gongahkia."
         )
@@ -192,13 +186,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await run_script(query, context)
         except Exception as e:
-            print(f"Error during scraping: {e}")
+            logger.error("FBS search failed (%s)", type(e).__name__)
             try:
                 await query.edit_message_text(
                     "An error occurred during the scraping process. 🌋"
                 )
             except Exception as edit_error:
-                print(f"Failed to edit message: {edit_error}")
+                logger.debug(
+                    "Telegram message update failed (%s)", type(edit_error).__name__
+                )
     elif query.data == "open_config":
         await query.message.reply_text(
             "⚙️ Search configuration — tap a row to change:",
@@ -690,6 +686,7 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
     )
 
     async def progress(stage):
+        logger.info("FBS: %s", stage)
         try:
             await status.edit_text(f"⏳ {stage}…")
         except Exception:
@@ -723,7 +720,7 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
 async def scrape_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    task = context.user_data.get("scrape_task")
+    task = _ACTIVE_SEARCHES.get(query.from_user.id)
     if task and not task.done():
         task.cancel()
         try:
@@ -810,9 +807,22 @@ PERSISTENCE_PATH = os.path.join(
 )  # user_data survives restarts
 
 
-def main():
-    persistence = PicklePersistence(filepath=PERSISTENCE_PATH)
-    app = ApplicationBuilder().token(read_token_env()).persistence(persistence).build()
+async def telegram_error(update, context):
+    logger.error(
+        "Telegram update failed (%s); raw details suppressed",
+        type(context.error).__name__,
+    )
+
+
+def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=None):
+    persistence = PicklePersistence(filepath=str(persistence_path))
+    app = (
+        ApplicationBuilder()
+        .token(token)
+        .persistence(persistence)
+        .post_init(post_init)
+        .build()
+    )
     app.add_handler(MessageHandler(filters.ALL, access_guard), group=-1)
     app.add_handler(CallbackQueryHandler(access_guard), group=-1)
     app.add_handler(CommandHandler("start", start))
@@ -842,9 +852,18 @@ def main():
     )
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
-    print("Bot is polling...")
-    app.run_polling()
+    app.add_error_handler(telegram_error)
+    return app
+
+
+def main():
+    # Keep the historical entrypoint while routing startup through validation.
+    if not __package__:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from bot.cli import main as cli_main
+
+    return cli_main(sys.argv[1:] or ["run"])
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

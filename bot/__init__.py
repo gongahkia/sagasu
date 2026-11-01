@@ -1,1 +1,3 @@
-# forces python to recognise bot as a package
+"""Sagasu: a personal Telegram assistant for SMU facilities."""
+
+__version__ = "1.0.0"

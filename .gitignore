@@ -11,3 +11,6 @@ bot/bot_state.pickle
 bot/.fbs-profile/
 artifacts/
 AGENTS.md
+*.egg-info/
+/build/
+/dist/
