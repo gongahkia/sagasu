@@ -312,6 +312,32 @@ class BookingFlowTest(unittest.IsolatedAsyncioTestCase):
         await bot.booking_action_callback(update, self.context)
         self.backend.assert_awaited_once()
 
+    async def test_only_confirm_sends_receipt_and_never_persists_image_bytes(self):
+        await self.purpose_and_email()
+        await self.click("skip")
+        token = next(iter(self.context.user_data["booking_drafts"]))
+        self.backend.return_value = {
+            "status": "verified",
+            "reference_number": "BK-TEST",
+            "receipt_png": b"png",
+        }
+        self.context.bot.send_photo = AsyncMock()
+        query = Mock(
+            message=self.message,
+            from_user=SimpleNamespace(id=7),
+            answer=AsyncMock(),
+            data=f"booking_validate:{token}",
+        )
+        update = SimpleNamespace(callback_query=query)
+        await bot.booking_action_callback(update, self.context)
+        self.context.bot.send_photo.assert_not_awaited()
+        query.data = f"booking_confirm:{token}"
+        await bot.booking_action_callback(update, self.context)
+        self.context.bot.send_photo.assert_awaited_once()
+        self.assertEqual(self.context.bot.send_photo.await_args.kwargs["chat_id"], 7)
+        self.assertNotIn(token, self.context.user_data["booking_drafts"])
+        self.assertNotIn("receipt_png", repr(self.context.user_data))
+
     async def test_no_room_selection_does_not_open_questions(self):
         self.context.user_data.pop("selected_room")
         await begin_booking(self.message, self.context)

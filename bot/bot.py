@@ -39,6 +39,7 @@ try:
         LayoutChanged,
         SearchConfig,
         execute_booking,
+        check_task_list,
         search_config_from_bot,
         search_fbs,
     )
@@ -66,6 +67,7 @@ except ImportError:
         LayoutChanged,
         SearchConfig,
         execute_booking,
+        check_task_list,
         search_config_from_bot,
         search_fbs,
     )
@@ -113,6 +115,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             ],
             [InlineKeyboardButton("Help", callback_data="view_help")],
+            [InlineKeyboardButton("📋 FBS Task List", callback_data="open_tasks")],
         ]
     )
     await update.message.reply_text(
@@ -236,6 +239,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
     elif query.data == "open_cobookers":
         await open_contacts(query.message, context)
+    elif query.data == "open_tasks":
+        await show_task_list(query.message, context)
     elif query.data == "open_config":
         abandon_setup(context)
         await query.message.reply_text(
@@ -250,6 +255,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Select or auto-pick a room\n"
             "Answer the booking questions one at a time\n"
             "Use /cobookers to manage saved co-bookers\n"
+            "Use /tasks to check pending FBS tasks\n"
             "Type /status to view current settings",
             parse_mode=ParseMode.HTML,
         )
@@ -696,6 +702,10 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
                 f"Reference: {result.get('reference_number', 'not shown')}\n"
                 f"FBS status: {result.get('fbs_status', 'not shown')}"
             )
+            if result.get("receipt_png"):
+                await send_booking_receipt(query, context, result)
+            elif result.get("receipt_error"):
+                await query.message.reply_text(result["receipt_error"])
         else:
             await status.edit_text(
                 "🧪 Validation passed through the complete pre-confirmation flow. "
@@ -711,6 +721,99 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
         await status.edit_text(f"⚠️ Booking cannot proceed: {error}")
     except FBSError as error:
         await status.edit_text(f"⚠️ Booking failed safely before completion: {error}")
+
+
+async def send_booking_receipt(query, context, result):
+    """Deliver private evidence without changing a verified booking's outcome."""
+    caption = (
+        f"FBS booking details · {result['reference_number']}\n"
+        f"{result.get('room', '')}\n"
+        f"{result.get('date', '')} · {result.get('start_time', '')}–{result.get('end_time', '')} SGT\n"
+        f"FBS status: {result.get('fbs_status', 'not shown')}"
+    )
+    try:
+        await context.bot.send_photo(
+            chat_id=query.from_user.id,
+            photo=result["receipt_png"],
+            caption=caption[:1024],
+            parse_mode=None,
+        )
+        return
+    except Exception as error:
+        logger.info(
+            "Receipt photo delivery failed (%s); trying PNG file", type(error).__name__
+        )
+    try:
+        # Telegram photos have size/aspect limits; the original PNG remains
+        # readable as a document when the FBS page is unusually tall.
+        await context.bot.send_document(
+            chat_id=query.from_user.id,
+            document=result["receipt_png"],
+            filename="sagasu-booking-details.png",
+            caption=caption[:1024],
+            parse_mode=None,
+        )
+    except Exception as error:
+        logger.warning("Receipt delivery unavailable (%s)", type(error).__name__)
+        await query.message.reply_text(
+            "Your booking is confirmed, but I couldn't deliver its screenshot. "
+            "Open my private chat and send /start to allow private receipts. "
+            "You can view this reference in FBS My Bookings; do not book again."
+        )
+
+
+async def show_task_list(message, context):
+    if message.chat.type != "private":
+        await message.reply_text(
+            "Use /tasks in my private chat to view your FBS Task List."
+        )
+        return
+    status = await message.reply_text("⏳ Checking your FBS Task List…")
+
+    async def progress(stage):
+        try:
+            await status.edit_text(f"⏳ {stage}…")
+        except Exception:
+            pass
+
+    try:
+        result = await check_task_list(
+            progress, auth_notify=owner_auth_notifier(context.bot)
+        )
+    except FBSError as error:
+        await status.edit_text(f"⚠️ Could not check Task List: {error}")
+        return
+    if not result["total"]:
+        await status.edit_text(
+            "✅ Your FBS Task List is empty. There are no items awaiting your action."
+        )
+        return
+    await status.edit_text(
+        f"📋 FBS Task List: {result['total']} item(s).\n"
+        "Review the request type and status below. Open FBS Task List to approve or reject a request."
+    )
+    chunk = ""
+    for task in result["tasks"]:
+        entry = (
+            f"Reference: {task['reference_number'][:120]}\n"
+            f"Room: {task['room'][:200]}\n"
+            f"When: {task['date_time'][:250]}\n"
+            f"Request: {task['request_type'][:200]}\n"
+            f"Requested by: {task['requested_by'][:200]}\n"
+            f"Status: {task['status'][:200]}\n\n"
+        )
+        if len(chunk) + len(entry) > 3800:
+            await message.reply_text(chunk, parse_mode=None)
+            chunk = ""
+        chunk += entry
+    if not result["complete"]:
+        chunk += f"Showing {len(result['tasks'])} of {result['total']} tasks. Open FBS Task List for the remaining items."
+    if chunk:
+        await message.reply_text(chunk, parse_mode=None)
+
+
+async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await show_task_list(update.message, context)
 
 
 async def scrape_cancel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -799,6 +902,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "5. Validate, then explicitly confirm the booking\n\n"
         "/book — start booking questions for the selected room\n"
         "/cobookers — save names/emails or remove saved co-bookers\n"
+        "/tasks — check your FBS Task List for requests awaiting action\n"
         "/cancel — stop questions and discard pending booking reviews\n\n"
         "Your SMU session stays in a private browser profile; approve MFA on your phone when prompted.",
         parse_mode=ParseMode.HTML,
@@ -845,6 +949,7 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("book", book_command))
     app.add_handler(CommandHandler("cobookers", cobookers_command))
+    app.add_handler(CommandHandler(["tasks", "tasklist"], tasks_command))
     app.add_handler(CallbackQueryHandler(wizard_callback, pattern=r"^wizard:"))
     app.add_handler(
         CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):")

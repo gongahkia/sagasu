@@ -1030,6 +1030,22 @@ class FBSClient:
                 "Final confirmation was attempted, but its outcome could not be verified. "
                 "Check FBS My Bookings before creating another booking."
             ) from None
+        # Receipt failures must never turn an already verified booking into an
+        # uncertain submission or invite the user to book it again.
+        try:
+            from .fbs_account import capture_booking_evidence
+
+            preview["receipt_png"] = await capture_booking_evidence(
+                self, preview.get("reference_number", "")
+            )
+        except Exception as error:
+            logger.warning(
+                "Verified booking receipt unavailable (%s)", type(error).__name__
+            )
+            preview["receipt_error"] = (
+                "Your booking is verified, but its details screenshot could not be captured. "
+                "View this reference in FBS My Bookings; do not create a duplicate booking."
+            )
         return preview
 
     async def _verify_booking_details(
@@ -1668,4 +1684,23 @@ async def execute_booking(
         logger.debug("Unexpected booking failure (%s)", type(error).__name__)
         raise FBSError(
             "The booking outcome could not be confirmed. Check FBS My Bookings before retrying."
+        ) from None
+
+
+async def check_task_list(
+    progress: ProgressCallback | None = None,
+    *,
+    auth_notify: ProgressCallback | None = None,
+) -> dict:
+    from .fbs_account import read_task_list
+
+    try:
+        async with FBSClient(progress=progress, auth_notify=auth_notify) as client:
+            return await read_task_list(client)
+    except FBSError:
+        raise
+    except Exception as error:
+        logger.debug("Task List check failed (%s)", type(error).__name__)
+        raise FBSError(
+            "Could not read FBS Task List. Try /tasks again or open it in FBS."
         ) from None
