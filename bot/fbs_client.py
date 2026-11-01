@@ -1630,10 +1630,20 @@ class FBSClient:
 def search_config_from_bot(config: dict) -> SearchConfig:
     """Translate the Telegram bot's compact config into the live FBS contract."""
 
-    date_raw = config.get("date_raw") or datetime.now(FBS_TIMEZONE).strftime("%d %B %Y")
+    now = datetime.now(FBS_TIMEZONE)
+    duration = float(config.get("duration_hrs", 2))
+    next_slot = now.replace(
+        minute=now.minute // 30 * 30, second=0, microsecond=0
+    ) + timedelta(minutes=30)
+    # FBS's current search contract covers one calendar date. Keep the rolling
+    # default as a full window rather than truncating it at midnight.
+    if (next_slot + timedelta(hours=duration)).date() != next_slot.date():
+        next_slot = (next_slot + timedelta(days=1)).replace(hour=0, minute=0)
+    date_raw = config.get("date_raw") or (
+        now if config.get("start_time") else next_slot
+    ).strftime("%d %B %Y")
     date = datetime.strptime(date_raw.title(), "%d %B %Y").strftime("%d-%b-%Y")
-    start = config.get("start_time", "11:00")
-    duration = float(config.get("duration_hrs", 2.5))
+    start = config.get("start_time") or next_slot.strftime("%H:%M")
     end = minutes_to_time(time_to_minutes(start) + int(duration * 60))
     return SearchConfig(
         date=date,

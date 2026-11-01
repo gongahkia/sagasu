@@ -221,6 +221,10 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         await callback_query.message.reply_text(f"🧩 FBS layout changed: {e}")
     except FBSError as e:
         await callback_query.message.reply_text(f"⚠️ FBS operation failed: {e}")
+    except ValueError as error:
+        await callback_query.message.reply_text(
+            f"⚠️ Invalid search window: {error}. Update /config and search again."
+        )
     except Exception as e:
         logger.error("FBS search failed (%s)", type(e).__name__)
         await callback_query.message.reply_text(
@@ -291,18 +295,7 @@ SCRAPE_PARAM_CHOICES = {
         ("+6 days", 6),
     ],
     "start_time": [
-        "08:00",
-        "09:00",
-        "10:00",
-        "11:00",
-        "12:00",
-        "13:00",
-        "14:00",
-        "15:00",
-        "16:00",
-        "17:00",
-        "18:00",
-        "19:00",
+        f"{hour:02d}:{minute:02d}" for hour in range(24) for minute in (0, 30)
     ],
     "duration": [0.5, 1, 1.5, 2, 2.5, 3, 4],
     "capacity": [
@@ -392,18 +385,28 @@ def _build_scrape_menu_keyboard(context):
     def label(key, fallback):
         return cfg.get(key, fallback)
 
-    date_raw = cfg.get("date_raw", "Today (default)")
+    try:
+        effective = search_config_from_bot(cfg)
+    except ValueError:
+        effective = None
+    date_raw = cfg.get("date_raw") or (effective.date if effective else "Today")
+    if not cfg.get("date_raw") and not cfg.get("start_time"):
+        date_raw += " (rolling)"
+    start = cfg.get("start_time") or (
+        effective.start_time if effective else "Next half-hour"
+    )
+    start += " SGT" + (" (rolling)" if not cfg.get("start_time") else "")
     kb = [
         [InlineKeyboardButton(f"📅 Date: {date_raw}", callback_data="pick:date")],
         [
             InlineKeyboardButton(
-                f"⏰ Start: {label('start_time', '11:00')}",
+                f"⏰ Start: {start}",
                 callback_data="pick:start_time",
             )
         ],
         [
             InlineKeyboardButton(
-                f"⏳ Duration: {label('duration_hrs', 2.5)}h",
+                f"⏳ Duration: {label('duration_hrs', 2):g}h",
                 callback_data="pick:duration",
             )
         ],
@@ -446,7 +449,14 @@ def _build_scrape_menu_keyboard(context):
 def _search_settings_text(context):
     text = "⚙️ Search settings — tap a row to change:"
     try:
-        require_future_booking(search_config_from_bot(get_scrape_config(context)))
+        config = get_scrape_config(context)
+        resolved = search_config_from_bot(config)
+        text += (
+            f"\nWindow: {resolved.date}, {resolved.start_time}–{resolved.end_time} SGT"
+        )
+        if not config.get("start_time"):
+            text += "\nThe rolling start recalculates for each search."
+        require_future_booking(resolved)
     except (BookingUnavailable, ValueError) as error:
         text += f"\n\n⚠️ {error}"
     return text
@@ -467,11 +477,26 @@ async def _open_param_picker(query, context, param):
             [InlineKeyboardButton(lbl, callback_data=f"set:date:{off}")]
             for lbl, off in SCRAPE_PARAM_CHOICES["date"]
         ]
+        buttons.insert(
+            0, [InlineKeyboardButton("↻ Rolling date", callback_data="set:date:AUTO")]
+        )
     elif param == "start_time":
+        choices = SCRAPE_PARAM_CHOICES["start_time"]
         buttons = [
-            [InlineKeyboardButton(t, callback_data=f"set:start_time:{t}")]
-            for t in SCRAPE_PARAM_CHOICES["start_time"]
+            [
+                InlineKeyboardButton(t, callback_data=f"set:start_time:{t}")
+                for t in choices[index : index + 3]
+            ]
+            for index in range(0, len(choices), 3)
         ]
+        buttons.insert(
+            0,
+            [
+                InlineKeyboardButton(
+                    "↻ Next half-hour (rolling)", callback_data="set:start_time:AUTO"
+                )
+            ],
+        )
     elif param == "duration":
         buttons = [
             [InlineKeyboardButton(f"{d}h", callback_data=f"set:duration:{d}")]
@@ -534,12 +559,18 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
     elif data.startswith("set:"):
         _, param, value = data.split(":", 2)
         if param == "date":
-            offset_days = int(value)
-            target = datetime.now(FBS_TIMEZONE) + timedelta(days=offset_days)
-            cfg["date_raw"] = target.strftime("%-d %B %Y").lower()
+            if value == "AUTO":
+                cfg.pop("date_raw", None)
+            else:
+                offset_days = int(value)
+                target = datetime.now(FBS_TIMEZONE) + timedelta(days=offset_days)
+                cfg["date_raw"] = target.strftime("%-d %B %Y").lower()
         elif param == "start_time":
-            cfg["start_time"] = value
-            cfg.pop("end_time", None)  # recompute from start+duration
+            if value == "AUTO":
+                cfg.pop("start_time", None)
+            else:
+                cfg["start_time"] = value
+            cfg.pop("end_time", None)  
         elif param == "duration":
             cfg["duration_hrs"] = float(value)
             cfg.pop("end_time", None)
@@ -657,7 +688,6 @@ async def autopick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = " ".join(context.args or []).strip()
-    # Preserve the old shortcut for existing users; /book alone opens questions.
     if "|" not in raw:
         await begin_booking(update.message, context, purpose=raw or None)
         return
@@ -779,8 +809,6 @@ async def send_booking_receipt(query, context, result):
             "Receipt photo delivery failed (%s); trying PNG file", type(error).__name__
         )
     try:
-        # Telegram photos have size/aspect limits; the original PNG remains
-        # readable as a document when the FBS page is unusually tall.
         await context.bot.send_document(
             chat_id=query.from_user.id,
             document=result["receipt_png"],
@@ -883,7 +911,6 @@ async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "last_room_order",
         "booking_drafts",
         "booking_wizard",
-        # Remove credentials left by versions predating browser-profile auth.
         "email",
         "password",
         "settings_state",
@@ -905,13 +932,16 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     lines.append("")
     lines.append("<b>Scrape params</b> (unset = default)")
-    lines.append(f"<i>Date:</i> {cfg.get('date_raw', 'today (default)')}")
-    lines.append(f"<i>Start time:</i> {cfg.get('start_time', '11:00 (default)')}")
-    lines.append(
-        f"<i>Duration:</i> {cfg.get('duration_hrs', '2.5h (default)')}h"
-        if "duration_hrs" in cfg
-        else "<i>Duration:</i> 2.5h (default)"
-    )
+    try:
+        resolved = search_config_from_bot(cfg)
+        lines.append(
+            f"<i>Window:</i> {resolved.date}, {resolved.start_time}–{resolved.end_time} SGT"
+        )
+        if not cfg.get("start_time"):
+            lines.append("<i>Start:</i> next half-hour (rolling)")
+    except ValueError:
+        lines.append("<i>Window:</i> invalid — update /config")
+    lines.append(f"<i>Duration:</i> {cfg.get('duration_hrs', 2):g}h")
     lines.append(f"<i>Capacity:</i> {cfg.get('room_capacity') or 'any (default)'}")
     lines.append(
         f"<i>Buildings:</i> {', '.join(cfg.get('buildings') or []) or '(default)'}"
@@ -946,7 +976,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 PERSISTENCE_PATH = os.path.join(
     os.path.dirname(__file__), "bot_state.pickle"
-)  # user_data survives restarts
+)  
 
 
 async def telegram_error(update, context):
@@ -1010,7 +1040,6 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
 
 
 def main():
-    # Keep the historical entrypoint while routing startup through validation.
     if not __package__:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from bot.cli import main as cli_main
