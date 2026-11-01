@@ -20,6 +20,7 @@ dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 include = ["bot*"]
+namespaces = false
 
 [tool.setuptools.package-data]
 "bot._vendor" = ["licenses/*.txt"]

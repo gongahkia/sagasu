@@ -46,9 +46,9 @@ class Reporter:
         if self.color:
             color = {"pass": "32", "warn": "33", "fail": "31", "skip": "90"}[status]
             label = f"\033[{color}m{label}\033[0m"
-        self.write(f"[{label}] {name}: {message}", error=status == "fail")
+        self.write(f"[{label}] {name}: {message}", error=status in {"fail", "warn"})
         if hint:
-            self.write(f"       {hint}", error=status == "fail")
+            self.write(f"       {hint}", error=status in {"fail", "warn"})
 
     def progress(self, message):
         return Progress(self, message)

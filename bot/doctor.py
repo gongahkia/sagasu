@@ -90,7 +90,9 @@ async def token_check(settings, timeout):
     try:
         from telegram import Bot
         from telegram.error import InvalidToken
-
+    except ImportError:
+        return Check("telegram.token", "fail", "python-telegram-bot is not installed.")
+    try:
         async with asyncio.timeout(timeout):
             async with Bot(settings.token):
                 pass  # initialize performs getMe; never sends a Telegram message.

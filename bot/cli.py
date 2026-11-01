@@ -215,7 +215,7 @@ def run(settings, reporter):
                 application = build_application(
                     settings.token, settings.persistence, post_init=ready
                 )
-                application.run_polling(close_loop=False)
+                application.run_polling(close_loop=False, bootstrap_retries=0)
         finally:
             try:
                 if not loop.is_closed():
@@ -306,14 +306,15 @@ def main(argv=None):
                         ),
                     )
                 )
-                progress.finish(
-                    (
-                        "Health checks passed."
-                        if report["ok"]
-                        else "Health checks found issues."
-                    ),
-                    failed=not report["ok"],
-                )
+                if not as_json:
+                    progress.finish(
+                        (
+                            "Health checks passed."
+                            if report["ok"]
+                            else "Health checks found issues."
+                        ),
+                        failed=not report["ok"],
+                    )
             report["version"] = __version__
             if as_json:
                 print(json.dumps(report, indent=2))
@@ -336,7 +337,14 @@ def main(argv=None):
             reporter.write(f"Configuration error: {error}", error=True)
         return 2
     except AlreadyRunning as error:
-        reporter.write(str(error), error=True)
+        if as_json:
+            print(
+                json.dumps(
+                    {"ok": False, "error": "already_running", "message": str(error)}
+                )
+            )
+        else:
+            reporter.write(str(error), error=True)
         return 1
     except KeyboardInterrupt:
         reporter.write("Cancelled; Sagasu stopped.")
@@ -354,7 +362,14 @@ def main(argv=None):
             message = "FBS authentication did not finish. Run sagasu doctor, then retry sagasu login when FBS is reachable."
         else:
             message = "Sagasu could not complete the operation. Run sagasu doctor; check paths and browser installation. Raw error details are suppressed."
-        reporter.write(message, error=True)
+        if as_json:
+            print(
+                json.dumps(
+                    {"ok": False, "error": "operation_failed", "message": message}
+                )
+            )
+        else:
+            reporter.write(message, error=True)
         logging.getLogger(__name__).debug(
             "Operation failed with exception type %s", name
         )

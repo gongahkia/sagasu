@@ -808,6 +808,14 @@ PERSISTENCE_PATH = os.path.join(
 
 
 async def telegram_error(update, context):
+    from telegram.error import Conflict, InvalidToken
+
+    if isinstance(context.error, (Conflict, InvalidToken)):
+        logger.error(
+            "Telegram rejected polling. Check BOT_TOKEN and stop any other instance of this bot."
+        )
+        context.application.stop_running()
+        return
     logger.error(
         "Telegram update failed (%s); raw details suppressed",
         type(context.error).__name__,
