@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
 _operation = contextvars.ContextVar("sagasu_operation", default=None)
 _step = contextvars.ContextVar("sagasu_step", default=None)
 
@@ -33,9 +34,19 @@ def error_details(error):
         seen.add(id(current))
         chain.append(type(current).__name__)
         for frame in traceback.extract_tb(current.__traceback__)[-8:]:
-            frames.append({"file": Path(frame.filename).name, "line": frame.lineno, "function": frame.name})
+            frames.append(
+                {
+                    "file": Path(frame.filename).name,
+                    "line": frame.lineno,
+                    "function": frame.name,
+                }
+            )
         current = current.__cause__ or current.__context__
-    return {"error_type": type(error).__name__, "error_chain": chain, "error_frames": frames}
+    return {
+        "error_type": type(error).__name__,
+        "error_chain": chain,
+        "error_frames": frames,
+    }
 
 
 def event(name, *, level=logging.INFO, **fields):
@@ -43,15 +54,23 @@ def event(name, *, level=logging.INFO, **fields):
     step = _step.get()
     if operation and level >= logging.WARNING:
         operation.issues += 1
-    logger.log(level, name, extra={
-        "event": name,
-        "operation_id": operation.id if operation else None,
-        "operation": operation.name if operation else None,
-        "step": step[0] if step else None,
-        "step_id": step[1] if step else None,
-        "elapsed_ms": round((time.monotonic() - operation.started) * 1000, 1) if operation else None,
-        "fields": fields,
-    })
+    logger.log(
+        level,
+        name,
+        extra={
+            "event": name,
+            "operation_id": operation.id if operation else None,
+            "operation": operation.name if operation else None,
+            "step": step[0] if step else None,
+            "step_id": step[1] if step else None,
+            "elapsed_ms": (
+                round((time.monotonic() - operation.started) * 1000, 1)
+                if operation
+                else None
+            ),
+            "fields": fields,
+        },
+    )
 
 
 @contextmanager
@@ -64,11 +83,17 @@ def step(name):
         yield
     except BaseException as error:
         cancelled = isinstance(error, (asyncio.CancelledError, KeyboardInterrupt))
-        event("step.cancelled" if cancelled else "step.failed", level=logging.WARNING if cancelled else logging.ERROR,
-              duration_ms=round((time.monotonic() - started) * 1000, 1), **error_details(error))
+        event(
+            "step.cancelled" if cancelled else "step.failed",
+            level=logging.WARNING if cancelled else logging.ERROR,
+            duration_ms=round((time.monotonic() - started) * 1000, 1),
+            **error_details(error),
+        )
         raise
     else:
-        event("step.completed", duration_ms=round((time.monotonic() - started) * 1000, 1))
+        event(
+            "step.completed", duration_ms=round((time.monotonic() - started) * 1000, 1)
+        )
     finally:
         _step.reset(token)
 
@@ -79,7 +104,9 @@ def observed_step(name):
         async def wrapped(*args, **kwargs):
             with step(name):
                 return await function(*args, **kwargs)
+
         return wrapped
+
     return decorate
 
 
@@ -97,16 +124,28 @@ def observed_operation(name):
             try:
                 result = await function(*args, **kwargs)
             except BaseException as error:
-                cancelled = isinstance(error, (asyncio.CancelledError, KeyboardInterrupt))
-                event("operation.cancelled" if cancelled else "operation.failed", level=logging.WARNING if cancelled else logging.ERROR, **error_details(error))
+                cancelled = isinstance(
+                    error, (asyncio.CancelledError, KeyboardInterrupt)
+                )
+                event(
+                    "operation.cancelled" if cancelled else "operation.failed",
+                    level=logging.WARNING if cancelled else logging.ERROR,
+                    **error_details(error),
+                )
                 raise
             else:
-                event("operation.completed", outcome="completed_with_issues" if operation.issues else "ok", issue_events=operation.issues)
+                event(
+                    "operation.completed",
+                    outcome="completed_with_issues" if operation.issues else "ok",
+                    issue_events=operation.issues,
+                )
                 return result
             finally:
                 _step.reset(step_token)
                 _operation.reset(token)
+
         return wrapped
+
     return decorate
 
 
@@ -120,6 +159,10 @@ class ContextFilter(logging.Filter):
             record.operation = operation.name if operation else None
             record.step = active_step[0] if active_step else None
             record.step_id = active_step[1] if active_step else None
-            record.elapsed_ms = round((time.monotonic() - operation.started) * 1000, 1) if operation else None
+            record.elapsed_ms = (
+                round((time.monotonic() - operation.started) * 1000, 1)
+                if operation
+                else None
+            )
             record.fields = {}
         return True

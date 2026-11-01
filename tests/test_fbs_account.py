@@ -232,9 +232,7 @@ class TelegramAccountTest(unittest.IsolatedAsyncioTestCase):
         await bot.send_booking_receipt(
             query, self.context, {"reference_number": "BK-TEST", "receipt_png": b"png"}
         )
-        self.assertIn(
-            "booking is confirmed", self.message.reply_text.await_args.args[0]
-        )
+        self.assertIn("booking is recorded", self.message.reply_text.await_args.args[0])
 
     async def test_tasks_rejects_group_chat_without_accessing_fbs(self):
         self.message.chat.type = "group"

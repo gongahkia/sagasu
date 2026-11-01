@@ -80,6 +80,9 @@ except ImportError:
     )
 
 
+from bot.observability import event, observed_operation, observed_step
+from bot.booking_management import bookings_command, management_callback, show_bookings
+
 logger = logging.getLogger(__name__)
 _ACTIVE_SEARCHES = {}
 _AUTH_HELP = (
@@ -123,6 +126,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ],
             [InlineKeyboardButton("Help", callback_data="view_help")],
             [InlineKeyboardButton("📋 FBS Task List", callback_data="open_tasks")],
+            [InlineKeyboardButton("📒 My bookings", callback_data="open_bookings")],
         ]
     )
     await update.message.reply_text(
@@ -133,6 +137,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@observed_operation("search")
 async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Searching FBS for available rooms")
     abandon_setup(context)
@@ -153,7 +158,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         )
 
         async def progress(stage):
-            logger.info("FBS: %s", stage)
+            logger.debug("FBS progress: %s", stage)
             try:
                 await status_msg.edit_text(f"⏳ {stage}…", reply_markup=cancel_kb)
             except Exception as e:
@@ -263,6 +268,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await open_contacts(query.message, context)
     elif query.data == "open_tasks":
         await show_task_list(query.message, context)
+    elif query.data == "open_bookings":
+        await show_bookings(query.message, context)
     elif query.data == "open_config":
         abandon_setup(context)
         await query.message.reply_text(
@@ -742,6 +749,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@observed_operation("booking")
 async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -770,7 +778,7 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
     )
 
     async def progress(stage):
-        logger.info("FBS: %s", stage)
+        logger.debug("FBS progress: %s", stage)
         try:
             await status.edit_text(f"⏳ {stage}…")
         except Exception:
@@ -786,7 +794,7 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
         if submit:
             drafts.pop(token, None)
             await status.edit_text(
-                "✅ Booking confirmed and verified in FBS My Bookings.\n"
+                "✅ Booking recorded and verified in FBS My Bookings.\n"
                 f"Room: {request.room}\n"
                 f"Date: {request.search.date}\n"
                 f"Time: {request.search.start_time}–{request.search.end_time}\n"
@@ -814,6 +822,7 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
         await status.edit_text(f"⚠️ Booking failed safely before completion: {error}")
 
 
+@observed_step("receipt.deliver")
 async def send_booking_receipt(query, context, result):
     """Deliver private evidence without changing a verified booking's outcome."""
     caption = (
@@ -823,14 +832,26 @@ async def send_booking_receipt(query, context, result):
         f"FBS status: {result.get('fbs_status', 'not shown')}"
     )
     try:
+        event(
+            "receipt.delivery_started",
+            transport="photo",
+            bytes=len(result["receipt_png"]),
+        )
         await context.bot.send_photo(
             chat_id=query.from_user.id,
             photo=result["receipt_png"],
             caption=caption[:1024],
             parse_mode=None,
         )
+        event("receipt.delivered", transport="photo")
         return
     except Exception as error:
+        event(
+            "receipt.delivery_retry",
+            level=logging.WARNING,
+            transport="document",
+            error_type=type(error).__name__,
+        )
         logger.info(
             "Receipt photo delivery failed (%s); trying PNG file", type(error).__name__
         )
@@ -842,15 +863,22 @@ async def send_booking_receipt(query, context, result):
             caption=caption[:1024],
             parse_mode=None,
         )
+        event("receipt.delivered", transport="document")
     except Exception as error:
+        event(
+            "receipt.delivery_failed",
+            level=logging.WARNING,
+            error_type=type(error).__name__,
+        )
         logger.warning("Receipt delivery unavailable (%s)", type(error).__name__)
         await query.message.reply_text(
-            "Your booking is confirmed, but I couldn't deliver its screenshot. "
+            "Your booking is recorded, but I couldn't deliver its screenshot. "
             "Open my private chat and send /start to allow private receipts. "
             "You can view this reference in FBS My Bookings; do not book again."
         )
 
 
+@observed_operation("tasks")
 async def show_task_list(message, context):
     if message.chat.type != "private":
         await message.reply_text(
@@ -922,10 +950,11 @@ async def scrape_cancel_callback(update: Update, context: ContextTypes.DEFAULT_T
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active = context.user_data.pop("booking_wizard", None)
     drafts = context.user_data.pop("booking_drafts", None)
+    cancellations = context.user_data.pop("cancellation_reviews", None)
     state = context.user_data.pop("settings_state", None)
     await update.message.reply_text(
         "Cancelled the current questions and pending booking reviews. No booking was submitted."
-        if active or drafts or state
+        if active or drafts or state or cancellations
         else "There’s nothing waiting to be cancelled."
     )
 
@@ -937,6 +966,8 @@ async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "last_room_order",
         "booking_drafts",
         "booking_wizard",
+        "cancellation_reviews",
+        "booking_management",
         "email",
         "password",
         "settings_state",
@@ -994,6 +1025,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/book — start booking questions for the selected room\n"
         "/cobookers — save names/emails or remove saved co-bookers\n"
         "/tasks — check your FBS Task List for requests awaiting action\n"
+        "/bookings — view existing bookings and review cancellation\n"
         "/cancel — stop questions and discard pending booking reviews\n\n"
         "Your SMU session stays in a private browser profile; approve MFA on your phone when prompted.",
         parse_mode=ParseMode.HTML,
@@ -1057,6 +1089,8 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
     app.add_handler(CommandHandler("book", book_command))
     app.add_handler(CommandHandler("cobookers", cobookers_command))
     app.add_handler(CommandHandler(["tasks", "tasklist"], tasks_command))
+    app.add_handler(CommandHandler(["bookings", "cancelbooking"], bookings_command))
+    app.add_handler(CallbackQueryHandler(management_callback, pattern=r"^manage:"))
     app.add_handler(CallbackQueryHandler(wizard_callback, pattern=r"^wizard:"))
     app.add_handler(
         CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):")

@@ -1,6 +1,8 @@
 """Complete read-only extraction of FBS's scroll-rendered DayPilot calendar."""
 
 import asyncio
+import logging
+from .observability import event, observed_step
 import math
 from datetime import datetime, timedelta, timezone
 
@@ -155,6 +157,7 @@ def dated_event_slot(event, status, config):
         ) from None
 
 
+@observed_step("calendar.extract")
 async def read_complete_calendar(frame, names, config):
     stage = "resource_readiness"
     try:
@@ -174,6 +177,7 @@ async def read_complete_calendar(frame, names, config):
                 timeout=30000,
             )
             stage = "resource_metadata"
+            event("calendar.phase", level=logging.DEBUG, phase=stage)
             metadata = await frame.evaluate(METADATA)
             # An unloaded server window or virtual event list cannot prove coverage.
             if (
@@ -188,6 +192,7 @@ async def read_complete_calendar(frame, names, config):
                 raise LayoutChanged("Calendar scroll area is not uniquely identifiable")
             await scroll.evaluate("(el) => {el.scrollTop = 0; el.scrollLeft = 0;}")
             stage = "row_scan"
+            event("calendar.phase", level=logging.DEBUG, phase=stage)
             rows = {}
             for _ in range(200):
                 # Allow DayPilot's scroll handler to render the next row headers.
@@ -219,11 +224,19 @@ async def read_complete_calendar(frame, names, config):
             await scroll.evaluate("(el) => {el.scrollTop = 0;}")
             await frame.wait_for_timeout(250)
             stage = "event_scan"
+            event("calendar.phase", level=logging.DEBUG, phase=stage)
             events = await scroll.evaluate(EVENTS)
             final_metadata = await frame.evaluate(METADATA)
             if final_metadata != metadata:
                 raise LayoutChanged("Calendar changed during extraction")
             stage = "coverage_validation"
+            event("calendar.phase", level=logging.DEBUG, phase=stage)
+            event(
+                "calendar.coverage",
+                rooms=len(rows),
+                events=len(events),
+                expected_events=metadata["event_count"],
+            )
             return calendar_rooms(names, config, rows, events, metadata["event_count"])
     except LayoutChanged:
         raise

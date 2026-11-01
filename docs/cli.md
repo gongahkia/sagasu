@@ -54,6 +54,7 @@ Common options work before or after the command:
 sagasu --env-file /path/to/private.env doctor --browser chromium
 sagasu run --no-spinner --no-color
 sagasu run --verbose --log-file artifacts/sagasu.log
+sagasu run --verbose --log-format json --log-file artifacts/sagasu.jsonl
 sagasu doctor --timeout 5 --json > artifacts/doctor.json
 ```
 
@@ -64,6 +65,14 @@ sagasu doctor --timeout 5 --json > artifacts/doctor.json
 - `--verbose` enables redacted debug logs. Raw authentication tracebacks remain suppressed.
 - `--log-file PATH` enables rotating logs (1 MB, three backups). The current log is created with mode 0600. Tokens, Telegram token URLs and URL query strings are redacted.
 - Human progress/log output goes to stderr. Configuration values, paths, version/help and JSON reports go to stdout.
+
+`--log-format text` (default) adds UTC timestamps, operation/step IDs and timings. `--log-format json` emits one JSON object per stderr/file line, with `schema_version: 1`; startup messages also use JSON and the banner/spinner are disabled. CLI command results still use stdout as before. Quiet mode hides informational console records but preserves them in an explicitly configured log file.
+
+Each search, booking, Task List check and cancellation has a task-local `operation_id`. Related browser, authentication, filter, calendar, form, submission, verification and receipt events keep that ID even across awaited calls. `step.started` pairs with `step.completed`, `step.failed` or `step.cancelled` using `step_id`; durations and total elapsed times are milliseconds. A start with no finish identifies an operation still waiting. `--verbose` adds filter-control counts and calendar extraction phases. Results include room/task counts and actual FBS statuses: submission verification does not mean a **Pending Confirmation** booking is already confirmed.
+
+Failures record exception types, cause/context types and file/function/line locations without exception values, locals, source lines or raw browser tracebacks. An operation whose handler recovers from a failed step ends with `outcome: completed_with_issues`; inspect its failed step or warning events. Cancellation uncertainty, selection retries and receipt delivery fallback have distinct events. Function arguments are never automatically recorded. Search window/room metadata is included, while passwords, tokens, cookies, email addresses, booking purpose, co-booker data, MFA numbers and screenshot contents are excluded or redacted. These private logs are still useful operational data: keep them out of public issue attachments unless reviewed.
+
+For example, use `jq 'select(.operation_id == "YOUR_ID")' artifacts/sagasu.jsonl` to isolate one request. Filter failures with `jq 'select(.event == "step.failed" or .event == "operation.failed" or .event == "cancellation.outcome_unknown")' artifacts/sagasu.jsonl`. The same IDs appear in timestamped text logs.
 
 Exit codes: 0 success/help, 1 runtime or doctor failure, 2 configuration/usage error, 130 keyboard cancellation. `run_polling` handles normal Ctrl+C shutdown itself and may return success after a clean stop. Closing active browser operations is part of shutdown; let the bot finish shutting down before restarting it.
 
@@ -108,6 +117,10 @@ The requested start must be in the future in Singapore time (SGT), even when the
 After submission is verified in My Bookings, Sagasu opens **VIEW** for that exact reference and sends a screenshot of the booking details to the requesting user's private Telegram chat. The caption includes the reference, room, time and FBS status. The image is held in memory, with no receipt files added to Telegram persistence or the repository. If Telegram cannot accept it as a photo, Sagasu tries the original PNG as a document. Screenshot or delivery failure keeps the booking marked as verified and explains how to find the reference in FBS; it never triggers another booking. **Validate only** does not create or send a receipt.
 
 Use `/tasks` (alias `/tasklist`) or **FBS Task List** in `/start` to check for requests awaiting your action. This feature is available in private chats and uses the same session/MFA flow as searches. It lists each task's reference, facility, dates/times, request type, requester and status. If FBS paginates the list, the response states how many items were read and directs you to FBS for the remainder. Approval and rejection actions remain in FBS. An unreadable or failed check is reported as a failure, never as an empty list.
+
+Use `/bookings` (alias `/cancelbooking`) or **My bookings** in `/start` to read existing bookings in a private chat. Cancellation buttons appear only for rows where FBS exposes its CANCEL action. Select one to review its reference, facility, time, status and cancellation reason, then choose **Confirm cancellation** or **Keep booking**. Reviews expire after five minutes and are single-use; `/cancel` discards pending cancellation reviews and `/logout` clears management state. The displayed reason is “Cancelled by booker via Sagasu” when FBS requests a reason.
+
+Before acting, Sagasu reloads My Bookings and requires the same exact reference, room, date/time, status and cancellation permission. Changed or inaccessible rows require a fresh review. After clicking CANCEL once, it handles a supported booking-cancellation confirmation, then requires that reference's FBS status to become **Cancelled**; **Pending Cancellation** is reported as pending. Missing rows and lost responses never count as proof of cancellation. An uncertain outcome disables the review and asks you to check FBS, without retrying the cancellation. An unrecognized confirmation form stops safely and requires inspection in FBS. If FBS paginates My Bookings, the list states its coverage and directs you to FBS for unlisted entries.
 
 Availability uses the calendar’s full dates as well as its clock labels: an unavailable period from midnight to the following midnight stays blocked. Booking selection interpolates half-hour boundaries within FBS’s hourly headers and scrolls the target into view. Sagasu verifies FBS retained the exact selection before clicking Make Booking and retries a lost selection once. Validation checks the selected room and full start/end datetimes on the FBS booking form. If final confirmation is attempted but cannot be verified in My Bookings, Sagasu disables that review and asks you to check FBS before retrying.
 

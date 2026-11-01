@@ -87,6 +87,12 @@ def parser():
         default=argparse.SUPPRESS,
         help="Optional rotating, redacted log file (0600)",
     )
+    common.add_argument(
+        "--log-format",
+        choices=("text", "json"),
+        default=argparse.SUPPRESS,
+        help="Timestamped text or JSON Lines logs (default: text)",
+    )
     result = argparse.ArgumentParser(
         prog="sagasu",
         description="Personal Telegram assistant for SMU room searches and confirmed bookings.",
@@ -280,6 +286,7 @@ def main(argv=None):
         spinner="none" if as_json else getattr(args, "spinner", "dots"),
         no_color=getattr(args, "no_color", False),
         quiet=getattr(args, "quiet", False) or as_json,
+        structured=getattr(args, "log_format", "text") == "json",
     )
     try:
         if args.command == "config" and args.config_action == "init":
@@ -304,6 +311,7 @@ def main(argv=None):
             verbose=getattr(args, "verbose", False),
             log_file=getattr(args, "log_file", None),
             secrets=(settings.token, settings.values.get("SMU_LOGIN_PASSWORD", "")),
+            log_format=getattr(args, "log_format", "text"),
         )
         if args.command == "config":
             print_values(settings.public(), as_json)

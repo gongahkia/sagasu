@@ -20,6 +20,8 @@ from tempfile import NamedTemporaryFile
 from typing import Awaitable, Callable, Iterable
 from urllib.parse import parse_qs, urlparse
 
+from .observability import event, observed_operation, observed_step, step
+
 from playwright.async_api import (
     BrowserContext,
     Error as PlaywrightError,
@@ -320,7 +322,7 @@ def add_free_windows(
 
 
 async def _noop_progress(stage: str) -> None:
-    logger.info("FBS: %s", stage)
+    logger.debug("FBS progress: %s", stage)
 
 
 async def close_shared_browser():
@@ -390,9 +392,12 @@ class FBSClient:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
 
+    @observed_step("browser.open")
     async def __aenter__(self) -> "FBSClient":
         global _SHARED_CONTEXT, _SHARED_PLAYWRIGHT
+        event("browser.lock_wait")
         await _BROWSER_LOCK.acquire()
+        event("browser.lock_acquired", headless=self.headless)
         try:
             if self.keep_alive and _SHARED_CONTEXT is not None:
                 try:
@@ -407,6 +412,7 @@ class FBSClient:
                         ),
                         pages[0] if pages else await self.context.new_page(),
                     )
+                    event("browser.ready", reused=True)
                     return self
                 except Exception:
                     _SHARED_CONTEXT = None
@@ -426,6 +432,7 @@ class FBSClient:
                 else await self.context.new_page()
             )
             await self._restore_session()
+            event("browser.ready", reused=False)
             if self.keep_alive:
                 _SHARED_PLAYWRIGHT = self._playwright
                 _SHARED_CONTEXT = self.context
@@ -501,6 +508,7 @@ class FBSClient:
         finally:
             _BROWSER_LOCK.release()
 
+    @observed_step("auth.ensure")
     async def ensure_authenticated(self) -> tuple[Page, Frame]:
         if not self.page:
             raise FBSError("Browser has not been started")
@@ -565,6 +573,7 @@ class FBSClient:
             and not parsed.password
         )
 
+    @observed_step("auth.login")
     async def _complete_interactive_authentication(self) -> None:
         if not self.page:
             raise FBSError("Browser page is unavailable")
@@ -592,6 +601,8 @@ class FBSClient:
                 continue
             state, prompt = await self._classify_auth_state()
             state_changed = state != previous_state
+            if state_changed:
+                event("auth.state", state=state)
             if state_changed:
                 await self._capture_auth_state(state)
                 # Number matching is sent privately to the owner, never to a group/search message.
@@ -889,10 +900,19 @@ class FBSClient:
             # A redirect can replace the page while the screenshot is taken.
             pass
 
+    @observed_step("availability.search")
     async def search(
         self, config: SearchConfig, *, room_name: str | None = None
     ) -> SearchResult:
         page, frame = await self.ensure_authenticated()
+        event(
+            "search.requested",
+            scope="single_room" if room_name else "filters",
+            date=config.date,
+            start=config.start_time,
+            end=config.end_time,
+            target_room=room_name,
+        )
         await self.progress("configuring availability search")
         await self._set_date(frame, config.date)
         await frame.locator("select#TimeFrom_c1_ctl04").select_option(config.start_time)
@@ -950,8 +970,16 @@ class FBSClient:
         await page.wait_for_timeout(1000)
 
         rooms = await self._read_availability(frame, matching_rooms, config)
+        event(
+            "search.results",
+            rooms=len(rooms),
+            free_rooms=sum(
+                room.is_free(config.start_time, config.end_time) for room in rooms
+            ),
+        )
         return SearchResult(config, rooms, datetime.now().astimezone().isoformat())
 
+    @observed_step("booking.execute")
     async def book(self, request: BookingRequest, *, submit: bool = False) -> dict:
         """Prepare or submit a booking.
 
@@ -959,6 +987,7 @@ class FBSClient:
         Only ``submit=True`` clicks FBS's final CONFIRM control.
         """
 
+        event("booking.requested", submit=submit)
         require_future_booking(request.search)
         result = await self.search(request.search, room_name=request.room)
         require_future_booking(request.search)
@@ -978,30 +1007,31 @@ class FBSClient:
 
         await self.progress("selecting requested room and timeslot")
         booking_frame = await self._prepare_booking_frame(frame, request)
-        await booking_frame.locator("input#bookingFormControl1_TextboxPurpose_c1").fill(
-            request.purpose
-        )
-        await booking_frame.locator(
-            "select#bookingFormControl1_DropDownUsageType_c1"
-        ).select_option(label=request.usage_type)
-        await self._wait_for_idle(booking_frame)
-        await booking_frame.locator(
-            "select#bookingFormControl1_DropDownSpaceBookingUsage_c1"
-        ).select_option(label=request.booking_usage)
-        await self._wait_for_idle(booking_frame)
-        await self.progress("adding co-booker to booking form")
-        await self._add_co_booker(booking_frame, request.co_booker)
+        with step("booking.fill_form"):
+            await booking_frame.locator(
+                "input#bookingFormControl1_TextboxPurpose_c1"
+            ).fill(request.purpose)
+            await booking_frame.locator(
+                "select#bookingFormControl1_DropDownUsageType_c1"
+            ).select_option(label=request.usage_type)
+            await self._wait_for_idle(booking_frame)
+            await booking_frame.locator(
+                "select#bookingFormControl1_DropDownSpaceBookingUsage_c1"
+            ).select_option(label=request.booking_usage)
+            await self._wait_for_idle(booking_frame)
+            await self.progress("adding co-booker to booking form")
+            await self._add_co_booker(booking_frame, request.co_booker)
 
-        invite = booking_frame.locator(
-            "input#bookingFormControl1_SendCalendarInvitation_c1"
-        )
-        if request.send_calendar_invite:
-            await invite.check()
-        else:
-            await invite.uncheck()
-        await booking_frame.locator(
-            "input#bookingFormControl1_TermsAndConditionsCheckbox_c1"
-        ).check()
+            invite = booking_frame.locator(
+                "input#bookingFormControl1_SendCalendarInvitation_c1"
+            )
+            if request.send_calendar_invite:
+                await invite.check()
+            else:
+                await invite.uncheck()
+            await booking_frame.locator(
+                "input#bookingFormControl1_TermsAndConditionsCheckbox_c1"
+            ).check()
 
         await self._verify_booking_details(booking_frame, request)
         require_future_booking(request.search)
@@ -1017,12 +1047,14 @@ class FBSClient:
             "booking_usage": request.booking_usage,
         }
         if not submit:
+            event("booking.validation_passed", submitted=False)
             return preview
 
         await self.progress("submitting confirmed booking")
         confirm = booking_frame.locator("a#panel_UIButton2").first
         try:
-            await confirm.click()
+            with step("booking.submit"):
+                await confirm.click()
             await self.page.wait_for_timeout(2000)
             preview.update(await self._verify_booking(request))
         except Exception:
@@ -1048,6 +1080,7 @@ class FBSClient:
             )
         return preview
 
+    @observed_step("booking.verify_form")
     async def _verify_booking_details(
         self, frame: Frame, request: BookingRequest
     ) -> None:
@@ -1077,6 +1110,7 @@ class FBSClient:
                     "FBS booking details do not match the requested date/time. Nothing was confirmed."
                 )
 
+    @observed_step("booking.verify_result")
     async def _verify_booking(self, request: BookingRequest) -> dict:
         """Verify a submitted booking against FBS's My Bookings table."""
 
@@ -1110,6 +1144,10 @@ class FBSClient:
                             and request.search.end_time in date_time
                             and room.casefold() == request.room.casefold()
                         ):
+                            event(
+                                "booking.verified",
+                                fbs_status=(await cells[8].inner_text()).strip(),
+                            )
                             return {
                                 "status": "verified",
                                 "reference_number": (
@@ -1126,6 +1164,7 @@ class FBSClient:
             "check FBS before retrying to avoid a duplicate booking"
         )
 
+    @observed_step("search.date")
     async def _set_date(self, frame: Frame, target_value: str) -> None:
         target = datetime.strptime(target_value, "%d-%b-%Y").date()
         field = frame.locator("input#DateBookingFrom_c1_textDate")
@@ -1139,9 +1178,17 @@ class FBSClient:
             await self._wait_for_idle(frame)
         raise FBSError(f"Could not navigate FBS calendar to {target_value}")
 
+    @observed_step("search.filter")
     async def _set_multi_select(
         self, frame: Frame, control_id: str, values: Iterable[str]
     ) -> None:
+        values = tuple(values)
+        event(
+            "search.filter_configured",
+            level=logging.DEBUG,
+            control=control_id,
+            selections=len(values),
+        )
         await self._wait_for_idle(frame)
         opener = frame.locator(f"#{control_id}_textItem:visible").first
         current_value = await frame.locator(
@@ -1202,6 +1249,7 @@ class FBSClient:
                 result.append(value)
         return result
 
+    @observed_step("search.facility_keyword")
     async def _set_facility_keyword(self, frame: Frame, room_name: str) -> None:
         field = frame.locator("input#panel_SimpleSearch_c1")
         if not await field.is_visible():
@@ -1214,6 +1262,7 @@ class FBSClient:
         await frame.locator("a#panel_buttonSimpleSearch").click()
         await self._wait_for_idle(frame)
 
+    @observed_step("facilities.select")
     async def _matching_room_names(
         self, frame: Frame, *, only_room: str | None = None
     ) -> list[str]:
@@ -1250,8 +1299,10 @@ class FBSClient:
             raise LayoutChanged(
                 "The requested facility selection could not be verified"
             )
+        event("facilities.selected", discovered=len(names), selected=selected)
         return [only_room] if only_room else names
 
+    @observed_step("calendar.read")
     async def _read_availability(
         self, frame: Frame, room_names: list[str], config: SearchConfig
     ) -> list[RoomAvailability]:
@@ -1364,6 +1415,7 @@ class FBSClient:
             )
         return result
 
+    @observed_step("calendar.verify_selection")
     async def _verify_calendar_selection(
         self, frame: Frame, room: str, start: str, end: str, date: str | None = None
     ) -> None:
@@ -1399,6 +1451,7 @@ class FBSClient:
             if matches(await self._selection_snapshot(frame)):
                 consecutive += 1
                 if consecutive >= 2:
+                    event("selection.verified", stable_snapshots=consecutive)
                     return
             else:
                 consecutive = 0
@@ -1428,6 +1481,7 @@ class FBSClient:
                 f"FBS rejected the selected timeslot: {reason[:1200]} No booking was submitted."
             )
 
+    @observed_step("booking.prepare")
     async def _prepare_booking_frame(
         self, frame: Frame, request: BookingRequest
     ) -> Frame:
@@ -1476,6 +1530,12 @@ class FBSClient:
                     "FBS did not open booking details after Make Booking. No final confirmation was attempted."
                 )
             except CalendarSelectionLost:
+                event(
+                    "selection.retry",
+                    level=logging.WARNING,
+                    attempt=attempt + 1,
+                    retrying=not bool(attempt),
+                )
                 if attempt:
                     raise
                 await self.progress(
@@ -1494,6 +1554,7 @@ class FBSClient:
             "FBS calendar selection failed before booking preparation."
         )
 
+    @observed_step("calendar.select")
     async def _drag_timeslot(
         self,
         frame: Frame,
@@ -1569,6 +1630,7 @@ class FBSClient:
             await self.page.wait_for_timeout(500)
         raise LayoutChanged(f"FBS frame was not created: {name}")
 
+    @observed_step("booking.cobooker")
     async def _add_co_booker(self, frame: Frame, query: str) -> None:
         await frame.locator("a#bookingFormControl1_GridCoBookers_ctl14").click()
         search_input = frame.locator(
@@ -1659,6 +1721,7 @@ def search_config_from_bot(config: dict) -> SearchConfig:
     )
 
 
+@observed_operation("backend.search")
 async def search_fbs(
     config: SearchConfig,
     progress: ProgressCallback | None = None,
@@ -1677,6 +1740,7 @@ async def search_fbs(
         ) from None
 
 
+@observed_operation("backend.booking")
 async def execute_booking(
     request: BookingRequest,
     *,
@@ -1697,6 +1761,7 @@ async def execute_booking(
         ) from None
 
 
+@observed_operation("backend.tasks")
 async def check_task_list(
     progress: ProgressCallback | None = None,
     *,
