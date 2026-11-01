@@ -14,6 +14,9 @@ dev = ["pre-commit>=4,<5"]
 [project.scripts]
 sagasu = "bot.cli:main"
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.dynamic]
 version = {attr = "bot.__version__"}
 dependencies = {file = ["requirements.txt"]}
@@ -23,4 +26,4 @@ include = ["bot*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"bot._vendor" = ["licenses/*.txt"]
+"bot._vendor.licenses" = ["*.txt"]

@@ -40,7 +40,7 @@ BROWSERS = (
     "msedge-beta",
     "msedge-dev",
 )
-TOKEN_PATTERN = re.compile(r"\d+:[A-Za-z0-9_-]{20,}")
+TOKEN_PATTERN = re.compile(r"[0-9]+:[A-Za-z0-9_-]{20,}")
 TEMPLATE = """BOT_TOKEN=replace-with-your-telegram-bot-token
 TELEGRAM_OWNER_ID=123456789
 # Use chromium with: python -m playwright install chromium

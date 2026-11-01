@@ -137,6 +137,17 @@ class ReporterHandler(logging.Handler):
         )
 
 
+class PrivateRotatingFileHandler(RotatingFileHandler):
+    def _open(self):
+        descriptor = os.open(
+            self.baseFilename, os.O_CREAT | os.O_APPEND | os.O_WRONLY, 0o600
+        )
+        os.chmod(self.baseFilename, 0o600)
+        return os.fdopen(
+            descriptor, self.mode, encoding=self.encoding, errors=self.errors
+        )
+
+
 def configure_logging(reporter, *, verbose=False, log_file=None, secrets=()):
     root = logging.getLogger()
     for handler in list(root.handlers):
@@ -151,7 +162,7 @@ def configure_logging(reporter, *, verbose=False, log_file=None, secrets=()):
         os.close(descriptor)
         path.chmod(0o600)
         handlers.append(
-            RotatingFileHandler(
+            PrivateRotatingFileHandler(
                 path, maxBytes=1_000_000, backupCount=3, encoding="utf-8"
             )
         )

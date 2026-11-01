@@ -152,6 +152,7 @@ class CliTest(unittest.TestCase):
             code, stdout, stderr = self.invoke("doctor", "--json")
         self.assertEqual(code, 1)
         self.assertFalse(json.loads(stdout)["ok"])
+        self.assertEqual(stderr, "")
         self.assertNotIn("\033", stdout + stderr)
         self.assertNotIn(TOKEN, stdout + stderr)
 
@@ -278,3 +279,79 @@ class LockTest(unittest.TestCase):
                 [sys.executable, "-c", code, directory], capture_output=True, timeout=10
             )
             self.assertEqual(result.returncode, 0)
+
+
+class StartupTest(unittest.TestCase):
+    def test_startup_failure_closes_browser_and_releases_instance_lock(self):
+        from bot.cli import run
+
+        with tempfile.TemporaryDirectory() as directory:
+            env = Path(directory) / ".env"
+            env.write_text(
+                f"BOT_TOKEN={TOKEN}\nTELEGRAM_OWNER_ID=42\nSAGASU_BROWSER_PROFILE=profile\nSAGASU_STATE_PATH=state.pickle\n"
+            )
+            with patch.dict(os.environ, {}, clear=True):
+                settings = Settings.load(env)
+            application = Mock()
+            application.run_polling.side_effect = InvalidToken(TOKEN)
+            close = AsyncMock()
+            with (
+                patch("bot.bot.build_application", return_value=application),
+                patch("bot.fbs_client.close_shared_browser", close),
+            ):
+                with self.assertRaises(InvalidToken):
+                    run(settings, Reporter(stream=io.StringIO()))
+            close.assert_awaited_once()
+            with InstanceLock(settings.profile):
+                pass
+
+    def test_rotating_logs_keep_private_permissions_and_redaction(self):
+        from bot.console import PrivateRotatingFileHandler
+
+        with tempfile.TemporaryDirectory() as directory:
+            handler = PrivateRotatingFileHandler(
+                Path(directory) / "sagasu.log",
+                maxBytes=80,
+                backupCount=2,
+                encoding="utf-8",
+            )
+            handler.addFilter(Redact([TOKEN]))
+            try:
+                for index in range(6):
+                    handler.handle(
+                        logging.LogRecord(
+                            "test",
+                            logging.WARNING,
+                            "",
+                            0,
+                            f"{index} token {TOKEN} and a sufficiently long message for rollover",
+                            (),
+                            None,
+                        )
+                    )
+            finally:
+                handler.close()
+            files = list(Path(directory).glob("sagasu.log*"))
+            self.assertGreater(len(files), 1)
+            for path in files:
+                self.assertNotIn(TOKEN, path.read_text())
+                if os.name != "nt":
+                    self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_ascii_tty_falls_back_and_spinner_thread_is_joined(self):
+        class Terminal(io.StringIO):
+            @property
+            def encoding(self):
+                return "ascii"
+
+            def isatty(self):
+                return True
+
+        stream = Terminal()
+        with patch.dict(os.environ, {"TERM": "xterm"}, clear=True):
+            reporter = Reporter(stream=stream, no_color=True)
+            self.assertEqual(reporter.rattle, LINE)
+            with reporter.progress("Checking") as progress:
+                progress.finish("Done")
+            self.assertFalse(progress.thread.is_alive())
+            self.assertIsNone(reporter.active)

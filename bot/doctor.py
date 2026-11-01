@@ -255,10 +255,25 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
         ("profile", settings.profile),
         ("state", settings.persistence),
     ):
+        if target.exists() and (
+            (name == "profile" and not target.is_dir())
+            or (name == "state" and not target.is_file())
+        ):
+            add(
+                Check(
+                    f"storage.{name}",
+                    "fail",
+                    "The configured path has the wrong file type.",
+                    "The profile must be a directory; Telegram state must be a file.",
+                )
+            )
+            continue
         parent = target if target.is_dir() else target.parent
         while not parent.exists() and parent != parent.parent:
             parent = parent.parent
-        writable = os.access(parent, os.W_OK)
+        writable = os.access(parent, os.W_OK | os.X_OK)
+        if name == "state" and target.is_file():
+            writable = writable and os.access(target, os.W_OK)
         add(
             Check(
                 f"storage.{name}",
