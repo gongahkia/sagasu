@@ -1,7 +1,38 @@
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from bot.fbs_client import FBSClient, LayoutChanged, SearchConfig
+from playwright.async_api import (
+    Error as PlaywrightError,
+    TimeoutError as PlaywrightTimeoutError,
+)
+
+from bot.fbs_client import FBSError, FBSClient, LayoutChanged, SearchConfig
+
+
+class NavigationTest(unittest.IsolatedAsyncioTestCase):
+    async def test_navigation_timeout_reports_connectivity_without_attempting_login(
+        self,
+    ):
+        client = FBSClient()
+        client.page = AsyncMock()
+        client.page.goto.side_effect = PlaywrightTimeoutError(
+            "private redirect details"
+        )
+        client._complete_interactive_authentication = AsyncMock()
+        with self.assertRaises(FBSError) as error:
+            await client.ensure_authenticated()
+        self.assertIn("navigation timed out", str(error.exception))
+        self.assertNotIn("private", str(error.exception))
+        client._complete_interactive_authentication.assert_not_awaited()
+
+    async def test_browser_navigation_error_does_not_expose_raw_details(self):
+        client = FBSClient()
+        client.page = AsyncMock()
+        client.page.goto.side_effect = PlaywrightError("private redirect details")
+        with self.assertRaises(FBSError) as error:
+            await client.ensure_authenticated()
+        self.assertIn("could not open FBS", str(error.exception))
+        self.assertNotIn("private", str(error.exception))
 
 
 class RoomSelectionTest(unittest.IsolatedAsyncioTestCase):

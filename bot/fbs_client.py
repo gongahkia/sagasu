@@ -15,7 +15,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Awaitable, Callable, Iterable
 
-from playwright.async_api import BrowserContext, Frame, Page, async_playwright
+from playwright.async_api import (
+    BrowserContext,
+    Error as PlaywrightError,
+    Frame,
+    Page,
+    TimeoutError as PlaywrightTimeoutError,
+    async_playwright,
+)
 
 
 FBS_URL = "https://fbs.intranet.smu.edu.sg/home"
@@ -339,7 +346,19 @@ class FBSClient:
         if not self.page:
             raise FBSError("Browser has not been started")
         await self.progress("opening FBS")
-        await self.page.goto(FBS_URL, wait_until="domcontentloaded", timeout=60000)
+        try:
+            await self.page.goto(FBS_URL, wait_until="domcontentloaded", timeout=60000)
+        except PlaywrightTimeoutError:
+            raise FBSError(
+                "FBS navigation timed out after 60 seconds. Open "
+                f"{FBS_URL} in a normal browser on this computer to check access. "
+                "Retry the search once FBS is reachable."
+            ) from None
+        except PlaywrightError:
+            raise FBSError(
+                "The browser could not open FBS. Check your connection and open "
+                f"{FBS_URL} in a normal browser on this computer."
+            ) from None
 
         try:
             await self.page.wait_for_selector("iframe#frameBottom", timeout=15000)
