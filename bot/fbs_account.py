@@ -375,7 +375,21 @@ async def fetch_bookings(*, auth_notify=None):
 async def execute_cancellation(expected, reason, *, auth_notify=None):
     try:
         async with FBSClient(auth_notify=auth_notify) as client:
-            return await cancel_booking(client, expected, reason)
+            result = await cancel_booking(client, expected, reason)
+            if result["status"] == "cancelled":
+                try:
+                    result["receipt_png"] = await capture_booking_evidence(
+                        client, expected["reference_number"]
+                    )
+                except Exception as error:
+                    event(
+                        "cancellation.receipt_unavailable",
+                        error_type=type(error).__name__,
+                    )
+                    result["receipt_error"] = (
+                        "Cancellation is verified, but its screenshot could not be captured. Check this reference in FBS My Bookings."
+                    )
+            return result
     except FBSError:
         raise
     except Exception:

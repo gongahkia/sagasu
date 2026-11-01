@@ -3,7 +3,7 @@
 import os
 
 
-def owner_auth_notifier(bot):
+def owner_auth_notifier(bot, *, render=None):
     async def notify(message):
         # Always use the configured user's private chat, even for group commands.
         from .fbs_client import AuthenticationRequired
@@ -14,6 +14,9 @@ def owner_auth_notifier(bot):
                 "Set TELEGRAM_OWNER_ID before requesting remote MFA approval."
             )
         try:
+            if render is not None:
+                await render(int(owner), f"🔐 {message}")
+                return
             await bot.send_message(
                 chat_id=int(owner), text=f"🔐 {message}", parse_mode=None
             )

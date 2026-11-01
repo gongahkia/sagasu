@@ -208,7 +208,7 @@ class TelegramAccountTest(unittest.IsolatedAsyncioTestCase):
         self.status = Mock(edit_text=AsyncMock())
         self.message.reply_text.return_value = self.status
         self.context = SimpleNamespace(
-            bot=Mock(send_photo=AsyncMock(), send_document=AsyncMock())
+            bot=Mock(send_photo=AsyncMock(), send_document=AsyncMock()), user_data={}
         )
 
     async def test_receipt_is_sent_to_user_privately_and_falls_back_to_original_png(
@@ -261,7 +261,7 @@ class TelegramAccountTest(unittest.IsolatedAsyncioTestCase):
             AsyncMock(return_value=parse_tasks(task_snapshot(total=40))),
         ):
             await bot.show_task_list(self.message, self.context)
-        text = self.message.reply_text.await_args.args[0]
+        text = self.status.edit_text.await_args.args[0]
         self.assertIn("Pending Approval", text)
         self.assertIn("Booking Approval", text)
         self.assertIn("Showing 1 of 40", text)

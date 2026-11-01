@@ -13,6 +13,7 @@ from .fbs_account import (
 )
 from .fbs_client import FBSError
 from .observability import event, observed_operation
+from .surface import finish_operation, deliver_receipt
 
 REASON = "Cancelled by booker via Sagasu"
 
@@ -30,7 +31,11 @@ async def show_bookings(message, context):
         return
     status = await message.reply_text("⏳ Reading FBS My Bookings…")
     try:
-        result = await fetch_bookings(auth_notify=owner_auth_notifier(context.bot))
+        result = await fetch_bookings(
+            auth_notify=owner_auth_notifier(
+                context.bot, render=getattr(context, "ui_auth_notify", None)
+            )
+        )
     except FBSError as error:
         await status.edit_text(f"⚠️ Could not read My Bookings: {error}")
         return
@@ -47,10 +52,11 @@ async def show_bookings(message, context):
 
 async def render_bookings(message, listing, page):
     items = listing["items"]
-    page = max(0, min(page, max(0, (len(items) - 1) // 6)))
+    page = max(0, min(page, max(0, (len(items) - 1) // 4)))
+    listing["page"] = page
     text = f"📒 FBS My Bookings · {listing['total']} item(s)\n\n"
     buttons = []
-    for index, item in enumerate(items[page * 6 : (page + 1) * 6], start=page * 6):
+    for index, item in enumerate(items[page * 4 : (page + 1) * 4], start=page * 4):
         text += (
             f"{item['reference_number'][:100]} · {item['room'][:160]}\n"
             f"{item['date_time'][:200]}\nStatus: {item['fbs_status'][:160]}\n"
@@ -81,7 +87,7 @@ async def render_bookings(message, listing, page):
                 "← Previous", callback_data=f"manage:{listing['id']}:page:{page - 1}"
             )
         )
-    if (page + 1) * 6 < len(items):
+    if (page + 1) * 4 < len(items):
         pages.append(
             Button("Next →", callback_data=f"manage:{listing['id']}:page:{page + 1}")
         )
@@ -105,7 +111,7 @@ async def management_callback(update, context):
     for key in list(reviews):
         if reviews[key]["expires_at"] < time.time():
             reviews.pop(key)
-    if action in {"confirm", "keep"}:
+    if action in {"confirm", "keep", "back"}:
         review = reviews.get(token)
         if not review or review["chat_id"] != query.message.chat_id:
             await query.message.reply_text(
@@ -113,18 +119,29 @@ async def management_callback(update, context):
             )
             return
         reviews.pop(token)
-        if action == "keep":
-            await query.edit_message_text(
-                "Booking kept. No cancellation was submitted."
-            )
+        if action in {"keep", "back"}:
+            listing = context.user_data.get("booking_management")
+            if listing:
+                await render_bookings(query.message, listing, listing.get("page", 0))
+            else:
+                await query.edit_message_text(
+                    "Booking kept. Return Home to refresh My bookings."
+                )
             return
         status = await query.message.reply_text(
             "⏳ Rechecking the booking before cancellation…"
         )
         try:
-            result = await execute_cancellation(
-                review["booking"], REASON, auth_notify=owner_auth_notifier(context.bot)
-            )
+            try:
+                result = await execute_cancellation(
+                    review["booking"],
+                    REASON,
+                    auth_notify=owner_auth_notifier(
+                        context.bot, render=getattr(context, "ui_auth_notify", None)
+                    ),
+                )
+            finally:
+                finish_operation(context)
         except CancellationOutcomeUnknown as error:
             context.user_data.pop("booking_management", None)
             await status.edit_text(f"⚠️ {error} This review has been disabled.")
@@ -141,6 +158,26 @@ async def management_callback(update, context):
         await status.edit_text(
             f"{label}\nReference: {review['booking']['reference_number']}\nFBS status: {result['fbs_status']}"
         )
+        if result.get("receipt_png"):
+            try:
+                await deliver_receipt(
+                    context,
+                    query.from_user.id,
+                    result["receipt_png"],
+                    f"FBS cancellation · {review['booking']['reference_number']}\n{review['booking']['room']}\n{review['booking']['date_time']}\nStatus: {result['fbs_status']}",
+                )
+            except Exception as error:
+                event(
+                    "cancellation.receipt_delivery_failed",
+                    error_type=type(error).__name__,
+                )
+                await status.edit_text(
+                    f"{label}\nReference: {review['booking']['reference_number']}\nThe cancellation receipt could not be delivered. Check FBS My Bookings."
+                )
+        elif result.get("receipt_error"):
+            await status.edit_text(
+                f"{label}\nReference: {review['booking']['reference_number']}\n{result['receipt_error']}"
+            )
         return
     listing = context.user_data.get("booking_management")
     if (
@@ -174,6 +211,8 @@ async def management_callback(update, context):
         "expires_at": time.time() + 300,
     }
     event("cancellation.review_created")
+    if getattr(context, "ui_panel", None):
+        context.ui_panel.back_to(f"manage:{key}:back")
     await query.message.reply_text(
         f"Cancel this FBS booking?\n\nReference: {item['reference_number']}\nRoom: {item['room']}\n"
         f"When: {item['date_time']}\nStatus: {item['fbs_status']}\nReason: {REASON}\n\n"

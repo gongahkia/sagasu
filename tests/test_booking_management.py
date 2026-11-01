@@ -4,7 +4,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from bot import booking_management as ui
-from bot.fbs_account import cancel_booking, CancellationOutcomeUnknown
+from bot.fbs_account import (
+    cancel_booking,
+    execute_cancellation,
+    CancellationOutcomeUnknown,
+)
 from bot.fbs_client import FBSError
 
 
@@ -18,6 +22,25 @@ BOOKING = {
 
 
 class CancellationTest(unittest.IsolatedAsyncioTestCase):
+    async def test_cancellation_receipt_failure_preserves_verified_cancellation(self):
+        with (
+            patch("bot.fbs_account.FBSClient"),
+            patch(
+                "bot.fbs_account.cancel_booking",
+                AsyncMock(
+                    return_value={"status": "cancelled", "fbs_status": "Cancelled"}
+                ),
+            ) as cancel,
+            patch(
+                "bot.fbs_account.capture_booking_evidence",
+                AsyncMock(side_effect=FBSError("unreadable")),
+            ),
+        ):
+            result = await execute_cancellation(BOOKING, ui.REASON)
+        self.assertEqual(result["status"], "cancelled")
+        self.assertIn("receipt_error", result)
+        cancel.assert_awaited_once()
+
     def client(self):
         button = Mock(click=AsyncMock())
         row = Mock()
@@ -130,7 +153,10 @@ class CancellationTest(unittest.IsolatedAsyncioTestCase):
 class ManagementUiTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.message = Mock(
-            chat=SimpleNamespace(type="private"), chat_id=7, reply_text=AsyncMock()
+            chat=SimpleNamespace(type="private"),
+            chat_id=7,
+            reply_text=AsyncMock(),
+            edit_text=AsyncMock(),
         )
         self.status = Mock(edit_text=AsyncMock())
         self.message.reply_text.return_value = self.status

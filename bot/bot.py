@@ -81,6 +81,7 @@ except ImportError:
 
 
 from bot.observability import event, observed_operation, observed_step
+from bot.surface import surface_handler, deliver_receipt, finish_operation
 from bot.booking_management import bookings_command, management_callback, show_bookings
 
 logger = logging.getLogger(__name__)
@@ -110,28 +111,39 @@ async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    panel = getattr(context, "ui_panel", None)
+    if panel:
+        panel.state["screen"] = "home"
+        panel.back_to(None)
     abandon_setup(context)
+    try:
+        window = search_config_from_bot(context.user_data.get("scrape_config") or {})
+        window_text = f"{window.date} · {window.start_time}–{window.end_time} SGT"
+    except ValueError:
+        window_text = "Choose a valid time in Search settings."
     keyboard = InlineKeyboardMarkup(
         [
             [
                 InlineKeyboardButton(
                     "🔎 Find available rooms", callback_data="run_script"
-                )
+                ),
+                InlineKeyboardButton("📒 My bookings", callback_data="open_bookings"),
             ],
-            [InlineKeyboardButton("⚙️ Search settings", callback_data="open_config")],
             [
                 InlineKeyboardButton(
                     "👥 Saved co-bookers", callback_data="open_cobookers"
-                )
+                ),
+                InlineKeyboardButton("📋 FBS Task List", callback_data="open_tasks"),
             ],
-            [InlineKeyboardButton("Help", callback_data="view_help")],
-            [InlineKeyboardButton("📋 FBS Task List", callback_data="open_tasks")],
-            [InlineKeyboardButton("📒 My bookings", callback_data="open_bookings")],
+            [
+                InlineKeyboardButton("⚙️ Search settings", callback_data="open_config"),
+                InlineKeyboardButton("Help", callback_data="view_help"),
+            ],
         ]
     )
     await update.message.reply_text(
         "<b>Sagasu · SMU room bookings</b>\n\n"
-        "Find a room, then I’ll guide you through the booking questions.",
+        f"Next search: {escape(window_text)}\n\nChoose an action below.",
         parse_mode=ParseMode.HTML,
         reply_markup=keyboard,
     )
@@ -154,7 +166,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
             [[InlineKeyboardButton("🛑 Cancel", callback_data="scrape_cancel")]]
         )
         status_msg = await callback_query.message.reply_text(
-            "⏳ Starting scrape…", reply_markup=cancel_kb
+            "⏳ Searching FBS…", reply_markup=cancel_kb
         )
 
         async def progress(stage):
@@ -166,7 +178,11 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
 
         scrape_task = asyncio.create_task(
             search_fbs(
-                search_config, progress, auth_notify=owner_auth_notifier(context.bot)
+                search_config,
+                progress,
+                auth_notify=owner_auth_notifier(
+                    context.bot, render=getattr(context, "ui_auth_notify", None)
+                ),
             )
         )
         _ACTIVE_SEARCHES[callback_query.from_user.id] = scrape_task
@@ -186,40 +202,10 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             return
         context.user_data["last_search"] = result.to_dict()
-        rooms = result.bookable_rooms
-        context.user_data["last_room_order"] = [room.name for room in rooms]
-        if not rooms:
-            await status_msg.edit_text(
-                "😴 No room is free for the entire requested window.\n"
-                "Adjust /config and try again."
-            )
-        else:
-            summary = (
-                f"<b>🥳 {len(rooms)} room(s) free for the full window</b>\n"
-                f"{escape(result.config.date)}, "
-                f"{escape(result.config.start_time)}–{escape(result.config.end_time)}\n\n"
-            )
-            buttons = [
-                [
-                    InlineKeyboardButton(
-                        "✨ Auto-pick best room", callback_data="autopick"
-                    )
-                ]
-            ]
-            for idx, room in enumerate(rooms[:20]):
-                summary += f"• <code>{escape(room.name)}</code>\n"
-                buttons.append(
-                    [
-                        InlineKeyboardButton(
-                            f"🏠 {room.name}", callback_data=f"room:{idx}"
-                        )
-                    ]
-                )
-            await status_msg.edit_text(
-                summary,
-                parse_mode=ParseMode.HTML,
-                reply_markup=InlineKeyboardMarkup(buttons),
-            )
+        context.user_data["last_room_order"] = [
+            room.name for room in result.bookable_rooms
+        ]
+        await render_search_results(status_msg, context)
 
     except AuthenticationRequired as e:
         await callback_query.message.reply_text(f"🔐 {e}")
@@ -242,16 +228,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "run_script":
-        new_keyboard = [
-            [
-                InlineKeyboardButton(
-                    "Oke the script is running 🏃...", callback_data="disabled"
-                )
-            ]
-        ]
-        await query.edit_message_reply_markup(
-            reply_markup=InlineKeyboardMarkup(new_keyboard)
-        )
         try:
             await run_script(query, context)
         except Exception as e:
@@ -277,17 +253,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=_build_scrape_menu_keyboard(context),
         )
     elif query.data == "view_help":
-        await query.edit_message_text(
-            "<code>Sagasu</code> finds and books SMU rooms.\n\n"
-            "Type /config to set search filters\n"
-            "Type /start to search\n"
-            "Select or auto-pick a room\n"
-            "Answer the booking questions one at a time\n"
-            "Use /cobookers to manage saved co-bookers\n"
-            "Use /tasks to check pending FBS tasks\n"
-            "Type /status to view current settings",
-            parse_mode=ParseMode.HTML,
-        )
+        from types import SimpleNamespace
+
+        await help_command(SimpleNamespace(message=query.message), context)
     elif query.data == "settings":
         await query.message.reply_text(_AUTH_HELP)
 
@@ -449,7 +417,7 @@ def _build_scrape_menu_keyboard(context):
             )
         ],
         [InlineKeyboardButton("↩️ Reset to defaults", callback_data="pick:reset")],
-        [InlineKeyboardButton("✅ Done", callback_data="pick:done")],
+        [InlineKeyboardButton("← Home", callback_data="ui:home")],
     ]
     return InlineKeyboardMarkup(kb)
 
@@ -551,7 +519,9 @@ async def _open_param_picker(query, context, param):
     if param in ("date", "start_time", "duration", "capacity"):
         buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="pick:done")])
     await _edit_settings_message(
-        query, f"Select {param}:", reply_markup=InlineKeyboardMarkup(buttons)
+        query,
+        f"Choose {param.replace('_', ' ')}:",
+        reply_markup=InlineKeyboardMarkup(buttons),
     )
 
 
@@ -649,6 +619,8 @@ async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     idx = int(query.data.split(":", 1)[1])
+    if getattr(context, "ui_panel", None):
+        context.ui_panel.back_to(f"ui:results:{max(0, idx) // 8}")
     order = context.user_data.get("last_room_order") or []
     if idx >= len(order):
         await query.message.reply_text("Results expired — run a new scrape.")
@@ -773,6 +745,10 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
     request = BookingRequest.from_mapping(draft["request"])
     if not await validate_booking_time(query.message, context, request.search):
         return
+    if submit:
+        drafts.pop(token, None)
+    elif getattr(context, "ui_panel", None):
+        context.ui_panel.back_to(f"ui:edit_booking:{token}")
     status = await query.message.reply_text(
         "⏳ Rechecking availability and preparing the booking…"
     )
@@ -785,12 +761,17 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
             pass
 
     try:
-        result = await execute_booking(
-            request,
-            submit=submit,
-            progress=progress,
-            auth_notify=owner_auth_notifier(context.bot),
-        )
+        try:
+            result = await execute_booking(
+                request,
+                submit=submit,
+                progress=progress,
+                auth_notify=owner_auth_notifier(
+                    context.bot, render=getattr(context, "ui_auth_notify", None)
+                ),
+            )
+        finally:
+            finish_operation(context)
         if submit:
             drafts.pop(token, None)
             await status.edit_text(
@@ -804,11 +785,19 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
             if result.get("receipt_png"):
                 await send_booking_receipt(query, context, result)
             elif result.get("receipt_error"):
-                await query.message.reply_text(result["receipt_error"])
+                await query.message.reply_text(
+                    result["receipt_error"]
+                    + f"\nReference: {result.get('reference_number', 'not shown')}"
+                )
         else:
-            await status.edit_text(
-                "🧪 Validation passed through the complete pre-confirmation flow. "
-                "No booking was submitted."
+            from .booking_flow import render_review
+
+            await render_review(
+                status,
+                request,
+                token,
+                edit=True,
+                notice="🧪 Validation passed. No booking was submitted.\n\n",
             )
     except BookingOutcomeUnknown as error:
         drafts.pop(token, None)
@@ -831,6 +820,23 @@ async def send_booking_receipt(query, context, result):
         f"{result.get('date', '')} · {result.get('start_time', '')}–{result.get('end_time', '')} SGT\n"
         f"FBS status: {result.get('fbs_status', 'not shown')}"
     )
+    if getattr(context, "ui_panel", None):
+        try:
+            await deliver_receipt(
+                context, query.from_user.id, result["receipt_png"], caption
+            )
+            event("receipt.delivered", transport="single_receipt_slot")
+        except Exception as error:
+            event(
+                "receipt.delivery_failed",
+                level=logging.WARNING,
+                error_type=type(error).__name__,
+            )
+            await query.message.reply_text(
+                f"Your booking is recorded, but the receipt could not be delivered.\nReference: {result.get('reference_number', 'not shown')}\nCheck this reference in FBS My Bookings."
+            )
+        return
+
     try:
         event(
             "receipt.delivery_started",
@@ -895,38 +901,16 @@ async def show_task_list(message, context):
 
     try:
         result = await check_task_list(
-            progress, auth_notify=owner_auth_notifier(context.bot)
+            progress,
+            auth_notify=owner_auth_notifier(
+                context.bot, render=getattr(context, "ui_auth_notify", None)
+            ),
         )
     except FBSError as error:
         await status.edit_text(f"⚠️ Could not check Task List: {error}")
         return
-    if not result["total"]:
-        await status.edit_text(
-            "✅ Your FBS Task List is empty. There are no items awaiting your action."
-        )
-        return
-    await status.edit_text(
-        f"📋 FBS Task List: {result['total']} item(s).\n"
-        "Review the request type and status below. Open FBS Task List to approve or reject a request."
-    )
-    chunk = ""
-    for task in result["tasks"]:
-        entry = (
-            f"Reference: {task['reference_number'][:120]}\n"
-            f"Room: {task['room'][:200]}\n"
-            f"When: {task['date_time'][:250]}\n"
-            f"Request: {task['request_type'][:200]}\n"
-            f"Requested by: {task['requested_by'][:200]}\n"
-            f"Status: {task['status'][:200]}\n\n"
-        )
-        if len(chunk) + len(entry) > 3800:
-            await message.reply_text(chunk, parse_mode=None)
-            chunk = ""
-        chunk += entry
-    if not result["complete"]:
-        chunk += f"Showing {len(result['tasks'])} of {result['total']} tasks. Open FBS Task List for the remaining items."
-    if chunk:
-        await message.reply_text(chunk, parse_mode=None)
+    context.user_data["task_list_result"] = result
+    await render_tasks(status, context, 0)
 
 
 async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -944,7 +928,9 @@ async def scrape_cancel_callback(update: Update, context: ContextTypes.DEFAULT_T
         except Exception:
             pass
     else:
-        await query.answer("No active scrape", show_alert=True)
+        await query.message.edit_text(
+            "Search stopped. Change the search settings or return Home."
+        )
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1018,7 +1004,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "<code>Sagasu</code> finds and books SMU rooms.\n\n"
         "1. /config — choose date, time and filters\n"
-        "2. /start — search FBS\n"
+        "2. /start → Find available rooms — search FBS\n"
         "3. Select a room or auto-pick\n"
         "4. Answer the purpose and co-booker questions\n"
         "5. Validate, then explicitly confirm the booking\n\n"
@@ -1033,6 +1019,155 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 PERSISTENCE_PATH = os.path.join(os.path.dirname(__file__), "bot_state.pickle")
+
+
+async def render_search_results(message, context, page=0):
+    cached = context.user_data.get("last_search") or {}
+    if not cached.get("config"):
+        await message.edit_text(
+            "No current search results. Choose Find rooms from Home."
+        )
+        return
+    config = SearchConfig.from_mapping(cached["config"])
+    if not await validate_booking_time(message, context, config):
+        return
+    names = context.user_data.get("last_room_order") or []
+    page = max(0, min(page, max(0, (len(names) - 1) // 8)))
+    text = f"<b>Available rooms · {len(names)}</b>\n{escape(config.date)} · {config.start_time}–{config.end_time} SGT\n\n"
+    buttons = []
+    if names:
+        text += "Choose a room to see its details."
+        buttons.append(
+            [InlineKeyboardButton("✨ Auto-pick a room", callback_data="autopick")]
+        )
+        for index, name in enumerate(names[page * 8 : (page + 1) * 8], start=page * 8):
+            buttons.append([InlineKeyboardButton(name, callback_data=f"room:{index}")])
+        pagination = []
+        if page:
+            pagination.append(
+                InlineKeyboardButton(
+                    "← Previous", callback_data=f"ui:results:{page - 1}"
+                )
+            )
+        if (page + 1) * 8 < len(names):
+            pagination.append(
+                InlineKeyboardButton("Next →", callback_data=f"ui:results:{page + 1}")
+            )
+        if pagination:
+            buttons.append(pagination)
+        text += f"\nPage {page + 1} of {max(1, (len(names) + 7) // 8)}"
+    else:
+        text += "No room is free for this whole window. Change the date, time or filters and search again."
+    buttons.append(
+        [InlineKeyboardButton("⚙️ Change search", callback_data="open_config")]
+    )
+    await message.edit_text(
+        text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+async def render_tasks(message, context, page=0):
+    result = context.user_data.get("task_list_result") or {
+        "tasks": [],
+        "total": 0,
+        "complete": True,
+    }
+    tasks = result["tasks"]
+    page = max(0, min(page, max(0, (len(tasks) - 1) // 4)))
+    text = f"📋 FBS Task List · {result['total']} item(s)\n\n"
+    if not result["total"]:
+        text += "Your FBS Task List is empty. There are no items awaiting your action."
+    for task in tasks[page * 4 : (page + 1) * 4]:
+        text += (
+            f"{task['reference_number'][:100]} · {task['room'][:150]}\n"
+            f"{task['date_time'][:200]}\nRequest: {task['request_type'][:150]}\n"
+            f"Requested by: {task['requested_by'][:150]}\nStatus: {task['status'][:150]}\n\n"
+        )
+    if tasks:
+        text += "Review and approve requests in FBS.\n"
+    if not result["complete"]:
+        text += f"Showing {len(tasks)} of {result['total']} tasks; open FBS for the remaining items.\n"
+    buttons = []
+    nav = []
+    if page:
+        nav.append(
+            InlineKeyboardButton("← Previous", callback_data=f"ui:tasks:{page - 1}")
+        )
+    if (page + 1) * 4 < len(tasks):
+        nav.append(InlineKeyboardButton("Next →", callback_data=f"ui:tasks:{page + 1}"))
+    if nav:
+        buttons.append(nav)
+    buttons.append(
+        [InlineKeyboardButton("↻ Refresh Task List", callback_data="open_tasks")]
+    )
+    await message.edit_text(
+        text, parse_mode=None, reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+
+async def surface_callback(update, context):
+    from types import SimpleNamespace
+
+    query = update.callback_query
+    data = query.data
+    if data.startswith("ui:"):
+        await query.answer()
+        parts = data.split(":")
+        action = parts[1]
+        if action == "home":
+            abandon_setup(context)
+            context.user_data.pop("booking_drafts", None)
+            context.user_data.pop("cancellation_reviews", None)
+            await start(SimpleNamespace(message=query.message), context)
+        elif action == "results":
+            abandon_setup(context)
+            context.user_data.pop("booking_drafts", None)
+            await render_search_results(
+                query.message, context, int(parts[2]) if len(parts) > 2 else 0
+            )
+        elif action == "tasks":
+            await render_tasks(query.message, context, int(parts[2]))
+        elif action == "edit_booking" and len(parts) == 3:
+            from .booking_flow import new_flow, prompt
+
+            draft = (context.user_data.get("booking_drafts") or {}).pop(parts[2], None)
+            if not draft or draft["expires_at"] < time.time():
+                await query.message.edit_text(
+                    "That booking review expired. Search again from Home."
+                )
+                return
+            request = BookingRequest.from_mapping(draft["request"])
+            if not await validate_booking_time(query.message, context, request.search):
+                return
+            flow = new_flow(
+                query.message,
+                context,
+                "purpose",
+                room=request.room,
+                search=draft["request"]["search"],
+                purpose=request.purpose,
+                co_booker=request.co_booker,
+            )
+            context.ui_panel.back_to("ui:results:0")
+            await prompt(query.message, context, flow)
+        return
+    routes = [
+        ("manage:", management_callback),
+        ("wizard:", wizard_callback),
+        ("pick:", scrape_config_callback),
+        ("set:", scrape_config_callback),
+        ("toggle:", scrape_config_callback),
+        ("room:", room_details_callback),
+        ("select_room:", select_room_callback),
+        ("booking_", booking_action_callback),
+        ("scrape_cancel", scrape_cancel_callback),
+        ("autopick", autopick_callback),
+    ]
+    for prefix, handler in routes:
+        if data.startswith(prefix):
+            await handler(update, context)
+            return
+    await button_callback(update, context)
 
 
 async def telegram_error(update, context):
@@ -1074,43 +1209,69 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
         ApplicationBuilder()
         .token(token)
         .persistence(persistence)
+        .concurrent_updates(8)
         .post_init(post_init)
         .build()
     )
     app.add_handler(MessageHandler(filters.ALL, access_guard), group=-1)
     app.add_handler(CallbackQueryHandler(access_guard), group=-1)
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("settings", settings_command))
-    app.add_handler(CommandHandler("logout", logout_command))
-    app.add_handler(CommandHandler("config", scrape_config_command))
-    app.add_handler(CommandHandler("cancel", cancel_command))
-    app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("book", book_command))
-    app.add_handler(CommandHandler("cobookers", cobookers_command))
-    app.add_handler(CommandHandler(["tasks", "tasklist"], tasks_command))
-    app.add_handler(CommandHandler(["bookings", "cancelbooking"], bookings_command))
-    app.add_handler(CallbackQueryHandler(management_callback, pattern=r"^manage:"))
-    app.add_handler(CallbackQueryHandler(wizard_callback, pattern=r"^wizard:"))
     app.add_handler(
-        CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):")
+        CallbackQueryHandler(surface_handler(surface_callback), pattern=r"^u:")
     )
-    app.add_handler(CallbackQueryHandler(room_details_callback, pattern=r"^room:"))
+    app.add_handler(CommandHandler("start", surface_handler(start)))
+    app.add_handler(CommandHandler("help", surface_handler(help_command)))
+    app.add_handler(CommandHandler("settings", surface_handler(settings_command)))
+    app.add_handler(CommandHandler("logout", surface_handler(logout_command)))
+    app.add_handler(CommandHandler("config", surface_handler(scrape_config_command)))
+    app.add_handler(CommandHandler("cancel", surface_handler(cancel_command)))
+    app.add_handler(CommandHandler("status", surface_handler(status_command)))
+    app.add_handler(CommandHandler("book", surface_handler(book_command)))
+    app.add_handler(CommandHandler("cobookers", surface_handler(cobookers_command)))
     app.add_handler(
-        CallbackQueryHandler(select_room_callback, pattern=r"^select_room:")
+        CommandHandler(["tasks", "tasklist"], surface_handler(tasks_command))
     )
-    app.add_handler(CallbackQueryHandler(autopick_callback, pattern=r"^autopick$"))
+    app.add_handler(
+        CommandHandler(["bookings", "cancelbooking"], surface_handler(bookings_command))
+    )
+    app.add_handler(
+        CallbackQueryHandler(surface_handler(management_callback), pattern=r"^manage:")
+    )
+    app.add_handler(
+        CallbackQueryHandler(surface_handler(wizard_callback), pattern=r"^wizard:")
+    )
     app.add_handler(
         CallbackQueryHandler(
-            booking_action_callback,
+            surface_handler(scrape_config_callback), pattern=r"^(pick|set|toggle):"
+        )
+    )
+    app.add_handler(
+        CallbackQueryHandler(surface_handler(room_details_callback), pattern=r"^room:")
+    )
+    app.add_handler(
+        CallbackQueryHandler(
+            surface_handler(select_room_callback), pattern=r"^select_room:"
+        )
+    )
+    app.add_handler(
+        CallbackQueryHandler(surface_handler(autopick_callback), pattern=r"^autopick$")
+    )
+    app.add_handler(
+        CallbackQueryHandler(
+            surface_handler(booking_action_callback),
             pattern=r"^booking_(validate|confirm|cancel):",
         )
     )
     app.add_handler(
-        CallbackQueryHandler(scrape_cancel_callback, pattern=r"^scrape_cancel$")
+        CallbackQueryHandler(
+            surface_handler(scrape_cancel_callback), pattern=r"^scrape_cancel$"
+        )
     )
-    app.add_handler(CallbackQueryHandler(button_callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+    app.add_handler(CallbackQueryHandler(surface_handler(button_callback)))
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND, surface_handler(handle_text_input)
+        )
+    )
     app.add_error_handler(telegram_error)
     return app
 

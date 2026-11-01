@@ -103,6 +103,8 @@ async def begin_booking(message, context, purpose=None):
         message, context, SearchConfig.from_mapping(search["config"])
     ):
         return
+    if getattr(context, "ui_panel", None):
+        context.ui_panel.back_to("ui:results:0")
     # Each new setup supersedes its previous pending review.
     context.user_data.pop("booking_drafts", None)
     flow = new_flow(
@@ -123,7 +125,9 @@ async def cobookers_command(update, context):
     await open_contacts(update.effective_message, context)
 
 
-async def prompt(message, context, flow):
+async def prompt(message, context, flow, *, notice=None):
+    if getattr(context, "ui_panel", None):
+        context.ui_panel.back_to("ui:results:0" if "search" in flow else "ui:home")
     step = flow["step"]
     rows = []
     if step == "purpose":
@@ -133,6 +137,8 @@ async def prompt(message, context, flow):
             f"{escape(cfg['date'])}, {escape(cfg['start_time'])}–{escape(cfg['end_time'])}\n\n"
             "What is this booking for? Send a short purpose, such as ‘Project meeting’."
         )
+        if flow.get("purpose"):
+            text += f"\nPrevious purpose: {escape(flow['purpose'])}"
     elif step == "co_booker":
         saved = list(contacts(context).items())
         text = "<b>Who will co-book with you?</b>\nChoose a saved co-booker or send their full SMU email address."
@@ -182,6 +188,8 @@ async def prompt(message, context, flow):
         return
     if step != "contacts":
         rows.append([("Cancel", "cancel")])
+    if notice:
+        text = f"⚠️ {escape(notice)}\n\n{text}"
     await message.reply_text(text, parse_mode="HTML", reply_markup=keyboard(flow, rows))
 
 
@@ -220,20 +228,27 @@ async def accept_text(message, context, text):
     step = flow["step"]
     if step == "purpose":
         if not text or len(text) > 200:
-            await message.reply_text("Send a purpose between 1 and 200 characters.")
+            await prompt(
+                message,
+                context,
+                flow,
+                notice="Send a purpose between 1 and 200 characters.",
+            )
             return True
         flow.update(purpose=text, step="co_booker", page=0)
     elif step in {"co_booker", "co_email", "contact_email"}:
         if not SMU_EMAIL_RE.fullmatch(text):
-            await message.reply_text(
-                "Please send the full SMU email address, such as friend@smu.edu.sg. A username alone isn’t enough."
+            await prompt(
+                message,
+                context,
+                flow,
+                notice="Please send the full SMU email address, such as friend@smu.edu.sg. A username alone isn’t enough.",
             )
             return True
         email = text.casefold()
         if step == "contact_email":
             save_contact(context, flow.pop("name"), email)
             flow.update(step="contacts", page=0)
-            await message.reply_text("Co-booker saved.")
         else:
             flow["co_booker"] = email
             if any(
@@ -245,19 +260,24 @@ async def accept_text(message, context, text):
             flow["step"] = "save_choice"
     elif step in {"save_name", "contact_name"}:
         if not text or len(text) > 40 or any(ord(char) < 32 for char in text):
-            await message.reply_text(
-                "Send a name between 1 and 40 characters, on one line."
+            await prompt(
+                message,
+                context,
+                flow,
+                notice="Send a name between 1 and 40 characters, on one line.",
             )
             return True
         if step == "save_name":
             save_contact(context, text, flow["co_booker"])
-            await message.reply_text("Co-booker saved for next time.")
             await finish_booking(message, context, flow)
             return True
         flow.update(name=text, step="contact_email")
     else:
-        await message.reply_text(
-            "Choose an option from the last question, or use /cancel."
+        await prompt(
+            message,
+            context,
+            flow,
+            notice="Choose an option below, or use /cancel.",
         )
         return True
     flow["expires_at"] = time.time() + 900
@@ -325,8 +345,11 @@ async def wizard_callback(update, context):
     if action == "use":
         person = contacts(context).get(value)
         if not person:
-            await query.message.reply_text(
-                "That saved co-booker was removed. Choose another."
+            await prompt(
+                query.message,
+                context,
+                flow,
+                notice="That saved co-booker was removed. Choose another.",
             )
             return
         flow["co_booker"] = person["email"]
@@ -348,7 +371,6 @@ async def wizard_callback(update, context):
         flow["step"] = "contact_name"
     elif action == "remove":
         contacts(context).pop(value, None)
-        await query.message.reply_text("Saved co-booker removed.")
     elif action == "back":
         flow["step"] = {
             "co_booker": "purpose",
@@ -383,6 +405,12 @@ async def show_review(message, context, request):
         if drafts[key]["expires_at"] < time.time():
             drafts.pop(key)
     drafts[token] = {"request": request.to_dict(), "expires_at": time.time() + 600}
+    if getattr(context, "ui_panel", None):
+        context.ui_panel.back_to(f"ui:edit_booking:{token}")
+    await render_review(message, request, token)
+
+
+async def render_review(message, request, token, *, edit=False, notice=""):
     text = (
         "<b>Review booking</b>\n\n"
         f"Room: <code>{escape(request.room)}</code>\n"
@@ -394,8 +422,9 @@ async def show_review(message, context, request):
         "Confirming accepts the FBS acknowledgement and declaration. "
         "Availability will be checked again before submission."
     )
-    await message.reply_text(
-        text,
+    sender = message.edit_text if edit else message.reply_text
+    await sender(
+        notice + text,
         parse_mode="HTML",
         reply_markup=Markup(
             [
