@@ -1,8 +1,8 @@
 """Live SMU FBS client built against the authenticated October 2026 DOM.
 
 The client is intentionally single-user.  It stores browser session state in a
-local Playwright profile, supports interactive MFA renewal, and never stores an
-SMU password.  Booking submission is opt-in through ``submit=True`` only.
+local Playwright profile and supports optional privately configured credentials
+and owner-approved MFA renewal.  Booking submission is opt-in through ``submit=True`` only.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Awaitable, Callable, Iterable
+from urllib.parse import parse_qs, urlparse
 
 from playwright.async_api import (
     BrowserContext,
@@ -279,13 +280,18 @@ class FBSClient:
         self,
         *,
         interactive: bool = True,
-        headless: bool = False,
+        headless: bool | None = None,
+        auth_notify: ProgressCallback | None = None,
         progress: ProgressCallback | None = None,
         keep_alive: bool = True,
         profile_path: Path | None = None,
     ) -> None:
         self.interactive = interactive
-        self.headless = headless
+        self.headless = (
+            os.getenv("SAGASU_HEADLESS", "false").lower() in {"1", "true", "yes"}
+            if headless is None else headless
+        )
+        self.auth_notify = auth_notify
         self.progress = progress or _noop_progress
         self.keep_alive = keep_alive
         self.profile_path = Path(
@@ -425,9 +431,16 @@ class FBSClient:
             ) from None
 
         try:
-            await self.page.wait_for_selector("iframe#frameBottom", timeout=15000)
+            await self.page.wait_for_function(
+                """() => !!document.querySelector('iframe#frameBottom') ||
+                ['login.microsoftonline.com', 'login.microsoft.com', 'login.windows.net']
+                    .includes(location.hostname)""",
+                timeout=15000,
+            )
+            if not await self.page.locator("iframe#frameBottom").count():
+                raise AuthenticationRequired("Microsoft sign-in required")
         except Exception as error:
-            if not self.interactive or self.headless:
+            if not self.interactive:
                 raise AuthenticationRequired(
                     "FBS session expired; run an interactive login first"
                 ) from error
@@ -447,119 +460,146 @@ class FBSClient:
         await self._save_session()
         return self.page, frame
 
+    @staticmethod
+    def _trusted_login_url(url: str) -> bool:
+        parsed = urlparse(url)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname in {
+                "login.microsoftonline.com", "login.microsoft.com", "login.windows.net"
+            }
+            and parsed.port in {None, 443}
+            and not parsed.username and not parsed.password
+        )
+
     async def _complete_interactive_authentication(self) -> None:
         if not self.page:
             raise FBSError("Browser page is unavailable")
         started = asyncio.get_running_loop().time()
         previous_state = None
-        email_submitted = False
+        email_submitted = password_submitted = method_selected = False
+        cancelled_passkey = False
+        notifications = set()
         timeout_ms = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", str(AUTH_TIMEOUT_MS)))
         while (asyncio.get_running_loop().time() - started) * 1000 < timeout_ms:
             if await self.page.locator("iframe#frameBottom").count():
-                await self.progress(
-                    "Microsoft authentication complete; continuing scrape"
-                )
+                await self.progress("Microsoft authentication complete; continuing FBS operation")
                 return
 
             state, prompt = await self._classify_auth_state()
             if state != previous_state:
                 await self._capture_auth_state(state)
-                await self.progress(prompt)
+                # Number matching is sent privately to the owner, never to a group/search message.
+                await self.progress("Open Microsoft Authenticator to approve sign-in" if state == "authenticator" else prompt)
                 previous_state = state
+            if state in {"authenticator", "failed"} and (state, prompt) not in notifications:
+                if self.auth_notify:
+                    await self.auth_notify(prompt)
+                elif self.headless:
+                    raise AuthenticationRequired("Headless sign-in needs a private Telegram MFA notifier. Start sagasu run.")
+                else:
+                    await self.progress(prompt)
+                notifications.add((state, prompt))
+            if state == "failed":
+                raise AuthenticationRequired(prompt)
 
-            if state == "email" and not email_submitted:
+            trusted = self._trusted_login_url(self.page.url)
+            if state == "email" and not email_submitted and trusted:
                 login_email = os.getenv("SMU_LOGIN_EMAIL", "").strip()
                 if login_email:
-                    field = self.page.locator(
-                        'input[name="loginfmt"]:visible, input[type="email"]:visible'
-                    ).first
-                    await field.fill(login_email)
-                    submit = self.page.locator(
-                        'input[type="submit"]:visible, button[type="submit"]:visible'
-                    ).first
-                    await submit.click()
+                    await self.page.locator('input[name="loginfmt"]:visible, input[type="email"]:visible').first.fill(login_email)
+                    await self.page.locator('input[type="submit"]:visible, button[type="submit"]:visible').first.click()
                     email_submitted = True
-            elif state == "stay_signed_in" and os.getenv(
-                "SAGASU_STAY_SIGNED_IN", "true"
-            ).lower() not in {"0", "false", "no"}:
+                elif self.headless:
+                    raise AuthenticationRequired("Set SMU_LOGIN_EMAIL for headless sign-in.")
+            elif state == "password" and not password_submitted and trusted:
+                password = os.getenv("SMU_LOGIN_PASSWORD", "")
+                if password:
+                    await self.page.locator('input[type="password"]:visible').first.fill(password)
+                    await self.page.locator('input[type="submit"]:visible, button[type="submit"]:visible').first.click()
+                    password_submitted = True
+                elif self.headless:
+                    raise AuthenticationRequired("Set SMU_LOGIN_PASSWORD for headless password sign-in.")
+            elif state == "stay_signed_in" and trusted and os.getenv("SAGASU_STAY_SIGNED_IN", "true").lower() not in {"0", "false", "no"}:
                 yes = self.page.locator("#idSIButton9:visible").first
                 if await yes.count():
                     await yes.click()
-            elif (
-                state == "webauthn"
-                and not self._auth_method_switched
-                and os.getenv("SAGASU_PREFER_AUTHENTICATOR", "true").lower()
-                not in {"0", "false", "no"}
-            ):
-                # Cancel the host-device passkey prompt and choose a method that
-                # can be approved remotely from the owner's phone.
-                await self.page.keyboard.press("Escape")
-                alternate = self.page.get_by_text("Sign in another way", exact=True)
-                if await alternate.count():
-                    await alternate.first.click()
-                    self._auth_method_switched = True
-            elif state == "method_picker" and self._auth_method_switched:
-                authenticator = self.page.get_by_text(
-                    re.compile(r"Microsoft Authenticator|Approve a request", re.I)
-                )
+            elif state == "password_choice" and trusted and not password_submitted:
+                await self.page.get_by_text("Use my password", exact=True).click()
+            elif state == "account" and trusted and not email_submitted:
+                email = os.getenv("SMU_LOGIN_EMAIL", "").strip()
+                if email:
+                    account = self.page.get_by_text(email, exact=True)
+                    if await account.count():
+                        await account.first.click()
+                        email_submitted = True
+            elif state == "webauthn" and trusted:
+                # Microsoft supplies its own cancellation URL for the browser-native prompt.
+                # Navigating to that trusted URL cancels it without OS-level keyboard automation.
+                cancel = parse_qs(urlparse(self.page.url).query).get("cancelUrl", [""])[0]
+                if cancel and self._trusted_login_url(cancel) and not cancelled_passkey:
+                    cancelled_passkey = True
+                    await self.page.goto(cancel, wait_until="domcontentloaded", timeout=30000)
+                else:
+                    await self.page.keyboard.press("Escape")
+                    alternate = self.page.get_by_text("Sign in another way", exact=True)
+                    if await alternate.count() and await alternate.first.is_visible():
+                        await alternate.first.click()
+            elif state == "method_picker" and trusted and not method_selected:
+                authenticator = self.page.get_by_text(re.compile(r"Microsoft Authenticator|Approve a request", re.I))
                 for option in await authenticator.all():
                     if await option.is_visible():
                         await option.click()
+                        method_selected = True
                         break
-
             await self.page.wait_for_timeout(750)
-        raise AuthenticationRequired("Timed out waiting for Microsoft login and MFA")
+        message = "Microsoft sign-in timed out. Start a new search when ready to approve MFA."
+        if self.auth_notify:
+            await self.auth_notify(message)
+        raise AuthenticationRequired(message)
 
     async def _classify_auth_state(self) -> tuple[str, str]:
         if not self.page:
-            return "unknown", "waiting for Microsoft sign-in in Chrome"
+            return "unknown", "waiting for Microsoft sign-in"
         body = ""
         try:
             body = (await self.page.locator("body").inner_text(timeout=2000)).casefold()
         except Exception:
             pass
+        if any(text in body for text in (
+            "password is incorrect", "incorrect password", "account or password is incorrect",
+            "too many times", "account has been locked", "you denied", "request was denied",
+            "we didn't hear from you", "sign-in was blocked", "sign in was blocked",
+        )):
+            return "failed", "Microsoft sign-in failed or was denied/blocked. Check your credentials or SMU sign-in policy before retrying."
         if await self.page.locator('input[type="password"]:visible').count():
-            return "password", "enter your Microsoft password in Chrome"
-        if await self.page.locator(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ).count():
-            if os.getenv("SMU_LOGIN_EMAIL", "").strip():
-                return "email", "entering your configured SMU email"
-            return "email", "enter your SMU email in Chrome"
+            return "password", ("entering your configured SMU password" if os.getenv("SMU_LOGIN_PASSWORD") else "enter your Microsoft password in Chrome")
+        if await self.page.locator('input[name="loginfmt"]:visible, input[type="email"]:visible').count():
+            return "email", ("entering your configured SMU email" if os.getenv("SMU_LOGIN_EMAIL", "").strip() else "enter your SMU email in Chrome")
         if "stay signed in" in body:
-            return "stay_signed_in", "keeping the local Microsoft session signed in"
-        if "face, fingerprint, pin or security key" in body:
-            return "webauthn", "switching from host-device sign-in to Authenticator"
-        if "verify your identity" in body and "authenticator" in body:
+            return "stay_signed_in", "keeping the Microsoft session signed in"
+        if "use my password" in body:
+            return "password_choice", "selecting password sign-in"
+        if "verify your identity" in body or "choose a way to sign in" in body:
             return "method_picker", "selecting Microsoft Authenticator"
-        if "authenticator" in body or "approve a request" in body:
+        if "face, fingerprint, pin or security key" in body or "/fido" in self.page.url:
+            return "webauthn", "switching from device passkey to another sign-in method"
+        if "authenticator" in body or "approve a request" in body or "approve sign in request" in body:
             number = ""
             for selector in ("#idRichContext_DisplaySign", ".displaySign"):
                 display = self.page.locator(selector).first
-                if await display.count():
+                if await display.count() and await display.is_visible():
                     candidate = (await display.inner_text()).strip()
-                    if re.fullmatch(r"\d{2,3}", candidate):
+                    if re.fullmatch(r"[0-9]{2,3}", candidate):
                         number = candidate
                         break
             if not number:
-                # Microsoft's number-matching value is sometimes plain text
-                # without a stable DOM id.
-                number = next(
-                    (
-                        line.strip()
-                        for line in body.splitlines()
-                        if re.fullmatch(r"\d{2,3}", line.strip())
-                    ),
-                    "",
-                )
-            suffix = f" and enter number {number}" if number else ""
-            return (
-                "authenticator",
-                f"approve the Microsoft Authenticator request{suffix}",
-            )
+                number = next((line.strip() for line in body.splitlines() if re.fullmatch(r"[0-9]{2,3}", line.strip())), "")
+            suffix = f" Enter number {number}." if number else " The matching number will follow when Microsoft displays it."
+            return "authenticator", f"Open Microsoft Authenticator and approve the Sagasu SMU sign-in.{suffix} Only approve if you initiated this request."
         if "pick an account" in body or "choose an account" in body:
-            return "account", "choose your SMU Microsoft account in Chrome"
-        return "sign_in", "complete Microsoft sign-in in Chrome"
+            return "account", "selecting your configured SMU account"
+        return "sign_in", "waiting for Microsoft sign-in"
 
     async def _capture_auth_state(self, state: str) -> None:
         """Capture auth UI locally while masking all form-field values."""
@@ -974,10 +1014,11 @@ def search_config_from_bot(config: dict) -> SearchConfig:
 
 
 async def search_fbs(
-    config: SearchConfig, progress: ProgressCallback | None = None
+    config: SearchConfig, progress: ProgressCallback | None = None,
+    *, auth_notify: ProgressCallback | None = None
 ) -> SearchResult:
     try:
-        async with FBSClient(progress=progress) as client:
+        async with FBSClient(progress=progress, auth_notify=auth_notify) as client:
             return await client.search(config)
     except FBSError:
         raise
@@ -993,9 +1034,10 @@ async def execute_booking(
     *,
     submit: bool,
     progress: ProgressCallback | None = None,
+    auth_notify: ProgressCallback | None = None,
 ) -> dict:
     try:
-        async with FBSClient(progress=progress) as client:
+        async with FBSClient(progress=progress, auth_notify=auth_notify) as client:
             return await client.book(request, submit=submit)
     except FBSError:
         raise

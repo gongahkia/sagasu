@@ -46,7 +46,8 @@ TELEGRAM_OWNER_ID=123456789
 # Use chromium with: python -m playwright install chromium
 SAGASU_BROWSER_CHANNEL=chromium
 # Optional: SMU_LOGIN_EMAIL=your.name@smu.edu.sg
-# Password entry and MFA remain manual in the browser.
+# Optional: SMU_LOGIN_PASSWORD=your-private-password
+# MFA approval stays manual; enable SAGASU_HEADLESS=true on a remote host.
 """
 
 
@@ -97,7 +98,7 @@ class Settings:
             if value is not None
             and (
                 key.startswith("SAGASU_")
-                or key in {"BOT_TOKEN", "TELEGRAM_OWNER_ID", "SMU_LOGIN_EMAIL"}
+                or key in {"BOT_TOKEN", "TELEGRAM_OWNER_ID", "SMU_LOGIN_EMAIL", "SMU_LOGIN_PASSWORD"}
             )
         }
         return cls(
@@ -125,6 +126,12 @@ class Settings:
                 "TELEGRAM_OWNER_ID must be your positive numeric Telegram user ID."
             )
 
+        if self.values.get("SMU_LOGIN_PASSWORD"):
+            if not self.values.get("SMU_LOGIN_EMAIL", "").strip() or not self.owner_id:
+                raise ConfigError(
+                    "Password autofill requires SMU_LOGIN_EMAIL and TELEGRAM_OWNER_ID."
+                )
+
     def activate(self):
         os.environ.update(self.values)
         os.environ.update(
@@ -140,6 +147,9 @@ class Settings:
             "env_file_exists": self.env_file.is_file(),
             "bot_token": "configured (redacted)" if self.token else "missing",
             "owner_id": "configured (redacted)" if self.owner_id else "not restricted",
+            "password_autofill": bool(self.values.get("SMU_LOGIN_PASSWORD")),
+            "headless": self.values.get("SAGASU_HEADLESS", "false").lower()
+            in {"1", "true", "yes"},
             "browser": self.browser,
             "browser_profile": str(self.profile),
             "telegram_state": str(self.persistence),

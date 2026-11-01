@@ -272,7 +272,7 @@ def main(argv=None):
             reporter,
             verbose=getattr(args, "verbose", False),
             log_file=getattr(args, "log_file", None),
-            secrets=(settings.token, os.getenv("SMU_LOGIN_PASSWORD", "")),
+            secrets=(settings.token, settings.values.get("SMU_LOGIN_PASSWORD", "")),
         )
         if args.command == "config":
             print_values(settings.public(), as_json)
