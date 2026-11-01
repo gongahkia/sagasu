@@ -1,12 +1,76 @@
 """Credential submission and remote MFA behavior, without external requests."""
 
 import os
+from pathlib import Path
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import quote
 
 from bot.auth import owner_auth_notifier
-from bot.fbs_client import AuthenticationRequired, FBSClient
+from bot.fbs_client import (
+    AuthenticationRequired,
+    FBSClient,
+    LOGIN_EMAIL_SELECTOR,
+    LOGIN_PASSWORD_SELECTOR,
+)
+
+
+class AuthBrowserFormTest(unittest.IsolatedAsyncioTestCase):
+    """Exercise the real DOM shape seen on Microsoft's fresh sign-in screen."""
+
+    async def asyncSetUp(self):
+        from playwright.async_api import async_playwright
+
+        playwright = await async_playwright().start()
+        self.addAsyncCleanup(playwright.stop)
+        if not Path(playwright.chromium.executable_path).is_file():
+            self.skipTest("Install Playwright Chromium to run browser regression tests")
+        browser = await playwright.chromium.launch(headless=True)
+        self.addAsyncCleanup(browser.close)
+        self.client = FBSClient(headless=True)
+        self.client.page = await browser.new_page()
+
+    async def test_email_form_ignores_opacity_zero_password_autofill_input(self):
+        await self.client.page.set_content(
+            '<h1>Sign in</h1><input name="loginfmt" type="email">'
+            '<input type="password" aria-hidden="true" tabindex="-1" '
+            'style="position:absolute;opacity:0;width:10px;height:13px">'
+        )
+        # This is the exact distinction :visible alone missed in the live test.
+        self.assertEqual(
+            await self.client.page.locator('input[type="password"]:visible').count(), 1
+        )
+        self.assertEqual((await self.client._classify_auth_state())[0], "email")
+
+    async def test_password_form_ignores_hidden_email_autofill_input(self):
+        await self.client.page.set_content(
+            '<h1>Enter password</h1><input name="loginfmt" type="email" '
+            'aria-hidden="true" style="opacity:0">'
+            '<input type="password">'
+        )
+        self.assertEqual((await self.client._classify_auth_state())[0], "password")
+        self.assertEqual(
+            await self.client.page.locator(LOGIN_EMAIL_SELECTOR).count(), 0
+        )
+
+    async def test_submission_targets_real_password_field_instead_of_autofill_decoy(
+        self,
+    ):
+        await self.client.page.set_content(
+            '<form onsubmit="event.preventDefault();window.submitted=true">'
+            '<input id="decoy" type="password" aria-hidden="true" style="opacity:0">'
+            '<input id="actual" type="password"><button type="submit">Sign in</button>'
+            "</form>"
+        )
+        with patch.object(self.client, "_trusted_login_url", return_value=True):
+            await self.client._submit_login_field(
+                LOGIN_PASSWORD_SELECTOR, "fixture-password", "password"
+            )
+        self.assertEqual(await self.client.page.locator("#decoy").input_value(), "")
+        self.assertEqual(
+            await self.client.page.locator("#actual").input_value(), "fixture-password"
+        )
+        self.assertTrue(await self.client.page.evaluate("window.submitted"))
 
 
 class AuthTest(unittest.IsolatedAsyncioTestCase):
@@ -67,6 +131,7 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
 
         client.page.locator.side_effect = locator
         client.page.get_by_text.side_effect = locator
+        client.page.evaluate = AsyncMock(return_value=None)
         client.page.keyboard = AsyncMock()
         client.page.goto = AsyncMock()
         client.page.wait_for_timeout = AsyncMock()
@@ -90,10 +155,10 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
             ]
         )
         await client._complete_interactive_authentication()
-        client.fields[
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ].fill.assert_awaited_once_with("test@smu.edu.sg")
-        client.fields['input[type="password"]:visible'].fill.assert_awaited_once_with(
+        client.fields[LOGIN_EMAIL_SELECTOR].fill.assert_awaited_once_with(
+            "test@smu.edu.sg"
+        )
+        client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once_with(
             "private $test#secret"
         )
         client.auth_notify.assert_awaited_once_with("Enter number 42.")
@@ -110,31 +175,25 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
                 ("authenticator", "Enter number 42."),
             ]
         )
-        field = client.page.locator(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ).first
+        field = client.page.locator(LOGIN_EMAIL_SELECTOR).first
         field.input_value = AsyncMock(
             side_effect=["test@smu.edu.sg", "", "test@smu.edu.sg"]
         )
         await client._complete_interactive_authentication()
         self.assertEqual(field.fill.await_count, 2)
-        client.fields['input[type="password"]:visible'].fill.assert_awaited_once()
+        client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
         client.auth_notify.assert_awaited_once_with("Enter number 42.")
 
     async def test_unchanged_email_screen_does_not_submit_again(self):
         client = self.flow([("email", "email"), ("email", "email")])
-        field = client.page.locator(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ).first
+        field = client.page.locator(LOGIN_EMAIL_SELECTOR).first
         field.input_value = AsyncMock(return_value="test@smu.edu.sg")
         await client._complete_interactive_authentication()
         field.fill.assert_awaited_once()
 
     async def test_repeated_empty_email_stops_and_notifies_owner(self):
         client = self.flow([("email", "email")] * 3)
-        field = client.page.locator(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ).first
+        field = client.page.locator(LOGIN_EMAIL_SELECTOR).first
         field.input_value = AsyncMock(
             side_effect=["test@smu.edu.sg", "", "test@smu.edu.sg", ""]
         )
@@ -153,7 +212,7 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaisesRegex(AuthenticationRequired, "resubmitting"):
             await client._complete_interactive_authentication()
-        client.fields['input[type="password"]:visible'].fill.assert_awaited_once()
+        client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
 
     async def test_password_choice_after_password_selects_authenticator(self):
         client = self.flow(
@@ -166,12 +225,10 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_cleared_email_is_retyped_and_verified_before_next(self):
         client = self.flow([])
-        field = client.page.locator(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ).first
+        field = client.page.locator(LOGIN_EMAIL_SELECTOR).first
         field.input_value = AsyncMock(side_effect=["", "test@smu.edu.sg"])
         await client._submit_login_field(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible',
+            LOGIN_EMAIL_SELECTOR,
             "test@smu.edu.sg",
             "email",
         )
@@ -182,13 +239,11 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_continuously_cleared_email_is_not_submitted_empty(self):
         client = self.flow([])
-        field = client.page.locator(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ).first
+        field = client.page.locator(LOGIN_EMAIL_SELECTOR).first
         field.input_value = AsyncMock(return_value="")
         with self.assertRaisesRegex(AuthenticationRequired, "No form was submitted"):
             await client._submit_login_field(
-                'input[name="loginfmt"]:visible, input[type="email"]:visible',
+                LOGIN_EMAIL_SELECTOR,
                 "test@smu.edu.sg",
                 "email",
             )
@@ -217,7 +272,7 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaisesRegex(AuthenticationRequired, "rejected"):
             await client._complete_interactive_authentication()
-        client.fields['input[type="password"]:visible'].fill.assert_awaited_once()
+        client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
         client.auth_notify.assert_awaited_once_with("Microsoft rejected sign-in")
 
     async def test_credentials_never_submitted_to_untrusted_origin(self):
@@ -247,12 +302,53 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
             [("webauthn", "passkey"), ("password_choice", "password")],
             url="https://login.microsoft.com/tenant/bridge/fido?cancelUrl="
             + quote(cancel, safe=""),
+            headless=False,
         )
         await client._complete_interactive_authentication()
         client.page.goto.assert_awaited_once_with(
             cancel, wait_until="domcontentloaded", timeout=30000
         )
         client.fields["Use my password"].click.assert_awaited_once()
+
+    async def test_headless_passkey_uses_trusted_method_picker_continuation(self):
+        client = self.flow(
+            [("webauthn", "passkey"), ("password_choice", "password")],
+            url="https://login.microsoft.com/tenant/fido/get",
+        )
+        resume = "https://login.microsoftonline.com/tenant/resume?ctx=private"
+        client.page.evaluate.return_value = resume
+        await client._complete_interactive_authentication()
+        client.page.goto.assert_awaited_once_with(
+            resume, wait_until="domcontentloaded", timeout=30000
+        )
+        client.page.keyboard.press.assert_not_awaited()
+        client.fields["Use my password"].click.assert_awaited_once()
+
+    async def test_headless_bridge_does_not_reset_login_to_email(self):
+        cancel = "https://login.microsoftonline.com/tenant/reprocess?ctx=private"
+        client = self.flow(
+            [("webauthn", "passkey")],
+            url="https://login.microsoft.com/tenant/bridge/fido?cancelUrl="
+            + quote(cancel, safe=""),
+        )
+        await client._complete_interactive_authentication()
+        client.page.goto.assert_not_awaited()
+        client.page.keyboard.press.assert_awaited_once_with("Escape")
+
+    async def test_passkey_continuation_rejects_untrusted_origin(self):
+        client = self.flow([("webauthn", "passkey")])
+        client.page.evaluate.return_value = "https://example.invalid/collect"
+        await client._complete_interactive_authentication()
+        client.page.goto.assert_not_awaited()
+
+    async def test_repeated_passkey_continuation_stops_instead_of_looping(self):
+        client = self.flow([("webauthn", "passkey")] * 2)
+        client.page.evaluate.return_value = (
+            "https://login.microsoftonline.com/tenant/resume?ctx=test"
+        )
+        with self.assertRaisesRegex(AuthenticationRequired, "restarted sign-in"):
+            await client._complete_interactive_authentication()
+        client.page.goto.assert_awaited_once()
 
     async def test_method_picker_selects_authenticator_without_prior_passkey(self):
         client = self.flow([("method_picker", "choose method")])

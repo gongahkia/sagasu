@@ -42,6 +42,14 @@ except ImportError:
 FBS_URL = "https://fbs.intranet.smu.edu.sg/home"
 PROFILE_PATH = DEFAULT_PROFILE
 AUTH_TIMEOUT_MS = 600000
+
+# Microsoft leaves opacity-zero autofill inputs in otherwise visible layouts.
+# Playwright's :visible includes them; aria-hidden identifies those decoys.
+LOGIN_EMAIL_SELECTOR = (
+    'input[name="loginfmt"]:visible:not([aria-hidden="true"]), '
+    'input[type="email"]:visible:not([aria-hidden="true"])'
+)
+LOGIN_PASSWORD_SELECTOR = 'input[type="password"]:visible:not([aria-hidden="true"])'
 AUTH_ARTIFACT_DIR = DEFAULT_ARTIFACTS
 FBS_TIMEZONE = timezone(timedelta(hours=8), "SGT")
 logger = logging.getLogger(__name__)
@@ -582,6 +590,7 @@ class FBSClient:
         email_submitted = password_submitted = method_selected = False
         email_submissions = 0
         cancelled_passkey = False
+        resumed_passkeys = set()
         notifications = set()
         timeout_ms = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", str(AUTH_TIMEOUT_MS)))
         while (asyncio.get_running_loop().time() - started) * 1000 < timeout_ms:
@@ -631,9 +640,7 @@ class FBSClient:
             trusted = self._trusted_login_url(self.page.url)
             if state == "email" and trusted:
                 login_email = os.getenv("SMU_LOGIN_EMAIL", "").strip()
-                field = self.page.locator(
-                    'input[name="loginfmt"]:visible, input[type="email"]:visible'
-                ).first
+                field = self.page.locator(LOGIN_EMAIL_SELECTOR).first
                 if login_email and (
                     not email_submitted or not (await field.input_value()).strip()
                 ):
@@ -644,7 +651,7 @@ class FBSClient:
                             "Microsoft restarted sign-in; restoring your email once"
                         )
                     await self._submit_login_field(
-                        'input[name="loginfmt"]:visible, input[type="email"]:visible',
+                        LOGIN_EMAIL_SELECTOR,
                         login_email,
                         "email",
                     )
@@ -660,7 +667,7 @@ class FBSClient:
                 password = os.getenv("SMU_LOGIN_PASSWORD", "")
                 if password and not password_submitted:
                     await self._submit_login_field(
-                        'input[type="password"]:visible', password, "password"
+                        LOGIN_PASSWORD_SELECTOR, password, "password"
                     )
                     password_submitted = True
                 elif not password and self.headless:
@@ -691,12 +698,32 @@ class FBSClient:
                         await account.first.click()
                         email_submitted = True
             elif state == "webauthn" and trusted:
-                # Microsoft supplies its own cancellation URL for the browser-native prompt.
-                # Navigating to that trusted URL cancels it without OS-level keyboard automation.
+                # Current Microsoft pages provide a continuation to the method picker.
+                # The bridge's cancelUrl can instead reset login to the email screen.
+                resume = await self.page.evaluate(
+                    """() => {
+                        const config = window.$Config || window.ServerData;
+                        return config?.fEnableDirectFidoCancelToCredPicker &&
+                            typeof config.urlResume === 'string' ? config.urlResume : null;
+                    }"""
+                )
                 cancel = parse_qs(urlparse(self.page.url).query).get("cancelUrl", [""])[
                     0
                 ]
-                if cancel and self._trusted_login_url(cancel) and not cancelled_passkey:
+                if resume and self._trusted_login_url(resume):
+                    if resume in resumed_passkeys or len(resumed_passkeys) >= 2:
+                        await self._stop_reset_login()
+                    resumed_passkeys.add(resume)
+                    await self.progress("opening Microsoft's alternate sign-in methods")
+                    await self.page.goto(
+                        resume, wait_until="domcontentloaded", timeout=30000
+                    )
+                elif (
+                    not self.headless
+                    and cancel
+                    and self._trusted_login_url(cancel)
+                    and not cancelled_passkey
+                ):
                     cancelled_passkey = True
                     await self.page.goto(
                         cancel, wait_until="domcontentloaded", timeout=30000
@@ -821,15 +848,13 @@ class FBSClient:
                 "manual",
                 "Microsoft requires an interactive verification step beyond Authenticator push approval. Complete it in an interactive browser; do not send passwords or verification codes to Telegram.",
             )
-        if await self.page.locator('input[type="password"]:visible').count():
+        if await self.page.locator(LOGIN_PASSWORD_SELECTOR).count():
             return "password", (
                 "entering your configured SMU password"
                 if os.getenv("SMU_LOGIN_PASSWORD")
                 else "enter your Microsoft password in Chrome"
             )
-        if await self.page.locator(
-            'input[name="loginfmt"]:visible, input[type="email"]:visible'
-        ).count():
+        if await self.page.locator(LOGIN_EMAIL_SELECTOR).count():
             return "email", (
                 "entering your configured SMU email"
                 if os.getenv("SMU_LOGIN_EMAIL", "").strip()
