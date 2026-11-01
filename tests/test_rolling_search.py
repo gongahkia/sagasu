@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
+from telegram.error import BadRequest
 
 from bot import bot
 from bot.booking_flow import FLOW_KEY, begin_booking
@@ -110,6 +111,69 @@ class RollingSearchTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.context.user_data["scrape_config"], {})
         self.assertIn("13:30–15:30", query.edit_message_text.await_args.args[0])
+
+    async def test_identical_menu_edits_are_harmless_for_done_reset_and_selections(
+        self,
+    ):
+        for data in (
+            "pick:done",
+            "pick:reset",
+            "set:date:AUTO",
+            "set:start_time:AUTO",
+            "set:duration:2",
+            "pick:start_time",
+        ):
+            query = self.query(data)
+            query.edit_message_text.side_effect = BadRequest(
+                "Message is not modified: specified new message content and reply markup are exactly the same"
+            )
+            with self.subTest(data=data):
+                await bot.scrape_config_callback(
+                    SimpleNamespace(callback_query=query), self.context
+                )
+                query.answer.assert_awaited_once()
+                self.assertNotIn("start_time", self.context.user_data["scrape_config"])
+
+    async def test_other_bad_requests_are_not_silently_swallowed(self):
+        query = self.query("pick:done")
+        query.edit_message_text.side_effect = BadRequest("Message can't be edited")
+        with self.assertRaises(BadRequest):
+            await bot.scrape_config_callback(
+                SimpleNamespace(callback_query=query), self.context
+            )
+
+    async def test_expired_button_refreshes_menu_without_changing_preferences(self):
+        self.context.user_data["scrape_config"] = {"floors": ["Level 2"]}
+        query = self.query("pick:reset")
+        query.answer.side_effect = BadRequest(
+            "Query is too old and response timeout expired or query ID is invalid"
+        )
+        await bot.scrape_config_callback(
+            SimpleNamespace(callback_query=query), self.context
+        )
+        self.assertEqual(
+            self.context.user_data["scrape_config"], {"floors": ["Level 2"]}
+        )
+        self.assertIn("request expired", self.message.reply_text.await_args.args[0])
+        self.assertIn("13:30–15:30", self.message.reply_text.await_args.args[0])
+        query.edit_message_text.assert_not_awaited()
+
+    async def test_error_log_identifies_known_bad_requests_without_private_details(
+        self,
+    ):
+        error = BadRequest("Can't parse entities: private booking details")
+        with self.assertLogs(bot.logger, level="ERROR") as logs:
+            await bot.telegram_error(None, SimpleNamespace(error=error))
+        self.assertIn("message formatting was rejected", logs.output[0])
+        self.assertNotIn("private booking details", logs.output[0])
+
+    async def test_unknown_bad_request_logging_does_not_expose_details(self):
+        with self.assertLogs(bot.logger, level="ERROR") as logs:
+            await bot.telegram_error(
+                None, SimpleNamespace(error=BadRequest("private details"))
+            )
+        self.assertIn("unrecognized request rejection", logs.output[0])
+        self.assertNotIn("private details", logs.output[0])
 
     async def test_rolling_options_preserve_other_search_preferences(self):
         self.context.user_data["scrape_config"] = {

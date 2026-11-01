@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timedelta
 from html import escape
 from telegram.constants import ParseMode
+from telegram.error import BadRequest
 from telegram.ext import MessageHandler, filters
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -470,6 +471,18 @@ async def scrape_config_command(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
+async def _edit_settings_message(query, text, **kwargs):
+    try:
+        return await query.edit_message_text(text, **kwargs)
+    except BadRequest as error:
+        if "message is not modified" not in str(error).casefold():
+            raise
+        # Done, Reset and repeated selections can legitimately render the same
+        # text and buttons. Telegram rejects these edits, although state is valid.
+        logger.debug("Telegram settings already match the selected configuration")
+        return None
+
+
 async def _open_param_picker(query, context, param):
     cfg = get_scrape_config(context)
     if param == "date":
@@ -530,27 +543,39 @@ async def _open_param_picker(query, context, param):
         return
     if param in ("date", "start_time", "duration", "capacity"):
         buttons.append([InlineKeyboardButton("⬅️ Back", callback_data="pick:done")])
-    await query.edit_message_text(
-        f"Select {param}:", reply_markup=InlineKeyboardMarkup(buttons)
+    await _edit_settings_message(
+        query, f"Select {param}:", reply_markup=InlineKeyboardMarkup(buttons)
     )
 
 
 async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    try:
+        await query.answer()
+    except BadRequest as error:
+        if "query is too old" not in str(error).casefold():
+            raise
+        await query.message.reply_text(
+            "That button request expired. Choose again from the refreshed settings.\n\n"
+            + _search_settings_text(context),
+            reply_markup=_build_scrape_menu_keyboard(context),
+        )
+        return
     data = query.data
     cfg = get_scrape_config(context)
     if data.startswith("pick:"):
         param = data.split(":", 1)[1]
         if param == "done":
-            await query.edit_message_text(
+            await _edit_settings_message(
+                query,
                 _search_settings_text(context),
                 reply_markup=_build_scrape_menu_keyboard(context),
             )
             return
         if param == "reset":
             context.user_data["scrape_config"] = {}
-            await query.edit_message_text(
+            await _edit_settings_message(
+                query,
                 _search_settings_text(context),
                 reply_markup=_build_scrape_menu_keyboard(context),
             )
@@ -570,13 +595,14 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
                 cfg.pop("start_time", None)
             else:
                 cfg["start_time"] = value
-            cfg.pop("end_time", None)  
+            cfg.pop("end_time", None)
         elif param == "duration":
             cfg["duration_hrs"] = float(value)
             cfg.pop("end_time", None)
         elif param == "capacity":
             cfg["room_capacity"] = None if value == "ANY" else value
-        await query.edit_message_text(
+        await _edit_settings_message(
+            query,
             _search_settings_text(context),
             reply_markup=_build_scrape_menu_keyboard(context),
         )
@@ -974,9 +1000,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-PERSISTENCE_PATH = os.path.join(
-    os.path.dirname(__file__), "bot_state.pickle"
-)  
+PERSISTENCE_PATH = os.path.join(os.path.dirname(__file__), "bot_state.pickle")
 
 
 async def telegram_error(update, context):
@@ -987,6 +1011,24 @@ async def telegram_error(update, context):
             "Telegram rejected polling. Check BOT_TOKEN and stop any other instance of this bot."
         )
         context.application.stop_running()
+        return
+    if isinstance(context.error, BadRequest):
+        detail = str(context.error).casefold()
+        if "message is not modified" in detail:
+            logger.debug("Telegram message already matches the requested content")
+            return
+        reasons = {
+            "query is too old": "button request expired; reopen the menu",
+            "message to edit not found": "message to edit no longer exists; reopen the menu",
+            "message can't be edited": "message cannot be edited; reopen the menu",
+            "can't parse entities": "message formatting was rejected",
+            "button_data_invalid": "button callback data was rejected",
+        }
+        reason = next(
+            (hint for marker, hint in reasons.items() if marker in detail),
+            "unrecognized request rejection; raw details suppressed",
+        )
+        logger.error("Telegram update failed (BadRequest): %s", reason)
         return
     logger.error(
         "Telegram update failed (%s); raw details suppressed",
