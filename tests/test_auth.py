@@ -45,6 +45,16 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
                 item = Mock()
                 item.first = item
                 item.fill = AsyncMock()
+                item.press = AsyncMock()
+                item.press_sequentially = AsyncMock()
+                item.wait_for = AsyncMock()
+                item.input_value = AsyncMock(
+                    return_value=(
+                        "private $test#secret"
+                        if 'type="password"' in selector
+                        else "test@smu.edu.sg"
+                    )
+                )
                 item.click = AsyncMock()
                 item.is_visible = AsyncMock(return_value=True)
                 item.count = AsyncMock(return_value=1)
@@ -103,7 +113,9 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         field = client.page.locator(
             'input[name="loginfmt"]:visible, input[type="email"]:visible'
         ).first
-        field.input_value = AsyncMock(return_value="")
+        field.input_value = AsyncMock(
+            side_effect=["test@smu.edu.sg", "", "test@smu.edu.sg"]
+        )
         await client._complete_interactive_authentication()
         self.assertEqual(field.fill.await_count, 2)
         client.fields['input[type="password"]:visible'].fill.assert_awaited_once()
@@ -123,7 +135,9 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         field = client.page.locator(
             'input[name="loginfmt"]:visible, input[type="email"]:visible'
         ).first
-        field.input_value = AsyncMock(return_value="")
+        field.input_value = AsyncMock(
+            side_effect=["test@smu.edu.sg", "", "test@smu.edu.sg", ""]
+        )
         with self.assertRaisesRegex(AuthenticationRequired, "restarted sign-in"):
             await client._complete_interactive_authentication()
         self.assertEqual(field.fill.await_count, 2)
@@ -149,6 +163,38 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         await client._complete_interactive_authentication()
         client._select_authenticator.assert_awaited_once()
         self.assertNotIn("Use my password", client.fields)
+
+    async def test_cleared_email_is_retyped_and_verified_before_next(self):
+        client = self.flow([])
+        field = client.page.locator(
+            'input[name="loginfmt"]:visible, input[type="email"]:visible'
+        ).first
+        field.input_value = AsyncMock(side_effect=["", "test@smu.edu.sg"])
+        await client._submit_login_field(
+            'input[name="loginfmt"]:visible, input[type="email"]:visible',
+            "test@smu.edu.sg",
+            "email",
+        )
+        field.press_sequentially.assert_awaited_once_with("test@smu.edu.sg", delay=25)
+        client.fields[
+            'input[type="submit"]:visible, button[type="submit"]:visible'
+        ].click.assert_awaited_once()
+
+    async def test_continuously_cleared_email_is_not_submitted_empty(self):
+        client = self.flow([])
+        field = client.page.locator(
+            'input[name="loginfmt"]:visible, input[type="email"]:visible'
+        ).first
+        field.input_value = AsyncMock(return_value="")
+        with self.assertRaisesRegex(AuthenticationRequired, "No form was submitted"):
+            await client._submit_login_field(
+                'input[name="loginfmt"]:visible, input[type="email"]:visible',
+                "test@smu.edu.sg",
+                "email",
+            )
+        client.fields[
+            'input[type="submit"]:visible, button[type="submit"]:visible'
+        ].click.assert_not_awaited()
 
     async def test_number_appearing_late_or_changing_sends_updated_notification(self):
         client = self.flow(

@@ -571,10 +571,11 @@ class FBSClient:
                         await self.progress(
                             "Microsoft restarted sign-in; restoring your email once"
                         )
-                    await field.fill(login_email)
-                    await self.page.locator(
-                        'input[type="submit"]:visible, button[type="submit"]:visible'
-                    ).first.click()
+                    await self._submit_login_field(
+                        'input[name="loginfmt"]:visible, input[type="email"]:visible',
+                        login_email,
+                        "email",
+                    )
                     email_submitted = True
                     email_submissions += 1
                 elif not login_email and self.headless:
@@ -586,12 +587,9 @@ class FBSClient:
                     await self._stop_reset_login()
                 password = os.getenv("SMU_LOGIN_PASSWORD", "")
                 if password and not password_submitted:
-                    await self.page.locator(
-                        'input[type="password"]:visible'
-                    ).first.fill(password)
-                    await self.page.locator(
-                        'input[type="submit"]:visible, button[type="submit"]:visible'
-                    ).first.click()
+                    await self._submit_login_field(
+                        'input[type="password"]:visible', password, "password"
+                    )
                     password_submitted = True
                 elif not password and self.headless:
                     raise AuthenticationRequired(
@@ -650,6 +648,42 @@ class FBSClient:
         if self.auth_notify:
             await self.auth_notify(message)
         raise AuthenticationRequired(message)
+
+    async def _submit_login_field(self, selector: str, value: str, kind: str) -> None:
+        """Commit field changes and verify them before submitting a Microsoft form."""
+        if not self.page:
+            raise AuthenticationRequired("Microsoft sign-in page is unavailable.")
+        field = self.page.locator(selector).first
+        submit = self.page.locator(
+            'input[type="submit"]:visible, button[type="submit"]:visible'
+        ).first
+        # Microsoft may hydrate/replace the form after its first paint. Wait for
+        # the button before typing, commit via blur, then check the resulting DOM.
+        await submit.wait_for(state="visible", timeout=15000)
+        for attempt in range(2):
+            if not self._trusted_login_url(self.page.url):
+                raise AuthenticationRequired(
+                    "Microsoft sign-in origin changed; submission stopped."
+                )
+            await field.fill(value)
+            if attempt == 1 and kind == "email":
+                await field.fill("")
+                await field.press_sequentially(value, delay=25)
+            await field.press("Tab")
+            await self.page.wait_for_timeout(250)
+            if (
+                self._trusted_login_url(self.page.url)
+                and await field.input_value() == value
+            ):
+                await submit.click()
+                return
+            await self.progress(
+                f"Microsoft replaced the {kind} field before submission; checking it again"
+            )
+        raise AuthenticationRequired(
+            f"Microsoft cleared or changed the {kind} field before submission. "
+            "No form was submitted; complete this step in the browser or retry the search."
+        )
 
     async def _stop_reset_login(self) -> None:
         message = (

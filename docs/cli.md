@@ -89,6 +89,16 @@ Session-only cookies are atomically saved as `.sagasu-session.json` inside the b
 
 The CLI does not reuse the removed public scraper's profile. If you encounter FBS/Microsoft login after migration, complete it in the bot's own Chrome window.
 
+## Booking in Telegram
+
+Send `/start` and choose **Find available rooms** (use **Search settings** or `/config` first to adjust the date/time). Open a room and tap **Book this room →**, or choose **Auto-pick best room**.
+
+Sagasu asks for the booking purpose, then the co-booker. Pick a saved name or send a full SMU email address. New co-bookers can be used once or saved with a name for future bookings. `/cobookers` also lets you add/remove saved people independently of a booking. Saved contacts belong to your Telegram user and survive bot restarts in the private Telegram state file; `/logout` keeps them.
+
+Review the exact room, date, time, purpose and co-booker. **Validate only** checks the FBS form without submitting. **Confirm & book** performs the actual booking and accepts the displayed FBS acknowledgement/declaration. A review expires after 10 minutes. Questions expire after 15 minutes of inactivity; `/cancel` ends questions and discards pending reviews while keeping saved contacts. Back buttons let you change answers before review.
+
+`/book` starts the questions for your selected room. The old `/book purpose | email` shortcut remains supported. Room/time details are captured when the questions start, and old question buttons cannot modify a new setup. Favorite selection uses stable contact IDs, so removing one contact does not make an old button choose someone else. If a co-booker shares the same email as an existing saved person, saving updates that person's name instead of creating a duplicate.
+
 ## Remote sign-in with phone approval
 
 Configure these on the host running Sagasu, using a private `.env` or the host's secret store:

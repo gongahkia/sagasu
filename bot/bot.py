@@ -3,8 +3,6 @@ import logging
 import sys
 from pathlib import Path
 import os
-import re
-import secrets
 import time
 from datetime import datetime, timedelta
 from html import escape
@@ -21,6 +19,16 @@ from telegram.ext import (
 )
 
 try:
+    from .booking_flow import (
+        abandon_setup,
+        accept_text,
+        begin_booking,
+        cobookers_command,
+        open_contacts,
+        show_review,
+        wizard_callback,
+        SMU_EMAIL_RE,
+    )
     from .auth import owner_auth_notifier
     from .fbs_client import (
         AuthenticationRequired,
@@ -37,6 +45,16 @@ except ImportError:
     if __package__:
         raise
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from bot.booking_flow import (
+        abandon_setup,
+        accept_text,
+        begin_booking,
+        cobookers_command,
+        open_contacts,
+        show_review,
+        wizard_callback,
+        SMU_EMAIL_RE,
+    )
     from bot.auth import owner_auth_notifier
     from bot.fbs_client import (
         AuthenticationRequired,
@@ -53,6 +71,11 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 _ACTIVE_SEARCHES = {}
+_AUTH_HELP = (
+    "🔐 Your SMU session uses Sagasu’s private browser profile. "
+    "Optional login credentials come from the host’s private configuration. "
+    "When Microsoft needs MFA, Sagasu sends an approval prompt to your private Telegram chat."
+)
 
 
 async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -73,27 +96,34 @@ async def access_guard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🔎 Find available rooms", callback_data="run_script")],
+    abandon_setup(context)
+    keyboard = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton(
-                "Pinch to alert help desk 📖", callback_data="view_help"
-            )
-        ],
-        [InlineKeyboardButton("⚙️ Search settings", callback_data="open_config")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        'Welcome to <a href="https://github.com/gongahkia/sagasu">Sagasu</a>!',
-        parse_mode=ParseMode.HTML,
+            [
+                InlineKeyboardButton(
+                    "🔎 Find available rooms", callback_data="run_script"
+                )
+            ],
+            [InlineKeyboardButton("⚙️ Search settings", callback_data="open_config")],
+            [
+                InlineKeyboardButton(
+                    "👥 Saved co-bookers", callback_data="open_cobookers"
+                )
+            ],
+            [InlineKeyboardButton("Help", callback_data="view_help")],
+        ]
     )
     await update.message.reply_text(
-        "Ello! Click one option below 👋", reply_markup=reply_markup
+        "<b>Sagasu · SMU room bookings</b>\n\n"
+        "Find a room, then I’ll guide you through the booking questions.",
+        parse_mode=ParseMode.HTML,
+        reply_markup=keyboard,
     )
 
 
 async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Searching FBS for available rooms")
+    abandon_setup(context)
 
     try:
         cancel_kb = InlineKeyboardMarkup(
@@ -202,7 +232,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.debug(
                     "Telegram message update failed (%s)", type(edit_error).__name__
                 )
+    elif query.data == "open_cobookers":
+        await open_contacts(query.message, context)
     elif query.data == "open_config":
+        abandon_setup(context)
         await query.message.reply_text(
             "⚙️ Search configuration — tap a row to change:",
             reply_markup=_build_scrape_menu_keyboard(context),
@@ -213,21 +246,13 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Type /config to set search filters\n"
             "Type /start to search\n"
             "Select or auto-pick a room\n"
-            "Type /book purpose | co-booker email\n"
+            "Answer the booking questions one at a time\n"
+            "Use /cobookers to manage saved co-bookers\n"
             "Type /status to view current settings",
             parse_mode=ParseMode.HTML,
         )
     elif query.data == "settings":
-        await query.message.reply_text(
-            "Sagasu now uses a private local Chrome profile. No SMU password is "
-            "stored in Telegram. Run a search and complete MFA in Chrome when prompted."
-        )
-
-
-SMU_EMAIL_RE = re.compile(
-    r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$",
-    re.IGNORECASE,
-)
+        await query.message.reply_text(_AUTH_HELP)
 
 
 SCRAPE_PARAM_CHOICES = {
@@ -394,6 +419,7 @@ def _build_scrape_menu_keyboard(context):
 
 
 async def scrape_config_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    abandon_setup(context)
     await update.message.reply_text(
         "⚙️ Scrape configuration — tap a row to change:",
         reply_markup=_build_scrape_menu_keyboard(context),
@@ -510,17 +536,15 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if await accept_text(update.message, context, update.message.text or ""):
+        return
     await update.message.reply_text(
-        "I wasn't expecting free text. Use /config, /start, or /book."
+        "Use /start to find a room, /book for guided booking, or /cobookers to manage saved co-bookers."
     )
 
 
 async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "🔐 Authentication uses a private Chrome profile on this computer.\n"
-        "Sagasu does not store your SMU password. When the session expires, "
-        "the next search opens Chrome so you can complete Microsoft MFA."
-    )
+    await update.message.reply_text(_AUTH_HELP)
 
 
 async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -553,13 +577,13 @@ async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
     context.user_data["selected_room"] = room
     await query.message.reply_text(
-        text + "\nUse <code>/book purpose | co-booker email</code> to continue.",
+        text + "\nTap below to answer the booking questions.",
         parse_mode=ParseMode.HTML,
         reply_markup=InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        "✅ Select this room", callback_data=f"select_room:{idx}"
+                        "Book this room →", callback_data=f"select_room:{idx}"
                     )
                 ]
             ]
@@ -576,11 +600,7 @@ async def select_room_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text("Results expired — run a new search.")
         return
     context.user_data["selected_room"] = order[idx]
-    await query.message.reply_text(
-        f"Selected <code>{escape(order[idx])}</code>.\n"
-        "Continue with <code>/book purpose | co-booker email</code>.",
-        parse_mode=ParseMode.HTML,
-    )
+    await begin_booking(query.message, context)
 
 
 async def autopick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -591,79 +611,36 @@ async def autopick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Results expired — run a new search.")
         return
     context.user_data["selected_room"] = order[0]
-    await query.message.reply_text(
-        f"✨ Auto-picked <code>{escape(order[0])}</code>.\n"
-        "Continue with <code>/book purpose | co-booker email</code>.",
-        parse_mode=ParseMode.HTML,
-    )
+    await begin_booking(query.message, context)
 
 
 async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    raw = " ".join(context.args or []).strip()
+    # Preserve the old shortcut for existing users; /book alone opens questions.
+    if "|" not in raw:
+        await begin_booking(update.message, context, purpose=raw or None)
+        return
     room = context.user_data.get("selected_room")
-    search = context.user_data.get("last_search")
-    if not room or not search:
+    search = context.user_data.get("last_search") or {}
+    if not room or not search.get("config"):
         await update.message.reply_text("Run a search and select a room first.")
         return
-    raw = " ".join(context.args or [])
     parts = [part.strip() for part in raw.split("|")]
-    if len(parts) < 2 or not parts[0] or not parts[1]:
-        await update.message.reply_text(
-            "Usage: /book purpose | co-booker email\n"
-            "Example: /book Project meeting | friend@smu.edu.sg"
-        )
+    if not parts[0] or len(parts) < 2 or not SMU_EMAIL_RE.fullmatch(parts[1]):
+        await update.message.reply_text("Let’s do this one question at a time.")
+        await begin_booking(update.message, context, purpose=parts[0] or None)
         return
-    purpose, co_booker = parts[:2]
-    if not SMU_EMAIL_RE.fullmatch(co_booker):
-        await update.message.reply_text(
-            "The co-booker must be a valid SMU email address."
-        )
-        return
-    booking_usage = parts[2] if len(parts) > 2 and parts[2] else "Meeting"
-    request = BookingRequest(
-        search=SearchConfig.from_mapping(search["config"]),
-        room=room,
-        purpose=purpose,
-        co_booker=co_booker,
-        booking_usage=booking_usage,
-    )
-    token = secrets.token_urlsafe(8)
-    drafts = context.user_data.setdefault("booking_drafts", {})
-    drafts[token] = {
-        "request": request.to_dict(),
-        "expires_at": time.time() + 600,
-    }
-    preview = (
-        "<b>Review booking</b>\n\n"
-        f"Room: <code>{escape(room)}</code>\n"
-        f"Date: {escape(request.search.date)}\n"
-        f"Time: {escape(request.search.start_time)}–{escape(request.search.end_time)}\n"
-        f"Purpose: {escape(request.purpose)}\n"
-        f"Usage: {escape(request.booking_usage)}\n"
-        f"Co-booker: <code>{escape(request.co_booker)}</code>\n\n"
-        "Confirming accepts the FBS acknowledgement and declaration. "
-        "Availability will be checked again before submission."
-    )
-    await update.message.reply_text(
-        preview,
-        parse_mode=ParseMode.HTML,
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [
-                    InlineKeyboardButton(
-                        "🧪 Validate only", callback_data=f"booking_validate:{token}"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "✅ Confirm & book", callback_data=f"booking_confirm:{token}"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
-                        "❌ Cancel", callback_data=f"booking_cancel:{token}"
-                    )
-                ],
-            ]
+    abandon_setup(context)
+    context.user_data.pop("booking_drafts", None)
+    await show_review(
+        update.message,
+        context,
+        BookingRequest(
+            search=SearchConfig.from_mapping(search["config"]),
+            room=room,
+            purpose=parts[0],
+            co_booker=parts[1].casefold(),
+            booking_usage=parts[2] if len(parts) > 2 and parts[2] else "Meeting",
         ),
     )
 
@@ -744,11 +721,14 @@ async def scrape_cancel_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    active = context.user_data.pop("booking_wizard", None)
+    drafts = context.user_data.pop("booking_drafts", None)
     state = context.user_data.pop("settings_state", None)
-    if state:
-        await update.message.reply_text(f"Cancelled ({state}) ✋")
-    else:
-        await update.message.reply_text("Nothing to cancel 👻")
+    await update.message.reply_text(
+        "Cancelled the current questions and pending booking reviews. No booking was submitted."
+        if active or drafts or state
+        else "There’s nothing waiting to be cancelled."
+    )
 
 
 async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -757,6 +737,7 @@ async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "last_search",
         "last_room_order",
         "booking_drafts",
+        "booking_wizard",
         # Remove credentials left by versions predating browser-profile auth.
         "email",
         "password",
@@ -807,9 +788,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "1. /config — choose date, time and filters\n"
         "2. /start — search FBS\n"
         "3. Select a room or auto-pick\n"
-        "4. /book purpose | co-booker email\n"
+        "4. Answer the purpose and co-booker questions\n"
         "5. Validate, then explicitly confirm the booking\n\n"
-        "Microsoft login and MFA happen only in a private local Chrome profile.",
+        "/book — start booking questions for the selected room\n"
+        "/cobookers — save names/emails or remove saved co-bookers\n"
+        "/cancel — stop questions and discard pending booking reviews\n\n"
+        "Your SMU session stays in a private browser profile; approve MFA on your phone when prompted.",
         parse_mode=ParseMode.HTML,
     )
 
@@ -853,6 +837,8 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
     app.add_handler(CommandHandler("cancel", cancel_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("book", book_command))
+    app.add_handler(CommandHandler("cobookers", cobookers_command))
+    app.add_handler(CallbackQueryHandler(wizard_callback, pattern=r"^wizard:"))
     app.add_handler(
         CallbackQueryHandler(scrape_config_callback, pattern=r"^(pick|set|toggle):")
     )
@@ -871,7 +857,7 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
         CallbackQueryHandler(scrape_cancel_callback, pattern=r"^scrape_cancel$")
     )
     app.add_handler(CallbackQueryHandler(button_callback))
-    app.add_handler(MessageHandler(filters.TEXT, handle_text_input))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
     app.add_error_handler(telegram_error)
     return app
 
