@@ -27,6 +27,7 @@ try:
         open_contacts,
         show_review,
         wizard_callback,
+        validate_booking_time,
         SMU_EMAIL_RE,
     )
     from .auth import owner_auth_notifier
@@ -36,12 +37,14 @@ try:
         BookingUnavailable,
         BookingOutcomeUnknown,
         FBSError,
+        FBS_TIMEZONE,
         LayoutChanged,
         SearchConfig,
         execute_booking,
         check_task_list,
         search_config_from_bot,
         search_fbs,
+        require_future_booking,
     )
 except ImportError:
     if __package__:
@@ -55,6 +58,7 @@ except ImportError:
         open_contacts,
         show_review,
         wizard_callback,
+        validate_booking_time,
         SMU_EMAIL_RE,
     )
     from bot.auth import owner_auth_notifier
@@ -64,12 +68,14 @@ except ImportError:
         BookingUnavailable,
         BookingOutcomeUnknown,
         FBSError,
+        FBS_TIMEZONE,
         LayoutChanged,
         SearchConfig,
         execute_booking,
         check_task_list,
         search_config_from_bot,
         search_fbs,
+        require_future_booking,
     )
 
 
@@ -131,6 +137,13 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     abandon_setup(context)
 
     try:
+        search_config = search_config_from_bot(
+            context.user_data.get("scrape_config") or {}
+        )
+        if not await validate_booking_time(
+            callback_query.message, context, search_config
+        ):
+            return
         cancel_kb = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🛑 Cancel", callback_data="scrape_cancel")]]
         )
@@ -145,9 +158,6 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
             except Exception as e:
                 logger.debug("Telegram progress update failed (%s)", type(e).__name__)
 
-        search_config = search_config_from_bot(
-            context.user_data.get("scrape_config") or {}
-        )
         scrape_task = asyncio.create_task(
             search_fbs(
                 search_config, progress, auth_notify=owner_auth_notifier(context.bot)
@@ -162,6 +172,13 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
         finally:
             _ACTIVE_SEARCHES.pop(callback_query.from_user.id, None)
 
+        if not await validate_booking_time(
+            callback_query.message, context, result.config
+        ):
+            await status_msg.edit_text(
+                "Search ended because the requested start time has passed. Choose a future time in /config."
+            )
+            return
         context.user_data["last_search"] = result.to_dict()
         rooms = result.bookable_rooms
         context.user_data["last_room_order"] = [room.name for room in rooms]
@@ -244,7 +261,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "open_config":
         abandon_setup(context)
         await query.message.reply_text(
-            "⚙️ Search configuration — tap a row to change:",
+            _search_settings_text(context),
             reply_markup=_build_scrape_menu_keyboard(context),
         )
     elif query.data == "view_help":
@@ -426,10 +443,19 @@ def _build_scrape_menu_keyboard(context):
     return InlineKeyboardMarkup(kb)
 
 
+def _search_settings_text(context):
+    text = "⚙️ Search settings — tap a row to change:"
+    try:
+        require_future_booking(search_config_from_bot(get_scrape_config(context)))
+    except (BookingUnavailable, ValueError) as error:
+        text += f"\n\n⚠️ {error}"
+    return text
+
+
 async def scrape_config_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     abandon_setup(context)
     await update.message.reply_text(
-        "⚙️ Scrape configuration — tap a row to change:",
+        _search_settings_text(context),
         reply_markup=_build_scrape_menu_keyboard(context),
     )
 
@@ -493,14 +519,14 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
         param = data.split(":", 1)[1]
         if param == "done":
             await query.edit_message_text(
-                "⚙️ Scrape configuration — tap a row to change:",
+                _search_settings_text(context),
                 reply_markup=_build_scrape_menu_keyboard(context),
             )
             return
         if param == "reset":
             context.user_data["scrape_config"] = {}
             await query.edit_message_text(
-                "⚙️ Scrape configuration — tap a row to change:",
+                _search_settings_text(context),
                 reply_markup=_build_scrape_menu_keyboard(context),
             )
             return
@@ -509,7 +535,7 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
         _, param, value = data.split(":", 2)
         if param == "date":
             offset_days = int(value)
-            target = datetime.now() + timedelta(days=offset_days)
+            target = datetime.now(FBS_TIMEZONE) + timedelta(days=offset_days)
             cfg["date_raw"] = target.strftime("%-d %B %Y").lower()
         elif param == "start_time":
             cfg["start_time"] = value
@@ -520,7 +546,7 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
         elif param == "capacity":
             cfg["room_capacity"] = None if value == "ANY" else value
         await query.edit_message_text(
-            "⚙️ Scrape configuration — tap a row to change:",
+            _search_settings_text(context),
             reply_markup=_build_scrape_menu_keyboard(context),
         )
     elif data.startswith("toggle:"):
@@ -565,6 +591,13 @@ async def room_details_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
     room = order[idx]
     search = context.user_data.get("last_search") or {}
+    if not search.get("config"):
+        await query.message.reply_text("Results expired — run a new search.")
+        return
+    if not await validate_booking_time(
+        query.message, context, SearchConfig.from_mapping(search["config"])
+    ):
+        return
     room_data = next(
         (
             candidate
@@ -673,6 +706,9 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     submit = action == "booking_confirm"
+    request = BookingRequest.from_mapping(draft["request"])
+    if not await validate_booking_time(query.message, context, request.search):
+        return
     status = await query.message.reply_text(
         "⏳ Rechecking availability and preparing the booking…"
     )
@@ -685,7 +721,6 @@ async def booking_action_callback(update: Update, context: ContextTypes.DEFAULT_
             pass
 
     try:
-        request = BookingRequest.from_mapping(draft["request"])
         result = await execute_booking(
             request,
             submit=submit,

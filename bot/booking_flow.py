@@ -11,7 +11,12 @@ from html import escape
 
 from telegram import InlineKeyboardButton as Button, InlineKeyboardMarkup as Markup
 
-from .fbs_client import BookingRequest, SearchConfig
+from .fbs_client import (
+    BookingRequest,
+    BookingUnavailable,
+    SearchConfig,
+    require_future_booking,
+)
 
 SMU_EMAIL_RE = re.compile(
     r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$",
@@ -24,6 +29,28 @@ PAGE_SIZE = 8
 
 def abandon_setup(context):
     context.user_data.pop(FLOW_KEY, None)
+
+
+async def validate_booking_time(message, context, config):
+    try:
+        require_future_booking(config)
+    except BookingUnavailable as error:
+        for key in (
+            FLOW_KEY,
+            "booking_drafts",
+            "selected_room",
+            "last_search",
+            "last_room_order",
+        ):
+            context.user_data.pop(key, None)
+        await message.reply_text(
+            f"⚠️ {error}",
+            reply_markup=Markup(
+                [[Button("⚙️ Change date/time", callback_data="open_config")]]
+            ),
+        )
+        return False
+    return True
 
 
 def contacts(context):
@@ -71,6 +98,10 @@ async def begin_booking(message, context, purpose=None):
     search = context.user_data.get("last_search") or {}
     if not room or not search.get("config"):
         await message.reply_text("Search for rooms and choose one first with /start.")
+        return
+    if not await validate_booking_time(
+        message, context, SearchConfig.from_mapping(search["config"])
+    ):
         return
     # Each new setup supersedes its previous pending review.
     context.user_data.pop("booking_drafts", None)
@@ -181,6 +212,10 @@ async def accept_text(message, context, text):
     flow = current_flow(message, context)
     if not flow:
         return False
+    if "search" in flow and not await validate_booking_time(
+        message, context, SearchConfig.from_mapping(flow["search"])
+    ):
+        return True
     text = text.strip()
     step = flow["step"]
     if step == "purpose":
@@ -273,6 +308,11 @@ async def wizard_callback(update, context):
         )
         return
     await query.answer()
+    if action not in {"cancel", "done"} and "search" in flow:
+        if not await validate_booking_time(
+            query.message, context, SearchConfig.from_mapping(flow["search"])
+        ):
+            return
     flow["expires_at"] = time.time() + 900
     if action in {"cancel", "done"}:
         abandon_setup(context)
@@ -334,6 +374,8 @@ async def finish_booking(message, context, flow):
 
 
 async def show_review(message, context, request):
+    if not await validate_booking_time(message, context, request.search):
+        return
     token = secrets.token_urlsafe(8)
     drafts = context.user_data.setdefault("booking_drafts", {})
     # Remove expired drafts so persistence does not grow with each booking.

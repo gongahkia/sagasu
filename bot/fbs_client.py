@@ -1630,7 +1630,7 @@ class FBSClient:
 def search_config_from_bot(config: dict) -> SearchConfig:
     """Translate the Telegram bot's compact config into the live FBS contract."""
 
-    date_raw = config.get("date_raw") or datetime.now().strftime("%d %B %Y")
+    date_raw = config.get("date_raw") or datetime.now(FBS_TIMEZONE).strftime("%d %B %Y")
     date = datetime.strptime(date_raw.title(), "%d %B %Y").strftime("%d-%b-%Y")
     start = config.get("start_time", "11:00")
     duration = float(config.get("duration_hrs", 2.5))
