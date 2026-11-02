@@ -19,13 +19,10 @@ If anything, the sluggish impression it gives off results from the overly convol
 
 ## Stack
 
-- [Python](https://www.python.org/) — server and browser automation runtime.
-- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) — standard MCP tools, resources, prompts and stdio transport.
-- [Playwright](https://playwright.dev/python/) and [Chromium](https://www.chromium.org/) — SMU FBS browser automation.
-- [Pydantic](https://docs.pydantic.dev/) — typed tool inputs and validation.
-- [SQLite](https://www.sqlite.org/) — private contacts, search preferences and durable action history.
-- [python-dotenv](https://github.com/theskumar/python-dotenv) — private host configuration.
-- [uv](https://docs.astral.sh/uv/) — Python environments and dependency installation.
+* *Script*: [Python](https://www.python.org/), [Playwright](https://playwright.dev/python/), [Chromium](https://www.chromium.org/) 
+* *MCP*: [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
+* *DB*: [SQLite](https://www.sqlite.org/) 
+* *Package*: [uv](https://docs.astral.sh/uv/) 
 
 ## Usage
 
