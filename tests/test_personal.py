@@ -296,7 +296,8 @@ class ConfigTests(unittest.TestCase):
             env.write_text("SAGASU_PREFERENCES_PATH=private/preferences.sqlite3\n")
             settings = Settings.load(env)
             self.assertEqual(
-                settings.preferences, env.parent / "private/preferences.sqlite3"
+                settings.preferences,
+                (env.parent / "private/preferences.sqlite3").resolve(),
             )
             settings.activate()
             self.assertEqual(

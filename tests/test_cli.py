@@ -107,9 +107,11 @@ class CliTest(unittest.TestCase):
             "SAGASU_BROWSER_PROFILE=private/browser\nSAGASU_STATE_PATH=private/state.pickle\n"
         )
         settings = Settings.load(self.path)
-        self.assertEqual(settings.profile, self.path.parent / "private/browser")
         self.assertEqual(
-            settings.persistence, self.path.parent / "private/state.pickle"
+            settings.profile, (self.path.parent / "private/browser").resolve()
+        )
+        self.assertEqual(
+            settings.persistence, (self.path.parent / "private/state.pickle").resolve()
         )
 
     def test_config_show_redacts_token(self):

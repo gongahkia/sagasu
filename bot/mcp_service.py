@@ -8,6 +8,7 @@ import asyncio
 import copy
 import secrets
 import time
+import math
 from dataclasses import dataclass, field
 
 from .booking_flow import SMU_EMAIL_RE
@@ -112,6 +113,9 @@ class Job:
             "updated_at": self.updated_at,
             "receipt_available": self.receipt is not None,
             "error": self.error,
+            "terminal": self.terminal,
+            "poll_after_ms": None if self.terminal else 2000,
+            "next_tool": "operation_result" if self.terminal else "wait_operation",
         }
 
 
@@ -311,12 +315,66 @@ class AgentService:
             output["result"] = result
         return output
 
-    def search(self, config=None):
+    async def wait(self, operation_id, timeout=20, offset=0, limit=20):
+        """Bound the wait without cancelling the browser job on timeout/disconnect."""
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or not 0 <= timeout <= 30
+        ):
+            raise AgentError("Wait timeout must be between 0 and 30 seconds.")
+        # Validate pagination before waiting, and keep the job reference if pruned later.
+        self.result(operation_id, offset, limit)
+        job = self.get(operation_id)
+        if not job.terminal:
+            await asyncio.wait([job.task], timeout=timeout)
+        return self.result(operation_id, offset, limit)
+
+    def available_rooms(self, operation_id, offset=0, limit=20):
+        """Filter before pagination; preserve the full discovery snapshot for reviews."""
+        from .fbs_client import RoomAvailability, TimeSlot
+
+        if offset < 0 or not 1 <= limit <= 50:
+            raise AgentError("Use offset >= 0 and limit between 1 and 50.")
+        result = self._completed(operation_id, "search")
+        config = SearchConfig.from_mapping(result["config"])
+        require_future_booking(config)
+        rooms = [
+            RoomAvailability(row["name"], [TimeSlot(**slot) for slot in row["timeslots"]])
+            for row in result["rooms"]
+        ]
+        available = sorted(
+            [room for room in rooms if room.is_free(config.start_time, config.end_time)],
+            key=lambda room: (-room.free_minutes, room.name.lower()),
+        )
+        return {
+            "operation_id": operation_id,
+            "config": copy.deepcopy(result["config"]),
+            "rooms": [
+                {"name": room.name, "free_minutes": room.free_minutes}
+                for room in available[offset : offset + limit]
+            ],
+            "searched_total": len(rooms),
+            "available_total": len(available),
+            "next_offset": offset + limit if offset + limit < len(available) else None,
+            "next_tool": "booking_review" if available else "search_rooms",
+        }
+
+    def search(self, config=None, preferences=None):
+        from .personal import validate_preferences
+
+        if config is not None and preferences is not None:
+            raise AgentError("Provide config OR preferences, not both.")
         try:
             if config is None:
-                search = search_config_from_bot(
-                    self.profile.preferences() if self.profile else {}
-                )
+                merged = self.profile.preferences() if self.profile else {}
+                for key, value in validate_preferences(preferences or {}).items():
+                    if value is None:
+                        merged.pop(key, None)
+                    else:
+                        merged[key] = value
+                search = search_config_from_bot(merged)
             else:
                 search = SearchConfig.from_mapping(config)
             require_future_booking(search)

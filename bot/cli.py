@@ -114,6 +114,13 @@ def parser():
         action="store_true",
         help="Also run Telegram polling in this process, sharing the browser safely",
     )
+    mcp_config = commands.add_parser(
+        "mcp-config",
+        help="Print secret-free Codex/Pi/generic client configuration; does not edit client files",
+        parents=[common],
+    )
+    mcp_config.add_argument("--client", choices=("codex", "pi", "generic"), required=True)
+    mcp_config.add_argument("--telegram", action="store_true")
     login = commands.add_parser(
         "login",
         help="Sign in to FBS/MFA using the bot's private browser profile",
@@ -316,6 +323,11 @@ def main(argv=None):
         settings = Settings.load(
             getattr(args, "env_file", None), getattr(args, "browser", None)
         )
+        if args.command == "mcp-config":
+            from .mcp_config import client_config
+
+            print(client_config(settings, args.client, telegram=args.telegram))
+            return 0
         configure_logging(
             reporter,
             verbose=getattr(args, "verbose", False),

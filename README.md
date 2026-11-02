@@ -27,12 +27,31 @@ The below instructions are for running `Sagasu` locally on your machine.
 $ git clone https://github.com/gongahkia/sagasu && cd sagasu
 $ python3 -m venv .venv
 $ source .venv/bin/activate
-$ pip install -r requirements.txt
-$ cp .env.example .env
-$ python -m bot.bot
+$ python -m pip install -e .
+$ python -m playwright install chromium
+$ sagasu config init
 ```
 
-Then set your `BOT_TOKEN` and `TELEGRAM_OWNER_ID` in `.env`. 
+Edit `.env` locally before starting: set `BOT_TOKEN` to your token from Telegram
+[@BotFather](https://t.me/BotFather), and `TELEGRAM_OWNER_ID` to your numeric user ID
+(available from [@userinfobot](https://t.me/userinfobot)). Keep the token private.
+Python 3.11 or later is required.
+
+```console
+$ sagasu doctor
+$ sagasu login
+$ sagasu run
+```
+
+Complete SMU Microsoft sign-in and MFA in the browser opened by `sagasu login`.
+Then open your own bot in Telegram, send `/start`, and choose **Find available
+rooms**. Use **Search settings** to change the date, time, or room filters. To
+book, select a room, enter a purpose and co-booker, and confirm the review.
+Keep `sagasu run` running while using the bot; Ctrl+C stops it.
+
+On subsequent runs, use `source .venv/bin/activate` followed by `sagasu run`.
+See the [CLI guide](docs/cli.md) for configuration and troubleshooting, or the
+[MCP guide](docs/mcp.md) for the optional agent interface.
 
 ## Contributors
 

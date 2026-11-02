@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -7,6 +8,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from telegram.ext import PicklePersistence
 
 from bot import bot
+from bot.fbs_client import FBS_TIMEZONE
 from bot.booking_flow import (
     CONTACTS_KEY,
     FLOW_KEY,
@@ -27,7 +29,9 @@ class BookingFlowTest(unittest.IsolatedAsyncioTestCase):
                 "selected_room": "SCIS1 GSR 3-1",
                 "last_search": {
                     "config": {
-                        "date": "02-Nov-2026",
+                        "date": (
+                            datetime.now(FBS_TIMEZONE) + timedelta(days=1)
+                        ).strftime("%d-%b-%Y"),
                         "start_time": "13:00",
                         "end_time": "14:00",
                     }
