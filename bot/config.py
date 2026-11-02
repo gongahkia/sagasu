@@ -66,6 +66,14 @@ class Settings:
     auth_timeout_ms: int
     values: dict = field(repr=False)
 
+    @property
+    def preferences(self):
+        path = Path(
+            self.values.get("SAGASU_PREFERENCES_PATH")
+            or self.persistence.with_name("personal.sqlite3")
+        ).expanduser()
+        return (self.env_file.parent / path).resolve()
+
     @classmethod
     def load(cls, env_file=None, browser=None):
         path = Path(env_file or DEFAULT_ENV).expanduser().resolve()
@@ -144,6 +152,7 @@ class Settings:
             SAGASU_BROWSER_CHANNEL=self.browser,
             SAGASU_BROWSER_PROFILE=str(self.profile),
             SAGASU_STATE_PATH=str(self.persistence),
+            SAGASU_PREFERENCES_PATH=str(self.preferences),
             SAGASU_AUTH_TIMEOUT_MS=str(self.auth_timeout_ms),
         )
 
@@ -159,5 +168,6 @@ class Settings:
             "browser": self.browser,
             "browser_profile": str(self.profile),
             "telegram_state": str(self.persistence),
+            "personal_preferences": str(self.preferences),
             "auth_timeout_seconds": self.auth_timeout_ms // 1000,
         }

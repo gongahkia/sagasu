@@ -165,8 +165,15 @@ class SurfaceTest(unittest.IsolatedAsyncioTestCase):
         self.user_id += 1
         message = NS(chat_id=7, chat=self.chat, message_id=self.user_id, text=text)
         self.api.messages[self.user_id] = dict(kind="text", author="user", text=text)
-        update = NS(message=message, callback_query=None, effective_message=message)
-        await surface.surface_handler(handler)(update, self.context)
+        update = NS(
+            message=message,
+            callback_query=None,
+            effective_message=message,
+            effective_user=NS(id=7),
+        )
+        await surface.surface_handler(
+            handler, personal_store=getattr(self, "personal_store", None)
+        )(update, self.context)
 
     def callback_data(self, label):
         for row in self.current()["reply_markup"].inline_keyboard:
@@ -184,8 +191,15 @@ class SurfaceTest(unittest.IsolatedAsyncioTestCase):
             text=self.current()["text"],
         )
         query = NS(data=data, message=message, from_user=NS(id=7), answer=AsyncMock())
-        update = NS(message=None, callback_query=query, effective_message=message)
-        await surface.surface_handler(bot.surface_callback)(update, self.context)
+        update = NS(
+            message=None,
+            callback_query=query,
+            effective_message=message,
+            effective_user=NS(id=7),
+        )
+        await surface.surface_handler(
+            bot.surface_callback, personal_store=getattr(self, "personal_store", None)
+        )(update, self.context)
         return query
 
     def search_result(self, count=12):
@@ -228,6 +242,36 @@ class SurfaceTest(unittest.IsolatedAsyncioTestCase):
         await self.click("Home")
         self.assertEqual(self.api.sent_texts, 1)
         self.assertEqual(len(self.api.messages), 1)
+
+    async def test_shared_personal_data_through_real_surface_binding(self):
+        import tempfile
+        from pathlib import Path
+        from bot.personal import PersonalStore
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.personal_store = PersonalStore(Path(directory) / "personal.sqlite3")
+            profile = self.personal_store.for_user(7)
+            self.context.user_data["saved_cobookers"] = {
+                "legacy": {"name": "Old friend", "email": "old@smu.edu.sg"}
+            }
+            await self.command(bot.start)
+            self.assertIn("legacy", profile.contacts())
+            person = profile.save_contact("MCP friend", "new@smu.edu.sg")
+            await self.click("Saved co-bookers")
+            self.assertIn("MCP friend", self.current()["text"])
+            await self.click("Remove MCP friend")
+            self.assertNotIn(person["id"], profile.contacts())
+            await self.click("Home")
+            profile.update_preferences({"duration_hrs": 3})
+            await self.click("Search settings")
+            self.assertIn("Duration: 3h", str(self.current()["reply_markup"]))
+            await self.click("Duration:")
+            await self.click("1.5h")
+            self.assertEqual(profile.preferences()["duration_hrs"], 1.5)
+            await self.click("Reset to defaults")
+            self.assertEqual(profile.preferences(), {})
+            self.assertIn("legacy", profile.contacts())
+            self.assertEqual(self.api.sent_texts, 1)
 
     async def test_booking_questions_validation_and_receipt_use_two_messages_total(
         self,

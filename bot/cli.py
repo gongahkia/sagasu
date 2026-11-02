@@ -330,7 +330,12 @@ def main(argv=None):
             print_values(
                 {
                     key: settings.public()[key]
-                    for key in ("env_file", "browser_profile", "telegram_state")
+                    for key in (
+                        "env_file",
+                        "browser_profile",
+                        "telegram_state",
+                        "personal_preferences",
+                    )
                 },
                 as_json,
             )

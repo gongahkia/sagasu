@@ -41,7 +41,7 @@ sagasu run
 | `sagasu login` | Open the bot's own profile and use configured credentials (or manual entry) and wait for MFA approval, then save the authenticated session. Does not require a Telegram token. |
 | `sagasu config init` | Create a private configuration template without overwriting anything. |
 | `sagasu config show --json` | Inspect configuration with token and owner ID redacted. |
-| `sagasu paths` | Show environment-file, browser-profile, and Telegram state paths. |
+| `sagasu paths` | Show environment-file, browser-profile, Telegram state and personal-preferences paths. |
 | `sagasu --version` | Show the installed Sagasu version. |
 
 A successful network check establishes reachability, not authentication or calendar correctness. A syntactically valid token is not proof Telegram accepts it; online doctor checks acceptance separately. Doctor reports session validity only with `--session`. If FBS is unreachable, it skips opening your saved profile and reports that distinction. Offline mode cannot be combined with `--session`.
@@ -80,7 +80,7 @@ Exit codes: 0 success/help, 1 runtime or doctor failure, 2 configuration/usage e
 
 ## Configuration and private state
 
-In a checkout, `.env`, `bot/.fbs-profile`, and `bot/bot_state.pickle` remain the defaults. When installed as a wheel outside a checkout, state uses the user's application-state directory and the default environment file is `.env` in the current directory. `sagasu paths` reports the resolved locations.
+In a checkout, `.env`, `bot/.fbs-profile`, `bot/bot_state.pickle`, and `bot/personal.sqlite3` are the defaults. When installed as a wheel outside a checkout, state uses the user's application-state directory and the default environment file is `.env` in the current directory. `sagasu paths` reports the resolved locations.
 
 Precedence: explicit CLI browser override, then exported environment variables, then the selected environment file, then defaults. Relative profile/state paths are resolved against that environment file's directory. `--env-file` selects an explicit file regardless of working directory. Variable interpolation in `.env` is disabled so credential values are treated literally.
 
@@ -91,6 +91,7 @@ Relevant settings:
 - `SAGASU_BROWSER_CHANNEL`: defaults to `chromium` for CLI commands.
 - `SAGASU_BROWSER_PROFILE`: private browser profile override.
 - `SAGASU_STATE_PATH`: private Telegram persistence-file override.
+- `SAGASU_PREFERENCES_PATH`: shared private contacts/search-settings database; defaults to `personal.sqlite3` beside the Telegram state file.
 - `SAGASU_AUTH_TIMEOUT_MS`: interactive authentication timeout, 1000–1800000 ms.
 - `SMU_LOGIN_EMAIL`: optional username prefill.
 - `SMU_LOGIN_PASSWORD`: optional password autofill, read from private configuration; requires an email and owner ID. Omit it to type the password yourself.
@@ -112,7 +113,9 @@ The default search lasts two hours and starts at the next strictly future half-h
 
 Past starts are rejected before scraping, opening room details or asking booking questions. Settings display a warning immediately for a manually selected past start. The bot rechecks after long searches and during questions so a window that expires while you are using the bot cannot produce a new booking review. It clears expired results and drafts while retaining saved co-bookers.
 
-Sagasu asks for the booking purpose, then the co-booker. Pick a saved name or send a full SMU email address. New co-bookers can be used once or saved with a name for future bookings. `/cobookers` also lets you add/remove saved people independently of a booking. Saved contacts belong to your Telegram user and survive bot restarts in the private Telegram state file; `/logout` keeps them.
+Sagasu asks for the booking purpose, then the co-booker. Pick a saved name or send a full SMU email address. New co-bookers can be used once or saved with a name for future bookings. `/cobookers` also lets you add/remove saved people independently of a booking. Saved contacts belong to your Telegram user and survive bot restarts in the private shared preferences database; `/logout` keeps them. Existing valid contacts and search settings migrate once from Telegram state. The configured owner shares them with MCP; other Telegram users remain isolated. A deleted contact stays deleted even if the legacy state still contains an older copy.
+
+`/config` reads/writes the same search defaults used by MCP's default searches: date/start, duration, capacity, buildings, floors, facility types, and equipment. MCP changes appear when a menu is next rendered; no unsolicited messages are sent. Reset clears only search preferences and keeps contacts. The shared SQLite database uses transactional writes and mode 0600. See [MCP personal-data tools](mcp.md#saved-co-bookers-and-shared-search-preferences) for agent-side contact editing, exact contact IDs and preference patching. Changing preferences or a contact does not alter an already prepared booking review.
 
 Review the exact room, date, time, purpose and co-booker. **Validate only** checks the FBS form without submitting and keeps the review's confirmation buttons available. **Confirm & book** performs the actual booking and accepts the displayed FBS acknowledgement/declaration. A review expires after 10 minutes. Questions expire after 15 minutes of inactivity; `/cancel` ends questions and discards pending reviews while keeping saved contacts. Back buttons let you change answers, including returning from review to edit the booking.
 

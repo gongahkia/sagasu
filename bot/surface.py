@@ -12,6 +12,7 @@ from telegram import (
     InputMediaDocument,
 )
 from telegram.error import BadRequest
+from .personal import PersonalDataError
 
 logger = logging.getLogger(__name__)
 STATE_KEY = "conversation_surface"
@@ -211,7 +212,7 @@ class SurfaceContext:
         return getattr(self._source, name)
 
 
-def surface_handler(function):
+def surface_handler(function, *, personal_store=None):
     @functools.wraps(function)
     async def wrapped(update, context):
         source = update.effective_message
@@ -266,9 +267,16 @@ def surface_handler(function):
                     await active["task"]
                 except asyncio.CancelledError:
                     pass
-            await function(
-                SurfaceUpdate(update, panel, data), SurfaceContext(context, panel)
-            )
+            bound = SurfaceContext(context, panel)
+            if personal_store is not None:
+                user = update.effective_user
+                if user is None:
+                    return
+                bound.personal_profile = personal_store.for_user(user.id)
+                bound.personal_profile.import_legacy(context.user_data)
+            await function(SurfaceUpdate(update, panel, data), bound)
+        except PersonalDataError as error:
+            await panel.render(f"⚠️ {error}", parse_mode=None)
         except asyncio.CancelledError:
             raise
         finally:

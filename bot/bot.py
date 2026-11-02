@@ -84,6 +84,7 @@ from bot.observability import event, observed_operation, observed_step
 from bot.surface import surface_handler, deliver_receipt, finish_operation
 from bot.booking_management import bookings_command, management_callback, show_bookings
 from bot.task_management import task_callback, listing as task_listing
+from bot.personal import PersonalStore, profile_for
 
 logger = logging.getLogger(__name__)
 _ACTIVE_SEARCHES = {}
@@ -118,7 +119,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         panel.back_to(None)
     abandon_setup(context)
     try:
-        window = search_config_from_bot(context.user_data.get("scrape_config") or {})
+        window = search_config_from_bot(get_scrape_config(context))
         window_text = f"{window.date} · {window.start_time}–{window.end_time} SGT"
     except ValueError:
         window_text = "Choose a valid time in Search settings."
@@ -156,9 +157,7 @@ async def run_script(callback_query: Update, context: ContextTypes.DEFAULT_TYPE)
     abandon_setup(context)
 
     try:
-        search_config = search_config_from_bot(
-            context.user_data.get("scrape_config") or {}
-        )
+        search_config = search_config_from_bot(get_scrape_config(context))
         if not await validate_booking_time(
             callback_query.message, context, search_config
         ):
@@ -261,12 +260,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(_AUTH_HELP)
 
 
-from .personal_options import SCRAPE_PARAM_CHOICES
-
+from bot.personal_options import SCRAPE_PARAM_CHOICES
 
 
 def get_scrape_config(context):
+    profile = profile_for(context)
+    if profile:
+        context.user_data["scrape_config"] = profile.preferences()
     return context.user_data.setdefault("scrape_config", {})
+
+
+def persist_scrape_config(context, config, keys=None, *, reset=False):
+    profile = profile_for(context)
+    if profile:
+        patch = {key: config.get(key) for key in keys} if keys else config
+        context.user_data["scrape_config"] = profile.update_preferences(
+            patch, reset=reset
+        )
+    else:
+        context.user_data["scrape_config"] = config
 
 
 def _build_scrape_menu_keyboard(context):
@@ -464,7 +476,7 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
             )
             return
         if param == "reset":
-            context.user_data["scrape_config"] = {}
+            persist_scrape_config(context, {}, reset=True)
             await _edit_settings_message(
                 query,
                 _search_settings_text(context),
@@ -492,6 +504,14 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
             cfg.pop("end_time", None)
         elif param == "capacity":
             cfg["room_capacity"] = None if value == "ANY" else value
+        changed = {
+            "date": ["date_raw"],
+            "start_time": ["start_time"],
+            "duration": ["duration_hrs"],
+            "capacity": ["room_capacity"],
+        }.get(param, [])
+        if changed:
+            persist_scrape_config(context, cfg, changed)
         await _edit_settings_message(
             query,
             _search_settings_text(context),
@@ -514,6 +534,7 @@ async def scrape_config_callback(update: Update, context: ContextTypes.DEFAULT_T
         else:
             current.append(opt)
         cfg[key] = current
+        persist_scrape_config(context, cfg, [key])
         await _open_param_picker(query, context, param)
 
 
@@ -883,7 +904,7 @@ async def logout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cfg = context.user_data.get("scrape_config") or {}
+    cfg = get_scrape_config(context)
 
     lines = ["<b>🧾 Current status</b>"]
     lines.append("<i>Authentication:</i> private local Chrome session")
@@ -1142,6 +1163,10 @@ async def telegram_error(update, context):
 
 
 def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=None):
+    from functools import partial
+
+    personal_store = PersonalStore.from_environment(persistence_path=persistence_path)
+    surface = partial(surface_handler, personal_store=personal_store)
     persistence = PicklePersistence(filepath=str(persistence_path))
     app = (
         ApplicationBuilder()
@@ -1153,65 +1178,53 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
     )
     app.add_handler(MessageHandler(filters.ALL, access_guard), group=-1)
     app.add_handler(CallbackQueryHandler(access_guard), group=-1)
+    app.add_handler(CallbackQueryHandler(surface(surface_callback), pattern=r"^u:"))
+    app.add_handler(CommandHandler("start", surface(start)))
+    app.add_handler(CommandHandler("help", surface(help_command)))
+    app.add_handler(CommandHandler("settings", surface(settings_command)))
+    app.add_handler(CommandHandler("logout", surface(logout_command)))
+    app.add_handler(CommandHandler("config", surface(scrape_config_command)))
+    app.add_handler(CommandHandler("cancel", surface(cancel_command)))
+    app.add_handler(CommandHandler("status", surface(status_command)))
+    app.add_handler(CommandHandler("book", surface(book_command)))
+    app.add_handler(CommandHandler("cobookers", surface(cobookers_command)))
+    app.add_handler(CommandHandler(["tasks", "tasklist"], surface(tasks_command)))
     app.add_handler(
-        CallbackQueryHandler(surface_handler(surface_callback), pattern=r"^u:")
-    )
-    app.add_handler(CommandHandler("start", surface_handler(start)))
-    app.add_handler(CommandHandler("help", surface_handler(help_command)))
-    app.add_handler(CommandHandler("settings", surface_handler(settings_command)))
-    app.add_handler(CommandHandler("logout", surface_handler(logout_command)))
-    app.add_handler(CommandHandler("config", surface_handler(scrape_config_command)))
-    app.add_handler(CommandHandler("cancel", surface_handler(cancel_command)))
-    app.add_handler(CommandHandler("status", surface_handler(status_command)))
-    app.add_handler(CommandHandler("book", surface_handler(book_command)))
-    app.add_handler(CommandHandler("cobookers", surface_handler(cobookers_command)))
-    app.add_handler(
-        CommandHandler(["tasks", "tasklist"], surface_handler(tasks_command))
-    )
-    app.add_handler(
-        CommandHandler(["bookings", "cancelbooking"], surface_handler(bookings_command))
+        CommandHandler(["bookings", "cancelbooking"], surface(bookings_command))
     )
     app.add_handler(
-        CallbackQueryHandler(surface_handler(management_callback), pattern=r"^manage:")
+        CallbackQueryHandler(surface(management_callback), pattern=r"^manage:")
     )
-    app.add_handler(
-        CallbackQueryHandler(surface_handler(task_callback), pattern=r"^task:")
-    )
-    app.add_handler(
-        CallbackQueryHandler(surface_handler(wizard_callback), pattern=r"^wizard:")
-    )
+    app.add_handler(CallbackQueryHandler(surface(task_callback), pattern=r"^task:"))
+    app.add_handler(CallbackQueryHandler(surface(wizard_callback), pattern=r"^wizard:"))
     app.add_handler(
         CallbackQueryHandler(
-            surface_handler(scrape_config_callback), pattern=r"^(pick|set|toggle):"
+            surface(scrape_config_callback), pattern=r"^(pick|set|toggle):"
         )
     )
     app.add_handler(
-        CallbackQueryHandler(surface_handler(room_details_callback), pattern=r"^room:")
+        CallbackQueryHandler(surface(room_details_callback), pattern=r"^room:")
+    )
+    app.add_handler(
+        CallbackQueryHandler(surface(select_room_callback), pattern=r"^select_room:")
+    )
+    app.add_handler(
+        CallbackQueryHandler(surface(autopick_callback), pattern=r"^autopick$")
     )
     app.add_handler(
         CallbackQueryHandler(
-            surface_handler(select_room_callback), pattern=r"^select_room:"
-        )
-    )
-    app.add_handler(
-        CallbackQueryHandler(surface_handler(autopick_callback), pattern=r"^autopick$")
-    )
-    app.add_handler(
-        CallbackQueryHandler(
-            surface_handler(booking_action_callback),
+            surface(booking_action_callback),
             pattern=r"^booking_(validate|confirm|cancel):",
         )
     )
     app.add_handler(
         CallbackQueryHandler(
-            surface_handler(scrape_cancel_callback), pattern=r"^scrape_cancel$"
+            surface(scrape_cancel_callback), pattern=r"^scrape_cancel$"
         )
     )
-    app.add_handler(CallbackQueryHandler(surface_handler(button_callback)))
+    app.add_handler(CallbackQueryHandler(surface(button_callback)))
     app.add_handler(
-        MessageHandler(
-            filters.TEXT & ~filters.COMMAND, surface_handler(handle_text_input)
-        )
+        MessageHandler(filters.TEXT & ~filters.COMMAND, surface(handle_text_input))
     )
     app.add_error_handler(telegram_error)
     return app

@@ -68,11 +68,14 @@ MCP-initiated MFA notifications are sent privately to the configured Telegram ow
 | --- | --- |
 | `server_status` | Version, confirmation requirements, notification availability, retained operation IDs; no FBS request. |
 | `login` | Start actual FBS session verification/renewal. |
-| `search_rooms` | Start a search. Omit `config` for the bot's rolling two-hour SCIS1 Group Study Room defaults; explicit config uses `DD-Mon-YYYY` dates and half-hour `HH:MM` times in SGT. |
+| `search_rooms` | Start a search. Omit `config` to use shared personal preferences, initially rolling two-hour SCIS1 GSR defaults. Explicit config is a complete one-off override using `DD-Mon-YYYY` and half-hour `HH:MM` times in SGT. |
+| `search_options` | List the same supported filter values, time choices, durations and capacity codes as Telegram. |
+| `list_cobookers`, `save_cobooker`, `delete_cobooker` | Read, add, edit or remove saved contacts shared with the configured Telegram owner. |
+| `get_search_preferences`, `set_search_preferences`, `reset_search_preferences` | Read, patch or reset shared search defaults without contacting FBS or submitting a booking. |
 | `list_bookings`, `list_tasks` | Read FBS account data. Tasks include observed `can_approve`/`can_view` capabilities; listing does not submit an action. |
 | `operation_status` | Poll progress without holding an MCP call open during scraping or MFA. |
 | `operation_result` | Read a result, with `offset` and `limit` (1–50, default 20) for room/booking/task rows. Preserve FBS `total`/`complete` coverage information. |
-| `booking_review` | Choose an exact free room from a successful search, a purpose, and a valid SMU co-booker email. Returns an immutable review lasting ten minutes. |
+| `booking_review` | Choose an exact free room from a successful search and purpose, plus either `cobooker_id` or `co_booker` (full SMU email or a unique saved name). Returns an immutable review lasting ten minutes. |
 | `cancellation_review` | Choose an exact cancellable booking reference from a successful My Bookings operation, and supply a reason. |
 | `task_approval_review` | Choose one uniquely listed, actionable task reference from a successful Task List operation. Prepare a review without approving. |
 | `task_details` | Open that task's read-only VIEW action and capture its reference-verified booking details as a background operation. |
@@ -94,6 +97,31 @@ Approval means **your task was approved**, not that every participant has confir
 `confirm_review` does not accept a model-supplied `confirmed=true` argument. Its approval parameter is supplied by the MCP client's human confirmation form. Decline, cancel, false, expiry, or missing form support results in no submission. Clients without form elicitation can search, inspect, and validate; use Telegram to complete a write. Client-side tool approval alone does not replace the form. Never configure an elicitation callback that automatically approves writes.
 
 The server uses SDK resolvers so confirmation works with both legacy and current MCP protocol connections. The MCP client is trusted to present the question to the human and faithfully return their answer.
+
+## Saved co-bookers and shared search preferences
+
+Telegram and MCP use a private SQLite store, by default `personal.sqlite3` beside the Telegram state file. `SAGASU_PREFERENCES_PATH` overrides it; relative paths resolve against the selected `.env`. Both processes must use the same store path and `TELEGRAM_OWNER_ID` to share the owner's data. MCP without an owner uses a separate local profile; other Telegram users have separate profiles. The database is created with mode 0600 and contains names, email addresses, and preferences; keep it private alongside the other runtime state. `sagasu paths` reports its resolved path. No OpenAI credentials are needed for these tools.
+
+Existing valid saved contacts and search settings are imported once from the configured private Telegram persistence file. Standalone MCP imports only the configured owner, so it can use existing data before the next Telegram interaction. Telegram also migrates each user's legacy fields on their first interaction. Existing contact IDs are preserved when valid; duplicate emails are normalized. Later edits and deletions in the shared store take precedence, so stale Telegram state does not resurrect removed contacts or reset preferences. The legacy persistence file is retained for conversation state. Migration reads only that configured trusted local file, never a client-supplied path.
+
+Use `list_cobookers` to obtain stable IDs. `save_cobooker(name, email)` updates an existing contact with that normalized email, or creates one. Supply `cobooker_id` to edit its name/address explicitly. Names may repeat; an ambiguous name cannot be used to book, so choose an exact ID. Deleting a contact affects future selection and does not cancel any booking. Contacts are limited to 200 per user and list results paginate. Changes made through MCP appear when Telegram next renders its contacts/settings, and Telegram saves are immediately available through MCP.
+
+`set_search_preferences` patches only supplied fields; omitted fields remain unchanged, and explicit `null` removes an override. Supported fields mirror Telegram: `date_raw` (e.g. `03 November 2026`), `start_time`, `duration_hrs`, `room_capacity`, `buildings`, `floors`, `facility_types`, and `equipment`. Obtain exact codes and filter names from `search_options`. An empty filter list uses the same default behavior as Telegram. For example:
+
+```json
+{
+  "preferences": {
+    "date_raw": null,
+    "start_time": null,
+    "duration_hrs": 3,
+    "floors": ["Level 2", "Level 3"]
+  }
+}
+```
+
+This restores rolling dates/starts while saving a three-hour duration and preferred floors. `get_search_preferences` returns both saved overrides and the current effective SGT search window. Fixed dates/start times remain fixed and can expire; actual searches reject past starts. `reset_search_preferences` restores default search behavior and keeps contacts. Settings and contacts persist across restarts, while operation IDs/reviews/receipts still expire as described below. Preference tools can run without form elicitation; they do not submit FBS actions. Actual booking, cancellation and approval retain their explicit confirmation requirement.
+
+Example agent request: “Save Lexuan as a co-booker using this SMU email. Remember SCIS1 floors 2 and 3 with a rolling three-hour window. Search using those settings, then prepare a booking with Lexuan for me to review.” Contact emails and search settings are copied into each prepared review; later personal-data changes do not silently alter an existing review.
 
 ## Outcomes, lifetime, and debugging
 

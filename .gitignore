@@ -8,6 +8,7 @@ booking_log/*.json
 mvenv/
 .venv/
 bot/bot_state.pickle
+bot/personal.sqlite3*
 bot/.fbs-profile/
 artifacts/
 AGENTS.md

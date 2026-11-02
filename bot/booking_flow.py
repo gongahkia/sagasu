@@ -4,7 +4,6 @@ Only plain data enters Telegram persistence. This module prepares drafts; the
 existing booking confirmation handler alone calls FBS.
 """
 
-import re
 import secrets
 import time
 from html import escape
@@ -17,11 +16,8 @@ from .fbs_client import (
     SearchConfig,
     require_future_booking,
 )
+from .personal import SMU_EMAIL_RE, profile_for
 
-SMU_EMAIL_RE = re.compile(
-    r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$",
-    re.IGNORECASE,
-)
 FLOW_KEY = "booking_wizard"
 CONTACTS_KEY = "saved_cobookers"
 PAGE_SIZE = 8
@@ -54,6 +50,9 @@ async def validate_booking_time(message, context, config):
 
 
 def contacts(context):
+    profile = profile_for(context)
+    if profile:
+        context.user_data[CONTACTS_KEY] = profile.contacts()
     return context.user_data.setdefault(CONTACTS_KEY, {})
 
 
@@ -203,6 +202,11 @@ def page_buttons(page, count):
 
 
 def save_contact(context, name, email):
+    profile = profile_for(context)
+    if profile:
+        person = profile.save_contact(name, email)
+        contacts(context)
+        return person["id"]
     saved = contacts(context)
     key = next(
         (
@@ -370,7 +374,13 @@ async def wizard_callback(update, context):
     elif action == "add":
         flow["step"] = "contact_name"
     elif action == "remove":
-        contacts(context).pop(value, None)
+        profile = profile_for(context)
+        if profile:
+            if value in profile.contacts():
+                profile.delete_contact(value)
+            contacts(context)
+        else:
+            contacts(context).pop(value, None)
     elif action == "back":
         flow["step"] = {
             "co_booker": "purpose",

@@ -392,6 +392,108 @@ class ServiceTests(ServiceCase):
 
 @unittest.skipIf(Client is None, "Install .[mcp] for MCP protocol tests")
 class ProtocolTests(ServiceCase):
+    def enable_personal_data(self):
+        from bot.personal import PersonalStore
+
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.service.profile = PersonalStore(
+            Path(temporary.name) / "personal.sqlite3", "telegram:42"
+        )
+
+    async def test_personal_tools_roundtrip_and_persist_across_services(self):
+        from bot.personal import PersonalStore
+
+        self.enable_personal_data()
+        async with Client(create_server(self.service)) as client:
+            person = await self.call(
+                client, "save_cobooker", name="Friend", email="Friend@smu.edu.sg"
+            )
+            listed = await self.call(client, "list_cobookers")
+            self.assertEqual(listed["cobookers"][0]["id"], person["id"])
+            await self.call(
+                client,
+                "set_search_preferences",
+                preferences={"floors": ["Level 3"], "duration_hrs": 3},
+            )
+            preferences = await self.call(client, "get_search_preferences")
+            self.assertEqual(preferences["effective_search"]["floors"], ["Level 3"])
+            reopened = PersonalStore(
+                self.service.profile.path, self.service.profile.scope
+            )
+            self.assertIn(person["id"], reopened.contacts())
+            self.assertEqual(reopened.preferences()["duration_hrs"], 3)
+            await self.call(
+                client,
+                "save_cobooker",
+                name="Renamed",
+                email="new@smu.edu.sg",
+                cobooker_id=person["id"],
+            )
+            self.assertEqual(reopened.resolve_contact(person["id"]), "new@smu.edu.sg")
+            await self.call(client, "reset_search_preferences")
+            self.assertEqual(reopened.preferences(), {})
+            self.assertIn(person["id"], reopened.contacts())
+            await self.call(client, "delete_cobooker", cobooker_id=person["id"])
+            self.assertEqual(reopened.contacts(), {})
+        self.assertEqual(self.backend.calls, [])
+
+    async def test_preference_patch_only_changes_supplied_fields_and_null_restores_rolling(
+        self,
+    ):
+        self.enable_personal_data()
+        async with Client(create_server(self.service)) as client:
+            await self.call(
+                client,
+                "set_search_preferences",
+                preferences={
+                    "floors": ["Level 2"],
+                    "start_time": "09:00",
+                    "duration_hrs": 3,
+                },
+            )
+            await self.call(
+                client,
+                "set_search_preferences",
+                preferences={"room_capacity": "LessThan5Pax"},
+            )
+            result = await self.call(
+                client,
+                "set_search_preferences",
+                preferences={"start_time": None, "date_raw": None},
+            )
+            self.assertTrue(result["rolling_start"])
+            self.assertEqual(
+                result["preferences"],
+                {
+                    "floors": ["Level 2"],
+                    "duration_hrs": 3,
+                    "room_capacity": "LessThan5Pax",
+                },
+            )
+            options = await self.call(client, "search_options")
+            self.assertIn("Level 2", options["choices"]["floor"])
+
+    async def test_invalid_personal_input_never_changes_data_or_contacts_fbs(self):
+        self.enable_personal_data()
+        async with Client(create_server(self.service)) as client:
+            for name, arguments in (
+                ("save_cobooker", {"name": "Friend", "email": "private@example.com"}),
+                (
+                    "set_search_preferences",
+                    {"preferences": {"floors": ["unrecognized-floor"]}},
+                ),
+                (
+                    "set_search_preferences",
+                    {"preferences": {"password": "do-not-store"}},
+                ),
+            ):
+                response = await client.call_tool(name, arguments)
+                self.assertTrue(response.is_error)
+            self.assertEqual(self.service.profile.contacts(), {})
+            self.assertEqual(self.service.profile.preferences(), {})
+        self.assertEqual(self.backend.calls, [])
+
     async def test_task_approval_elicitation_and_generic_receipt(self):
         self.backend.tasks = [TASK]
         prompts = []
@@ -424,8 +526,8 @@ class ProtocolTests(ServiceCase):
             self.assertIn("approve_task", prompts[0])
             self.assertEqual(job.result["status"], "approved")
 
-    async def call(self, client, name, **arguments):
-        result = await client.call_tool(name, arguments)
+    async def call(self, client, tool_name, **arguments):
+        result = await client.call_tool(tool_name, arguments)
         if result.is_error:
             return result
         self.assertIsNotNone(result.structured_content)
@@ -595,7 +697,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         ):
             env = Path(directory) / ".env"
             env.write_text(
-                "BOT_TOKEN=123:abcdefghijklmnopqrstuvwx\nTELEGRAM_OWNER_ID=42\nSAGASU_BROWSER_PROFILE=browser\n"
+                "BOT_TOKEN=123:abcdefghijklmnopqrstuvwx\nTELEGRAM_OWNER_ID=42\nSAGASU_BROWSER_PROFILE=browser\nSAGASU_STATE_PATH=state.pickle\n"
             )
             settings = Settings.load(env)
             app = Mock()

@@ -117,7 +117,14 @@ class Job:
 
 class AgentService:
     def __init__(
-        self, *, backend=None, notify=None, clock=time.time, limit=32, ttl=3600
+        self,
+        *,
+        backend=None,
+        notify=None,
+        clock=time.time,
+        limit=32,
+        ttl=3600,
+        profile=None,
     ):
         self.backend = backend or Backend()
         self.notify = notify
@@ -125,6 +132,38 @@ class AgentService:
         self.jobs, self.reviews = {}, {}
         self.queue = asyncio.Lock()
         self.closed = False
+        self.profile = profile
+
+    def personal_profile(self):
+        if self.profile is None:
+            raise AgentError("Personal preferences are not configured for this server.")
+        return self.profile
+
+    def list_cobookers(self, offset=0, limit=20):
+        if offset < 0 or not 1 <= limit <= 50:
+            raise AgentError("Use offset >= 0 and limit between 1 and 50.")
+        rows = [
+            {"id": key, **person}
+            for key, person in self.personal_profile().contacts().items()
+        ]
+        return {
+            "cobookers": rows[offset : offset + limit],
+            "total": len(rows),
+            "next_offset": offset + limit if offset + limit < len(rows) else None,
+        }
+
+    def get_preferences(self):
+        from dataclasses import asdict
+
+        preferences = self.personal_profile().preferences()
+        return {
+            "preferences": preferences,
+            "effective_search": asdict(search_config_from_bot(preferences)),
+            "timezone": "Asia/Singapore",
+            "rolling_start": not preferences.get("start_time"),
+            "rolling_date": not preferences.get("date_raw"),
+            "affects_existing_reviews": False,
+        }
 
     def prune(self):
         now = self.clock()
@@ -275,7 +314,9 @@ class AgentService:
     def search(self, config=None):
         try:
             if config is None:
-                search = search_config_from_bot({})
+                search = search_config_from_bot(
+                    self.profile.preferences() if self.profile else {}
+                )
             else:
                 search = SearchConfig.from_mapping(config)
             require_future_booking(search)
@@ -291,7 +332,21 @@ class AgentService:
             raise AgentError(f"A successful {kind} operation is required first.")
         return job.result
 
-    def review_booking(self, search_operation_id, room, purpose, co_booker):
+    def review_booking(
+        self, search_operation_id, room, purpose, co_booker=None, cobooker_id=None
+    ):
+        if cobooker_id is not None:
+            if co_booker is not None:
+                raise AgentError(
+                    "Provide either a saved co-booker ID or an email/name, not both."
+                )
+            co_booker = self.personal_profile().resolve_contact(cobooker_id)
+        elif co_booker and "@" not in co_booker:
+            co_booker = self.personal_profile().resolve_contact(co_booker)
+        if not co_booker:
+            raise AgentError(
+                "Provide a co-booker email or choose a saved co-booker ID."
+            )
         result = self._completed(search_operation_id, "search")
         search = SearchConfig.from_mapping(result["config"])
         require_future_booking(search)
