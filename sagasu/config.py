@@ -58,6 +58,11 @@ class Settings:
     auth_timeout_ms: int
     values: dict = field(repr=False)
 
+    @property
+    def journal(self):
+        path = Path(self.values.get("SAGASU_JOURNAL_PATH") or self.preferences.with_name("actions.sqlite3")).expanduser()
+        return (self.env_file.parent / path).resolve()
+
     @classmethod
     def load(cls, env_file=None, browser=None):
         path = Path(env_file or DEFAULT_ENV).expanduser().resolve()
@@ -107,6 +112,8 @@ class Settings:
         )
 
     def validate(self):
+        if self.journal == self.preferences:
+            raise ConfigError("Action history and personal preferences must use different files.")
         if self.values.get("SAGASU_MCP_CONFIRMATION", "agent") not in {
             "human",
             "agent",
@@ -124,6 +131,7 @@ class Settings:
             SAGASU_BROWSER_CHANNEL=self.browser,
             SAGASU_BROWSER_PROFILE=str(self.profile),
             SAGASU_PREFERENCES_PATH=str(self.preferences),
+            SAGASU_JOURNAL_PATH=str(self.journal),
             SAGASU_AUTH_TIMEOUT_MS=str(self.auth_timeout_ms),
         )
 
@@ -138,5 +146,6 @@ class Settings:
             "mcp_confirmation": self.values.get("SAGASU_MCP_CONFIRMATION", "agent"),
             "browser_profile": str(self.profile),
             "personal_preferences": str(self.preferences),
+            "action_history": str(self.journal),
             "auth_timeout_seconds": self.auth_timeout_ms // 1000,
         }

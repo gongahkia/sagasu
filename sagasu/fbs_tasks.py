@@ -4,6 +4,7 @@ No disappearing-row-only success, bulk approvals, automatic retries, or rejectio
 """
 
 import re
+from .action_journal import checkpoint_verified
 
 from playwright.async_api import Error as PlaywrightError
 
@@ -243,6 +244,7 @@ async def approve_task(client, expected):
                                 else "acknowledgement_and_removed_task"
                             ),
                         )
+                        checkpoint_verified(outcome)
                         await capture_approval_receipt(client, frame, outcome)
                         return outcome
                 except PlaywrightError:

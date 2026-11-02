@@ -21,6 +21,7 @@ from typing import Awaitable, Callable, Iterable
 from urllib.parse import parse_qs, urlparse
 
 from .observability import event, observed_operation, observed_step, step
+from .action_journal import checkpoint_verified
 
 from playwright.async_api import (
     BrowserContext,
@@ -1101,6 +1102,7 @@ class FBSClient:
                 "Final confirmation was attempted, but its outcome could not be verified. "
                 "Check FBS My Bookings before creating another booking."
             ) from None
+        checkpoint_verified(preview)
         # Receipt failures must never turn an already verified booking into an
         # uncertain submission or invite the user to book it again.
         try:

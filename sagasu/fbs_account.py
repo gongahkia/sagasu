@@ -2,6 +2,7 @@
 
 import asyncio
 import re
+from .action_journal import checkpoint_verified
 
 from playwright.async_api import Error as PlaywrightError
 
@@ -344,9 +345,11 @@ async def cancel_booking(client, expected, reason):
                         status = found[0]["fbs_status"]
                         if re.match(r"cancelled\b|canceled\b", status, re.I):
                             event("cancellation.verified", fbs_status=status)
+                            checkpoint_verified({"status": "cancelled", "fbs_status": status, "reference_number": expected["reference_number"]})
                             return {"status": "cancelled", "fbs_status": status}
                         if re.search(r"pending.*cancel|cancel.*pending", status, re.I):
                             event("cancellation.pending", fbs_status=status)
+                            checkpoint_verified({"status": "pending", "fbs_status": status, "reference_number": expected["reference_number"]})
                             return {"status": "pending", "fbs_status": status}
                     if not confirmed_dialog:
                         confirmed_dialog = await confirm_cancellation_dialog(

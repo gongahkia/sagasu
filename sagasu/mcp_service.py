@@ -1,6 +1,7 @@
 """Transport-independent, single-user agent operations over the existing FBS client.
 
-Jobs and receipts deliberately live only in memory. Nothing is replayed on restart.
+Read jobs, reviews and receipts live in memory. Write outcomes have a private
+journal when configured; nothing is replayed on restart.
 The transport enforces the host's human-form or agent-submission policy.
 """
 
@@ -12,6 +13,7 @@ import math
 from dataclasses import dataclass, field
 
 from .personal import SMU_EMAIL_RE
+from .action_journal import VERIFIED_ACTION, JournalError, action_summary, safe_fields, RESULT_KEYS
 from .fbs_client import (
     AuthenticationRequired,
     BookingOutcomeUnknown,
@@ -100,6 +102,9 @@ class Job:
     task: asyncio.Task | None = field(default=None, repr=False)
     auth_prompt: str | None = field(default=None, repr=False)
     auth_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
+    verified_result: dict | None = field(default=None, repr=False)
+    recovered: bool = False
+    history_warning: str | None = None
 
     @property
     def terminal(self):
@@ -115,6 +120,8 @@ class Job:
             "updated_at": self.updated_at,
             "receipt_available": self.receipt is not None,
             "error": self.error,
+            "recovered": self.recovered,
+            "history_warning": self.history_warning,
             "terminal": self.terminal,
             "poll_after_ms": None if self.terminal else 2000,
             "next_tool": (
@@ -134,6 +141,7 @@ class AgentService:
         limit=32,
         ttl=3600,
         profile=None,
+        journal=None,
     ):
         self.backend = backend or Backend()
         self.clock, self.limit, self.ttl = clock, limit, ttl
@@ -142,6 +150,8 @@ class AgentService:
         self.queue = asyncio.Lock()
         self.closed = False
         self.profile = profile
+        self.journal = journal
+        self.journal_failed = False
 
     def personal_profile(self):
         if self.profile is None:
@@ -191,15 +201,24 @@ class AgentService:
     def get(self, operation_id):
         self.prune()
         if operation_id not in self.jobs:
+            saved = self.journal.get(operation_id) if self.journal else None
+            if saved and saved["status"] in {"succeeded", "failed", "cancelled", "outcome_unknown"}:
+                return Job(saved["operation_id"], saved["kind"], saved["created_at"],
+                    status=saved["status"], updated_at=saved["updated_at"], result=saved["result"],
+                    stage="Recovered action outcome; check FBS before repeating an uncertain action.",
+                    error={"code": saved["error_code"], "message": "Inspect durable action history and FBS before retrying.", "retry_safe": False} if saved["error_code"] else None,
+                    recovered=True)
             raise AgentError(
-                "Unknown or expired operation. Operations disappear on server restart; check My Bookings and Task List before repeating a write."
+                "Unknown or expired operation. Read operations expire on restart; inspect action_history and FBS before repeating a write."
             )
         return self.jobs[operation_id]
 
-    def start(self, kind, payload=None):
+    def start(self, kind, payload=None, *, review_id=None):
         self.prune()
         if self.closed:
             raise AgentError("Server is shutting down.")
+        if kind in WRITE_KINDS and self.journal_failed:
+            raise AgentError("Action history failed. Check private storage and reconcile FBS before restarting to submit more actions.")
         if len(self.jobs) >= self.limit:
             # Retain active jobs; bound memory even if a client never polls results.
             oldest = next((key for key, job in self.jobs.items() if job.terminal), None)
@@ -211,10 +230,35 @@ class AgentService:
         job = Job(
             secrets.token_urlsafe(16), kind, self.clock(), updated_at=self.clock()
         )
+        if kind in WRITE_KINDS and self.journal:
+            self.journal.reserve(job, review_id, action_summary(kind, payload))
         self.jobs[job.id] = job
         job.task = asyncio.create_task(self._run(job, copy.deepcopy(payload)))
         event("agent.operation_queued", agent_operation_id=job.id, kind=kind)
         return job.public()
+
+    def action_history(self, offset=0, limit=20):
+        if self.journal is None:
+            raise AgentError("Durable action history is not configured.")
+        return self.journal.history(offset, limit)
+
+    def _checkpoint(self, job, result):
+        job.verified_result = safe_fields(result, RESULT_KEYS)
+        job.updated_at = self.clock()
+        if self.journal:
+            try:
+                self.journal.update(job, status="succeeded", result=job.verified_result)
+            except JournalError:
+                self.journal_failed = True
+                raise
+
+    def _persist_outcome(self, job):
+        if self.journal and job.kind in WRITE_KINDS:
+            try:
+                self.journal.update(job, result=job.result)
+            except JournalError:
+                self.journal_failed = True
+                job.history_warning = "Durable action history could not be updated. Preserve this outcome/reference and reconcile in FBS before retrying. Further writes are blocked."
 
     @observed_operation("agent.operation")
     async def _run(self, job, payload):
@@ -241,9 +285,14 @@ class AgentService:
             job.auth_prompt = message
             job.auth_event.set()
 
+        backend_started = False
+        token = VERIFIED_ACTION.set(lambda result: self._checkpoint(job, result))
         try:
             async with self.queue:
                 job.status, job.stage = "running", "Opening FBS"
+                if self.journal and job.kind in WRITE_KINDS:
+                    self.journal.update(job)
+                backend_started = True
                 result = await self.backend.run(job.kind, payload, progress, notify)
                 result = copy.deepcopy(result)
                 receipt = result.pop("receipt_png", None)
@@ -275,7 +324,7 @@ class AgentService:
                     TaskApprovalOutcomeUnknown,
                 ),
             ) or (
-                job.kind in WRITE_KINDS
+                job.kind in WRITE_KINDS and backend_started
                 and not isinstance(
                     error, (AuthenticationRequired, BookingUnavailable, TaskUnavailable)
                 )
@@ -305,9 +354,14 @@ class AgentService:
                 outcome=job.status,
             )
         finally:
+            VERIFIED_ACTION.reset(token)
+            if job.verified_result is not None and job.status != "succeeded":
+                job.result = {**job.verified_result, "receipt_error": "FBS outcome was verified before interruption; screenshot unavailable. Do not submit again."}
+                job.status, job.stage, job.error = "succeeded", "Verified FBS outcome; receipt interrupted", None
             job.auth_prompt = None
             job.auth_event.clear()
             job.updated_at = self.clock()
+            self._persist_outcome(job)
             event(
                 "agent.operation_finished",
                 agent_operation_id=job.id,
@@ -578,7 +632,7 @@ class AgentService:
         review = self.reviews[review_id]
         if review["kind"] == "book":
             require_future_booking(review["payload"].search)
-        job = self.start(review["kind"], review["payload"])
+        job = self.start(review["kind"], review["payload"], review_id=review_id)
         self.submitted_reviews[review_id] = job["operation_id"]
         del self.reviews[
             review_id
@@ -590,6 +644,10 @@ class AgentService:
         self.prune()
         if review_id in self.submitted_reviews:
             return self.get(self.submitted_reviews[review_id]).public()
+        if self.journal:
+            saved = self.journal.get(review_id=review_id)
+            if saved:
+                return self.get(saved["operation_id"]).public()
         return self.confirm(review_id)
 
     def discard(self, review_id):
@@ -614,6 +672,7 @@ class AgentService:
                     "Stopped",
                     self.clock(),
                 )
+                self._persist_outcome(job)
         return job.public()
 
     async def close(self):
@@ -634,3 +693,4 @@ class AgentService:
                         "Stopped",
                         self.clock(),
                     )
+                    self._persist_outcome(job)
