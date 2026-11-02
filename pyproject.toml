@@ -5,11 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sagasu"
 dynamic = ["version", "dependencies"]
-description = "Personal Telegram assistant for SMU room searches and confirmed bookings"
+description = "Personal Telegram and MCP assistant for SMU room searches and confirmed bookings"
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
 dev = ["pre-commit>=4,<5"]
+mcp = ["mcp>=2.3,<3"]
 
 [project.scripts]
 sagasu = "bot.cli:main"

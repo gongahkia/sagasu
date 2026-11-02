@@ -1,6 +1,6 @@
 # Sagasu CLI
 
-Sagasu runs a personal Telegram bot. The CLI handles setup, diagnostics, local Microsoft login, and runtime management; it never submits a room booking. Booking still requires explicit confirmation in Telegram.
+Sagasu runs a personal Telegram bot and an optional MCP server for coding agents. The CLI handles setup, diagnostics, Microsoft login, and runtime management. Booking requires explicit confirmation in Telegram or a supported MCP client's user confirmation form. See [MCP setup](mcp.md) for agent connections.
 
 ## Install and start
 
@@ -32,6 +32,8 @@ sagasu run
 | Command | Behavior |
 | --- | --- |
 | `sagasu run` | Start Telegram polling; Ctrl+C stops the bot and closes its shared browser. |
+| `sagasu mcp` | Serve a private stdio MCP connection. Install `.[mcp]` first; the agent launches this command. |
+| `sagasu mcp --telegram` | Also run Telegram polling in the same process, sharing the browser/profile safely. |
 | `sagasu doctor` | Check Python/dependencies, config, writable data paths, isolated browser startup, FBS/Telegram HTTPS reachability, and Telegram token acceptance. Sends no Telegram messages. |
 | `sagasu doctor --offline` | Check local setup/browser startup; skip service requests and token verification. |
 | `sagasu doctor --session` | Also check the actual saved FBS session with the bot stopped. No manual login or credential submission. |
@@ -120,7 +122,11 @@ The requested start must be in the future in Singapore time (SGT), even when the
 
 After submission is verified in My Bookings, Sagasu opens **VIEW** for that exact reference and sends a screenshot of the booking details to the requesting user's private Telegram chat. The caption includes the reference, room, time and FBS status. The image is held in memory, with no receipt files added to Telegram persistence or the repository. If Telegram cannot accept it as a photo, Sagasu tries the original PNG as a document. Screenshot or delivery failure keeps the booking marked as verified and explains how to find the reference in FBS; it never triggers another booking. **Validate only** does not create or send a receipt.
 
-Use `/tasks` (alias `/tasklist`) or **FBS Task List** in `/start` to check for requests awaiting your action. This feature is available in private chats and uses the same session/MFA flow as searches. It lists each task's reference, facility, dates/times, request type, requester and status. If FBS paginates the list, the response states how many items were read and directs you to FBS for the remainder. Approval and rejection actions remain in FBS. An unreadable or failed check is reported as a failure, never as an empty list.
+Use `/tasks` (alias `/tasklist`) or **FBS Task List** in `/start` to check for requests awaiting your action. This feature is available in private chats and uses the same session/MFA flow as searches. It lists each task's reference, facility, dates/times, request type, requester and status. If FBS paginates the list, the response states how many items were read and directs you to FBS for the remainder. An unreadable or failed check is reported as a failure, never as an empty list.
+
+Where FBS exposes the controls, **Details** opens the exact task's booking details and sends a screenshot without approval. **Review approval** opens a five-minute review with **Confirm task approval** and **Back to tasks**. Only confirmation submits approval; the backend rechecks the task and selects exactly one checkbox before using Approve Selected. Changed, duplicate, or ambiguous tasks stop before submission. An uncertain result disables the review and directs you to FBS; it is never automatically retried. Rejection remains in FBS.
+
+Verified approval updates the existing control message and replaces the receipt screenshot. The receipt shows the booking details when accessible, otherwise FBS's approval acknowledgement; the caption distinguishes them. An approved task does not guarantee the entire booking is confirmed. Screenshot failure does not undo approval. The pending-task flow is covered by local Chromium fixtures; a full live approval check is still required when a pending task is available.
 
 Use `/bookings` (alias `/cancelbooking`) or **My bookings** in `/start` to read existing bookings in a private chat. Cancellation buttons appear only for rows where FBS exposes its CANCEL action. Select one to review its reference, facility, time, status and cancellation reason, then choose **Confirm cancellation** or **Keep booking**. **Back** and **Keep booking** return to the same listing page without submitting cancellation. Reviews expire after five minutes and are single-use; `/cancel` discards pending cancellation reviews and `/logout` clears management state. The displayed reason is “Cancelled by booker via Sagasu” when FBS requests a reason.
 

@@ -47,6 +47,20 @@ class CliTest(unittest.TestCase):
             self.assertEqual(main([]), 0)
         self.assertIn("doctor", output.getvalue())
 
+    def test_mcp_command_supports_shared_telegram_and_common_options(self):
+        parsed = parser().parse_args(["mcp", "--telegram", "--browser", "chromium"])
+        self.assertEqual(parsed.command, "mcp")
+        self.assertTrue(parsed.telegram)
+        self.assertEqual(parsed.browser, "chromium")
+
+    def test_missing_optional_mcp_dependency_has_install_hint(self):
+        with patch.dict(sys.modules, {"bot.mcp_server": None}):
+            code, stdout, stderr = self.invoke("mcp")
+        self.assertEqual(code, 2)
+        self.assertEqual(stdout, "")
+        self.assertIn(".[mcp]", stderr)
+        self.assertNotIn(TOKEN, stderr)
+
     def test_historical_script_entrypoint_still_shows_help(self):
         root = Path(__file__).resolve().parents[1]
         result = subprocess.run(

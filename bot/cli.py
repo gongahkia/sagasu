@@ -1,4 +1,4 @@
-"""Sagasu's command-line interface. No command submits room bookings."""
+"""Sagasu's command-line interface and optional, human-confirmed MCP server."""
 
 import argparse
 import asyncio
@@ -96,13 +96,23 @@ def parser():
     result = argparse.ArgumentParser(
         prog="sagasu",
         description="Personal Telegram assistant for SMU room searches and confirmed bookings.",
-        epilog="Start with: sagasu doctor --browser chromium. No command books a room; bookings require confirmation in Telegram.",
+        epilog="Start with: sagasu doctor --browser chromium. Bookings require confirmation through Telegram or an MCP client's user prompt.",
         parents=[common],
     )
     result.add_argument("--version", action="version", version=f"sagasu {__version__}")
     commands = result.add_subparsers(dest="command", metavar="COMMAND")
     commands.add_parser(
         "run", help="Run the Telegram bot until Ctrl+C", parents=[common]
+    )
+    mcp = commands.add_parser(
+        "mcp",
+        help="Serve a private local MCP connection over stdio (install .[mcp])",
+        parents=[common],
+    )
+    mcp.add_argument(
+        "--telegram",
+        action="store_true",
+        help="Also run Telegram polling in this process, sharing the browser safely",
     )
     login = commands.add_parser(
         "login",
@@ -358,9 +368,21 @@ def main(argv=None):
             if as_json:
                 print(json.dumps(report, indent=2))
             return 0 if report["ok"] else 1
-        if args.command in {"run", "login"}:
-            settings.validate(require_token=args.command == "run")
+        if args.command in {"run", "login", "mcp"}:
+            settings.validate(
+                require_token=args.command == "run"
+                or (args.command == "mcp" and args.telegram)
+            )
         settings.activate()
+        if args.command == "mcp":
+            try:
+                from .mcp_server import serve
+            except ImportError:
+                raise ConfigError(
+                    "MCP support is not installed or incompatible. Install the project with: python -m pip install -e '.[mcp]'"
+                ) from None
+            asyncio.run(serve(settings, with_telegram=args.telegram))
+            return 0
         if args.command == "login":
             asyncio.run(login(settings, reporter, args.timeout))
             return 0

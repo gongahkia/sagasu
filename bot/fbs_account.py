@@ -63,6 +63,11 @@ async def capture_booking_evidence(client, reference):
     if await view.count() != 1:
         raise LayoutChanged("The booking VIEW action could not be identified")
     await view.click()
+    return await capture_open_booking_details(client, reference)
+
+
+async def capture_open_booking_details(client, reference):
+    """Capture the current details only after its exact reference is verified."""
     async with asyncio.timeout(45):
         while True:
             detail = client.page.frame(name="frameContent")
@@ -174,6 +179,9 @@ async def read_task_list(client):
         if (await field.input_value()).strip():
             raise LayoutChanged("FBS Task List search filter could not be cleared")
     result = parse_tasks(await frame.evaluate(TASK_SNAPSHOT))
+    from .fbs_tasks import add_task_capabilities
+
+    await add_task_capabilities(frame, result)
     event(
         "tasks.results",
         total=result["total"],

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 from telegram.error import BadRequest
 
-from bot import bot, booking_management as management, surface
+from bot import bot, booking_management as management, surface, task_management
 from bot.fbs_client import (
     FBS_TIMEZONE,
     SearchConfig,
@@ -60,6 +60,89 @@ class FakeBot:
 
 
 class SurfaceTest(unittest.IsolatedAsyncioTestCase):
+    async def open_task(self):
+        task = {
+            "reference_number": "BK-TASK",
+            "room": "Room A",
+            "date_time": "03-Nov-2026 14:00 - 16:00",
+            "request_type": "Booking Approval",
+            "requested_by": "A student",
+            "status": "Pending Approval",
+            "can_approve": True,
+            "can_view": True,
+        }
+        await self.command(bot.start)
+        with patch.object(
+            bot,
+            "check_task_list",
+            AsyncMock(return_value={"tasks": [task], "total": 1, "complete": True}),
+        ):
+            await self.click("FBS Task List")
+        return task
+
+    async def test_task_approval_review_back_and_confirmation_use_one_panel(self):
+        task = await self.open_task()
+        result = {
+            "status": "approved",
+            "task_status": "Approval acknowledged by FBS",
+            "task": task,
+            "reference_number": task["reference_number"],
+            "receipt_png": b"png",
+            "receipt_kind": "approval_acknowledgement",
+        }
+        with patch.object(
+            task_management, "execute_task_action", AsyncMock(return_value=result)
+        ) as execute:
+            await self.click("Review approval")
+            execute.assert_not_awaited()
+            await self.click("Back to tasks")
+            execute.assert_not_awaited()
+            await self.click("Review approval")
+            old_confirmation = self.callback_data("Confirm task approval")
+            await self.click("Confirm task approval")
+            execute.assert_awaited_once()
+            self.assertTrue(execute.await_args.kwargs["approve"])
+            await self.click(data=old_confirmation)
+            execute.assert_awaited_once()
+        self.assertEqual(self.api.sent_texts, 1)
+        self.assertEqual(self.api.sent_receipts, 1)
+        self.assertIn("Task approval verified", self.current()["text"])
+        self.assertIn("may still require", self.current()["text"])
+        self.assertNotIn(
+            "task_approval_reviews",
+            {key: value for key, value in self.context.user_data.items() if value},
+        )
+
+    async def test_task_details_sends_screenshot_without_approval(self):
+        task = await self.open_task()
+        result = {
+            "status": "details",
+            "task": task,
+            "reference_number": task["reference_number"],
+            "receipt_png": b"png",
+            "receipt_kind": "booking_details",
+        }
+        with patch.object(
+            task_management, "execute_task_action", AsyncMock(return_value=result)
+        ) as execute:
+            await self.click("Details")
+            self.assertNotIn("approve", execute.await_args.kwargs)
+        self.assertEqual(self.api.sent_texts, 1)
+        self.assertEqual(self.api.sent_receipts, 1)
+        self.assertIn("Task List", self.current()["text"])
+
+    async def test_expired_task_review_never_calls_backend(self):
+        await self.open_task()
+        await self.click("Review approval")
+        for review in self.context.user_data["task_approval_reviews"].values():
+            review["expires_at"] = 0
+        with patch.object(
+            task_management, "execute_task_action", AsyncMock()
+        ) as execute:
+            await self.click("Confirm task approval")
+            execute.assert_not_awaited()
+        self.assertIn("expired", self.current()["text"])
+
     def setUp(self):
         surface._locks.clear()
         surface._active.clear()

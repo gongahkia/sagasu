@@ -34,7 +34,7 @@ class InstanceLock:
             self.stream.close()
             self.stream = None
             raise AlreadyRunning(
-                "Another Sagasu process is using this browser profile. Stop it before starting run, login, or a session check."
+                "Another Sagasu process is using this browser profile. Stop it before starting run, mcp, login, or a session check. Use mcp --telegram to share one browser in one process."
             ) from None
         return self
 

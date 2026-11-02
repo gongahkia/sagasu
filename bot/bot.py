@@ -83,6 +83,7 @@ except ImportError:
 from bot.observability import event, observed_operation, observed_step
 from bot.surface import surface_handler, deliver_receipt, finish_operation
 from bot.booking_management import bookings_command, management_callback, show_bookings
+from bot.task_management import task_callback, listing as task_listing
 
 logger = logging.getLogger(__name__)
 _ACTIVE_SEARCHES = {}
@@ -260,95 +261,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(_AUTH_HELP)
 
 
-SCRAPE_PARAM_CHOICES = {
-    "date": [
-        ("Today", 0),
-        ("Tomorrow", 1),
-        ("+2 days", 2),
-        ("+3 days", 3),
-        ("+4 days", 4),
-        ("+5 days", 5),
-        ("+6 days", 6),
-    ],
-    "start_time": [
-        f"{hour:02d}:{minute:02d}" for hour in range(24) for minute in (0, 30)
-    ],
-    "duration": [0.5, 1, 1.5, 2, 2.5, 3, 4],
-    "capacity": [
-        ("Any", None),
-        ("<5 pax", "LessThan5Pax"),
-        ("6-10 pax", "From6To10Pax"),
-        ("11-15 pax", "From11To15Pax"),
-        ("16-20 pax", "From16To20Pax"),
-        ("21-50 pax", "From21To50Pax"),
-        (">50 pax", "From51To100Pax"),
-    ],
-    "building": [
-        "School of Economics/School of Computing & Information Systems 2",
-        "School of Computing & Information Systems 1",
-        "School of Accountancy",
-        "Yong Pung How School of Law/Kwa Geok Choo Law Library",
-        "School of Social Sciences/College of Integrative Studies",
-        "Lee Kong Chian School of Business",
-        "Li Ka Shing Library",
-        "Lazada One",
-        "NTUC Trade Union House",
-        "Administration Building",
-        "Sports & Recreation Centre",
-        "Campus Centre",
-        "Prinsep Street Residences",
-        "Concourse - Room/Lab",
-        "Campus Open Spaces - Events/Activities",
-        "SMU Connexion",
-    ],
-    "floor": [
-        "Basement 1",
-        "Basement 2",
-        "Level 1",
-        "Level 2",
-        "Level 3",
-        "Level 4",
-        "Level 5",
-        "Level 6",
-        "Level 7",
-    ],
-    "facility_type": [
-        "Group Study Room",
-        "Project Room",
-        "Meeting Room",
-        "Seminar Room",
-        "Classroom",
-        "Chatterbox",
-        "Hostel Facilities",
-        "Meeting Pod",
-        "MPH / Sports Hall",
-        "Phone Booth",
-        "Project Room (Level 5)",
-        "SMUC Facilities",
-        "Student Activities Area",
-        "Study Booth",
-    ],
-    "equipment": [
-        "Classroom PC",
-        "Classroom Prompter",
-        "Clip-on Mic",
-        "Doc Camera",
-        "DVD Player",
-        "Gooseneck Mic",
-        "Handheld Mic",
-        "Hybrid (USB connection)",
-        "In-room VC System",
-        "Projector",
-        "Rostrum Mic",
-        "Teams Room",
-        "Teams Room NEAT Board",
-        "TV Panel",
-        "USB Connection VC room",
-        "Video Recording",
-        "Wired Mic",
-        "Wireless Projection",
-    ],
-}
+from .personal_options import SCRAPE_PARAM_CHOICES
+
 
 
 def get_scrape_config(context):
@@ -910,6 +824,8 @@ async def show_task_list(message, context):
         await status.edit_text(f"⚠️ Could not check Task List: {error}")
         return
     context.user_data["task_list_result"] = result
+    context.user_data.pop("task_list_view", None)
+    context.user_data.pop("task_approval_reviews", None)
     await render_tasks(status, context, 0)
 
 
@@ -937,10 +853,11 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active = context.user_data.pop("booking_wizard", None)
     drafts = context.user_data.pop("booking_drafts", None)
     cancellations = context.user_data.pop("cancellation_reviews", None)
+    approvals = context.user_data.pop("task_approval_reviews", None)
     state = context.user_data.pop("settings_state", None)
     await update.message.reply_text(
-        "Cancelled the current questions and pending booking reviews. No booking was submitted."
-        if active or drafts or state or cancellations
+        "Cancelled the current questions and pending action reviews. No action was submitted."
+        if active or drafts or state or cancellations or approvals
         else "There’s nothing waiting to be cancelled."
     )
 
@@ -1075,19 +992,38 @@ async def render_tasks(message, context, page=0):
     tasks = result["tasks"]
     page = max(0, min(page, max(0, (len(tasks) - 1) // 4)))
     text = f"📋 FBS Task List · {result['total']} item(s)\n\n"
+    view = task_listing(context, message.chat_id)
+    buttons = []
     if not result["total"]:
         text += "Your FBS Task List is empty. There are no items awaiting your action."
-    for task in tasks[page * 4 : (page + 1) * 4]:
+    for index, task in enumerate(tasks[page * 4 : (page + 1) * 4], start=page * 4):
         text += (
             f"{task['reference_number'][:100]} · {task['room'][:150]}\n"
             f"{task['date_time'][:200]}\nRequest: {task['request_type'][:150]}\n"
             f"Requested by: {task['requested_by'][:150]}\nStatus: {task['status'][:150]}\n\n"
         )
+        if view and task.get("can_view"):
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"📷 Details · {task['reference_number'][:40]}",
+                        callback_data=f"task:{view['id']}:view:{index}",
+                    )
+                ]
+            )
+        if view and task.get("can_approve"):
+            buttons.append(
+                [
+                    InlineKeyboardButton(
+                        f"Review approval · {task['reference_number'][:40]}",
+                        callback_data=f"task:{view['id']}:approve:{index}",
+                    )
+                ]
+            )
     if tasks:
-        text += "Review and approve requests in FBS.\n"
+        text += "Approval opens a review first. Actions unavailable here can be reviewed in FBS.\n"
     if not result["complete"]:
         text += f"Showing {len(tasks)} of {result['total']} tasks; open FBS for the remaining items.\n"
-    buttons = []
     nav = []
     if page:
         nav.append(
@@ -1118,6 +1054,7 @@ async def surface_callback(update, context):
             abandon_setup(context)
             context.user_data.pop("booking_drafts", None)
             context.user_data.pop("cancellation_reviews", None)
+            context.user_data.pop("task_approval_reviews", None)
             await start(SimpleNamespace(message=query.message), context)
         elif action == "results":
             abandon_setup(context)
@@ -1152,6 +1089,7 @@ async def surface_callback(update, context):
             await prompt(query.message, context, flow)
         return
     routes = [
+        ("task:", task_callback),
         ("manage:", management_callback),
         ("wizard:", wizard_callback),
         ("pick:", scrape_config_callback),
@@ -1235,6 +1173,9 @@ def build_application(token, persistence_path=PERSISTENCE_PATH, *, post_init=Non
     )
     app.add_handler(
         CallbackQueryHandler(surface_handler(management_callback), pattern=r"^manage:")
+    )
+    app.add_handler(
+        CallbackQueryHandler(surface_handler(task_callback), pattern=r"^task:")
     )
     app.add_handler(
         CallbackQueryHandler(surface_handler(wizard_callback), pattern=r"^wizard:")

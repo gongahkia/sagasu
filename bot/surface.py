@@ -256,7 +256,7 @@ def surface_handler(function):
             state["message_id"] = source.message_id
         panel = Panel(context, source, generation)
         critical = data.startswith("booking_confirm:") or (
-            data.startswith("manage:") and data.endswith(":confirm")
+            data.startswith(("manage:", "task:")) and data.endswith(":confirm")
         )
         _active[key] = {"task": asyncio.current_task(), "critical": critical}
         try:
