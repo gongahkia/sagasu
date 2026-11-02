@@ -480,7 +480,7 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
                 "recovery": {
                     "awaiting_mfa": "Call authentication_status, relay the current prompt/number, and wait for the user to approve Microsoft sign-in. Never request passwords in chat.",
                     "outcome_unknown": "Read My Bookings/Task List and reconcile the exact reference; do not retry the write.",
-                    "expired_operation": "State is in memory. Reconcile writes in FBS before preparing a new review.",
+                    "expired_operation": "Read jobs expire. Inspect action_history and operation_result for durable write outcomes, then reconcile uncertain writes in FBS before preparing another review.",
                     "pending_confirmation": "A submitted booking may still require other FBS participants to approve.",
                 },
             }
@@ -523,6 +523,9 @@ async def serve(settings):
         allow_agent_submission=settings.values.get("SAGASU_MCP_CONFIRMATION", "agent")
         == "agent",
     )
-    with InstanceLock(settings.profile), InstanceLock(settings.journal.parent / ("." + settings.journal.name + ".lock")):
+    with (
+        InstanceLock(settings.profile),
+        InstanceLock(settings.journal.parent / ("." + settings.journal.name + ".lock")),
+    ):
         journal.recover(service.clock())
         await server.run_stdio_async()

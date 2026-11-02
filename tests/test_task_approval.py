@@ -138,6 +138,22 @@ class BrowserApprovalTests(unittest.IsolatedAsyncioTestCase):
         result = await approve_task(self.client, TASK)
         self.assertEqual(result["task_status"], "Approved")
 
+    async def test_verified_approval_is_checkpointed_before_receipt_capture(self):
+        with patch("sagasu.fbs_tasks.checkpoint_verified") as checkpoint:
+
+            async def capture(client, frame, outcome):
+                checkpoint.assert_called_once()
+                self.assertEqual(
+                    checkpoint.call_args.args[0]["reference_number"],
+                    TASK["reference_number"],
+                )
+
+            with patch(
+                "sagasu.fbs_tasks.capture_approval_receipt", side_effect=capture
+            ):
+                result = await approve_task(self.client, TASK)
+        self.assertEqual(result["status"], "approved")
+
     async def test_selection_of_multiple_tasks_is_rejected_before_approval(self):
         await self.mode("select_many")
         with self.assertRaises(TaskUnavailable):

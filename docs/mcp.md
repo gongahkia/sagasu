@@ -10,9 +10,9 @@ current authentication prompts and receipt images.
 ## Install and authenticate
 
 ```sh
-python3 -m venv .venv
+uv venv
 source .venv/bin/activate
-python -m pip install -e .
+uv pip install -e .
 python -m playwright install chromium
 sagasu config init
 sagasu doctor --timeout 30
@@ -29,7 +29,7 @@ Only one process can own a profile at a time. Stop MCP before running standalone
 login or `doctor --session`. Close the existing server before starting another
 client with the same profile. Closing an agent can stop its server; keep it open until writes
 finish. Saved contacts/preferences and browser sessions survive restarts;
-operation IDs, reviews, authentication prompts and screenshots do not.
+read-operation IDs, reviews, authentication prompts and screenshots do not. Minimal write outcomes and submission IDs persist in the private action journal.
 
 ## Connect an MCP client
 
@@ -150,7 +150,7 @@ Keep FBS's own `total`/`complete` fields when reporting partially read listings.
 interrupt running writes. `discard_review` abandons an unsubmitted review.
 
 Repeated `submit_review` calls with the **same review ID** return the original
-operation while retained, including failed/uncertain outcomes. They do not submit
+operation from memory or durable history, including failed/uncertain outcomes. They do not submit
 again. Another review is a new action. Backend writes recheck exact rooms or
 references, enforce future starts, and verify FBS's actual result. **Pending
 Confirmation** and **Pending Cancellation** are not final confirmations.
@@ -159,7 +159,35 @@ An `outcome_unknown` or an interrupted write requires reconciliation in My
 Bookings/Task List before creating another review. Do not infer failure from a
 missing row or expired ID. No action is automatically replayed after restart.
 Reviews expire after ten minutes; up to 32 operations and 32 reviews are retained.
-Completed operations expire after one hour and may be evicted sooner at capacity.
+Completed in-memory operations expire after one hour and may be evicted sooner at capacity. Durable action history remains available after that eviction and across restarts.
+
+### Durable action history
+
+`action_history` reads paginated write outcomes, including operation/review IDs,
+room/time or booking reference, and verified FBS status. `operation_result` can
+read a recorded write after restart; `submit_review` with the same submitted
+review ID returns that action without resubmitting. Reads, unsubmitted reviews,
+full booking payloads, credentials, purpose, co-booker emails, MFA prompts and
+receipt images are not journalled.
+
+Before any FBS write starts, a private SQLite reservation is committed. A crash
+before the job starts recovers as `cancelled`; an interrupted running action
+recovers as `outcome_unknown`. Positive FBS verification is checkpointed before
+receipt capture, so interruption during screenshots preserves a known outcome.
+A pending FBS status remains pending, even when its verification is successful.
+
+No write is resumed or replayed. For an uncertain booking without a known
+reference, use the recorded room/time to inspect candidate bookings in FBS;
+absence from a partial listing does not prove the action failed. A new review
+represents a new action, so reconcile before creating one. History storage failure
+prevents new or queued writes from starting; a known verified outcome is retained
+in memory and reported with a history warning if its durable update fails.
+
+The file defaults to `actions.sqlite3` beside the preferences database, has mode
+0600, and can be overridden with `SAGASU_JOURNAL_PATH`. Keep it private and preserve
+it when moving the installation. History currently has no automatic retention
+cleanup; deleting it also removes cross-restart replay protection. The runtime
+locks both the browser profile and journal while recovering/serving.
 
 Receipts are in-memory PNGs limited to 4 MiB. `operation_receipt` returns the image;
 `booking_receipt` remains an alias. Check `receipt_kind` for task details versus
@@ -174,7 +202,7 @@ backends/local browser fixtures and do not submit real bookings or approvals.
 ## Development checks
 
 ```sh
-python -m pip install -e '.[dev]'
+uv pip install -e '.[dev]'
 python -m unittest discover -v
 pre-commit run --all-files
 ```

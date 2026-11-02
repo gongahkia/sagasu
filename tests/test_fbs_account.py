@@ -193,12 +193,15 @@ class EvidenceTest(unittest.IsolatedAsyncioTestCase):
         )
         with (
             patch("sagasu.fbs_client.require_future_booking"),
+            patch("sagasu.fbs_client.checkpoint_verified") as checkpoint,
             patch(
                 "sagasu.fbs_account.capture_booking_evidence",
                 AsyncMock(side_effect=LayoutChanged("changed")),
             ),
         ):
             result = await client.book(request, submit=True)
+        checkpoint.assert_called_once()
+        self.assertEqual(checkpoint.call_args.args[0]["reference_number"], "BK-TEST")
         self.assertEqual(result["status"], "verified")
         self.assertIn("receipt_error", result)
         self.assertNotIn("receipt_png", result)

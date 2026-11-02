@@ -60,7 +60,10 @@ class Settings:
 
     @property
     def journal(self):
-        path = Path(self.values.get("SAGASU_JOURNAL_PATH") or self.preferences.with_name("actions.sqlite3")).expanduser()
+        path = Path(
+            self.values.get("SAGASU_JOURNAL_PATH")
+            or self.preferences.with_name("actions.sqlite3")
+        ).expanduser()
         return (self.env_file.parent / path).resolve()
 
     @classmethod
@@ -113,7 +116,9 @@ class Settings:
 
     def validate(self):
         if self.journal == self.preferences:
-            raise ConfigError("Action history and personal preferences must use different files.")
+            raise ConfigError(
+                "Action history and personal preferences must use different files."
+            )
         if self.values.get("SAGASU_MCP_CONFIRMATION", "agent") not in {
             "human",
             "agent",

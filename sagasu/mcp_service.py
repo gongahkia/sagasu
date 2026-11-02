@@ -13,7 +13,13 @@ import math
 from dataclasses import dataclass, field
 
 from .personal import SMU_EMAIL_RE
-from .action_journal import VERIFIED_ACTION, JournalError, action_summary, safe_fields, RESULT_KEYS
+from .action_journal import (
+    VERIFIED_ACTION,
+    JournalError,
+    action_summary,
+    safe_fields,
+    RESULT_KEYS,
+)
 from .fbs_client import (
     AuthenticationRequired,
     BookingOutcomeUnknown,
@@ -202,12 +208,31 @@ class AgentService:
         self.prune()
         if operation_id not in self.jobs:
             saved = self.journal.get(operation_id) if self.journal else None
-            if saved and saved["status"] in {"succeeded", "failed", "cancelled", "outcome_unknown"}:
-                return Job(saved["operation_id"], saved["kind"], saved["created_at"],
-                    status=saved["status"], updated_at=saved["updated_at"], result=saved["result"],
+            if saved and saved["status"] in {
+                "succeeded",
+                "failed",
+                "cancelled",
+                "outcome_unknown",
+            }:
+                return Job(
+                    saved["operation_id"],
+                    saved["kind"],
+                    saved["created_at"],
+                    status=saved["status"],
+                    updated_at=saved["updated_at"],
+                    result=saved["result"],
                     stage="Recovered action outcome; check FBS before repeating an uncertain action.",
-                    error={"code": saved["error_code"], "message": "Inspect durable action history and FBS before retrying.", "retry_safe": False} if saved["error_code"] else None,
-                    recovered=True)
+                    error=(
+                        {
+                            "code": saved["error_code"],
+                            "message": "Inspect durable action history and FBS before retrying.",
+                            "retry_safe": False,
+                        }
+                        if saved["error_code"]
+                        else None
+                    ),
+                    recovered=True,
+                )
             raise AgentError(
                 "Unknown or expired operation. Read operations expire on restart; inspect action_history and FBS before repeating a write."
             )
@@ -218,7 +243,9 @@ class AgentService:
         if self.closed:
             raise AgentError("Server is shutting down.")
         if kind in WRITE_KINDS and self.journal_failed:
-            raise AgentError("Action history failed. Check private storage and reconcile FBS before restarting to submit more actions.")
+            raise AgentError(
+                "Action history failed. Check private storage and reconcile FBS before restarting to submit more actions."
+            )
         if len(self.jobs) >= self.limit:
             # Retain active jobs; bound memory even if a client never polls results.
             oldest = next((key for key, job in self.jobs.items() if job.terminal), None)
@@ -289,7 +316,12 @@ class AgentService:
         token = VERIFIED_ACTION.set(lambda result: self._checkpoint(job, result))
         try:
             async with self.queue:
+                if job.kind in WRITE_KINDS and self.journal_failed:
+                    raise JournalError(
+                        "Action history failed before this queued action could start."
+                    )
                 job.status, job.stage = "running", "Opening FBS"
+                job.updated_at = self.clock()
                 if self.journal and job.kind in WRITE_KINDS:
                     self.journal.update(job)
                 backend_started = True
@@ -324,7 +356,8 @@ class AgentService:
                     TaskApprovalOutcomeUnknown,
                 ),
             ) or (
-                job.kind in WRITE_KINDS and backend_started
+                job.kind in WRITE_KINDS
+                and backend_started
                 and not isinstance(
                     error, (AuthenticationRequired, BookingUnavailable, TaskUnavailable)
                 )
@@ -356,8 +389,15 @@ class AgentService:
         finally:
             VERIFIED_ACTION.reset(token)
             if job.verified_result is not None and job.status != "succeeded":
-                job.result = {**job.verified_result, "receipt_error": "FBS outcome was verified before interruption; screenshot unavailable. Do not submit again."}
-                job.status, job.stage, job.error = "succeeded", "Verified FBS outcome; receipt interrupted", None
+                job.result = {
+                    **job.verified_result,
+                    "receipt_error": "FBS outcome was verified before interruption; screenshot unavailable. Do not submit again.",
+                }
+                job.status, job.stage, job.error = (
+                    "succeeded",
+                    "Verified FBS outcome; receipt interrupted",
+                    None,
+                )
             job.auth_prompt = None
             job.auth_event.clear()
             job.updated_at = self.clock()

@@ -5,9 +5,9 @@ configuration, diagnostics, Microsoft login and MCP client setup. Python 3.11+
 is required. The main install includes the official MCP SDK.
 
 ```sh
-python3 -m venv .venv
+uv venv
 source .venv/bin/activate
-python -m pip install -e .
+uv pip install -e .
 python -m playwright install chromium
 sagasu config init
 sagasu doctor --timeout 30
@@ -27,10 +27,11 @@ service. `python -m sagasu` is equivalent to the installed `sagasu` command.
 | `doctor` | Check dependencies, configuration, storage, isolated browser startup and FBS HTTPS reachability. No booking/account writes. |
 | `doctor --offline` | Check local setup without network requests. |
 | `doctor --session` | Also verify the saved FBS session without submitting credentials. Stop MCP first. |
+| `smoke --live --json` | Explicit live read-only session, search and bookings check using saved authentication. Does not sign in or submit booking/account forms. |
 | `doctor --json` | Structured report; exit 1 if checks fail. |
 | `config init` | Create a private `.env` with mode 0600; never overwrite an existing file. |
 | `config show --json` | Show resolved configuration without private credential values. |
-| `paths` | Show environment file, browser profile and preferences database paths. |
+| `paths` | Show environment file, browser profile, preferences database and action journal paths. |
 | `--version` | Show installed version. |
 
 `doctor --timeout 1..60` sets each probe deadline; browser startup/session checks
@@ -40,7 +41,7 @@ Reachability does not prove an authenticated session or calendar correctness.
 
 ## Private configuration
 
-A checkout defaults to `.env`, `.sagasu/browser`, `.sagasu/personal.sqlite3` and
+A checkout defaults to `.env`, `.sagasu/browser`, `.sagasu/personal.sqlite3`, `.sagasu/actions.sqlite3` and
 `artifacts/auth`. A wheel uses the user's application-state directory for private
 state and the current directory's `.env`. `sagasu paths` reports resolved locations.
 Relative configured paths resolve against the selected environment file.
@@ -55,6 +56,7 @@ read literally. Never source `.env` in a shell.
 | `SAGASU_BROWSER_CHANNEL` | `chromium` by default; supported installed Chrome/Edge channels are also accepted. |
 | `SAGASU_BROWSER_PROFILE` | Private browser profile path. |
 | `SAGASU_PREFERENCES_PATH` | Private SQLite contacts/search preferences path. |
+| `SAGASU_JOURNAL_PATH` | Private durable write-outcome SQLite file; defaults to `actions.sqlite3` beside preferences. |
 | `SAGASU_AUTH_TIMEOUT_MS` | Sign-in/MFA deadline, 1000–1800000 milliseconds. |
 | `SMU_LOGIN_EMAIL` | Optional Microsoft username autofill. |
 | `SMU_LOGIN_PASSWORD` | Optional private password autofill; requires an email. |
@@ -110,3 +112,19 @@ live in `/var/lib/sagasu`. `sudo sagasu-host doctor` and `sudo sagasu-host login
 use the same paths. Headless MFA prompts come through the connected agent or the
 standalone login terminal. The installer does not grant agents sudo access or
 provision a remote MCP transport.
+
+## Explicit live smoke check
+
+Stop the MCP server first. After completing `sagasu login`, invoke:
+
+```sh
+sagasu smoke --live --json --timeout 180
+```
+
+This checks the saved session, searches using current personal defaults, and
+reads My Bookings. Output includes counts and FBS listing coverage, not account
+rows or credentials. The default overall deadline is 180 seconds (allowed 1–600).
+An expired session fails with an actionable hint; the check never submits login
+credentials, renews MFA, validates a booking form, books, cancels or approves.
+It is never part of the default test suite or CI. See [verification status](testing.md)
+for checks that remain open until run against a real SMU account.

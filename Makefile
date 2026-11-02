@@ -3,7 +3,7 @@
 all: config
 
 config:
-	python3 -m pip install -e ".[dev]"
+	uv pip install -e ".[dev]"
 	python3 -m playwright install chromium
 
 start:

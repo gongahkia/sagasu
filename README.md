@@ -19,7 +19,13 @@ If anything, the sluggish impression it gives off results from the overly convol
 
 ## Stack
 
-...
+- [Python](https://www.python.org/) — server and browser automation runtime.
+- [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) — standard MCP tools, resources, prompts and stdio transport.
+- [Playwright](https://playwright.dev/python/) and [Chromium](https://www.chromium.org/) — SMU FBS browser automation.
+- [Pydantic](https://docs.pydantic.dev/) — typed tool inputs and validation.
+- [SQLite](https://www.sqlite.org/) — private contacts, search preferences and durable action history.
+- [python-dotenv](https://github.com/theskumar/python-dotenv) — private host configuration.
+- [uv](https://docs.astral.sh/uv/) — Python environments and dependency installation.
 
 ## Usage
 
@@ -28,13 +34,13 @@ If anything, the sluggish impression it gives off results from the overly convol
 
 The below are for locally running `Sagasu` on your machine.
 
-1. First run the below set-up instructions.
+1. First run the below set-up instructions using [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```console
-$ git clone https://github.com/gongahkia/sagasu
-$ python3 -m venv .venv
+$ git clone https://github.com/gongahkia/sagasu && cd sagasu
+$ uv venv
 $ source .venv/bin/activate
-$ python -m pip install -e .
+$ uv pip install -e .
 $ python -m playwright install chromium
 $ sagasu config init
 $ sagasu doctor --timeout 30
@@ -53,7 +59,21 @@ Show my bookings and cancel the one I no longer need.
 
 ## Architecture
 
-... add mermaid diagram
+```mermaid
+flowchart TD
+    User[User] <--> Client[Any MCP client]
+    Client <-->|MCP over stdio| Server[Sagasu MCP server]
+    Server <--> Operations[Operations, reviews and recovery]
+    Operations <--> Preferences[(SQLite contacts and preferences)]
+    Operations <--> History[(SQLite action history)]
+    Operations <--> Browser[Playwright and Chromium]
+    Config[Private .env] -.-> Server
+    Profile[Private browser profile] <--> Browser
+    Browser <--> FBS[SMU FBS]
+    Browser <--> Microsoft[Microsoft sign-in]
+    User -->|Approve MFA| Authenticator[Microsoft Authenticator]
+    Authenticator --> Microsoft
+```
 
 ## Contributors
 

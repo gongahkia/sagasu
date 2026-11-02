@@ -656,6 +656,8 @@ class ProtocolTests(ServiceCase):
             }
             env.update(
                 SAGASU_BROWSER_PROFILE=str(path / "browser"),
+                SAGASU_PREFERENCES_PATH=str(path / "personal.sqlite3"),
+                SAGASU_JOURNAL_PATH=str(path / "actions.sqlite3"),
                 SMU_LOGIN_PASSWORD="",
                 SMU_LOGIN_EMAIL="",
             )
