@@ -193,6 +193,7 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
     for name, target in (
         ("profile", settings.profile),
         ("preferences", settings.preferences),
+        ("history", settings.journal),
     ):
         if target.exists() and (
             (name == "profile" and not target.is_dir())

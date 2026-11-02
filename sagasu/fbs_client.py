@@ -944,6 +944,19 @@ class FBSClient:
     async def search(
         self, config: SearchConfig, *, room_name: str | None = None
     ) -> SearchResult:
+        try:
+            result = await self._search_available(config, room_name=room_name)
+            if self.page and isinstance(self.page.url, str) and self._trusted_login_url(self.page.url):
+                raise AuthenticationRequired("SMU session expired during search. Renew login before searching again.")
+            return result
+        except (PlaywrightError, LayoutChanged):
+            if self.page and isinstance(self.page.url, str) and self._trusted_login_url(self.page.url):
+                raise AuthenticationRequired("SMU session expired during search. Renew login before searching again; no booking was submitted.") from None
+            raise
+
+    async def _search_available(
+        self, config: SearchConfig, *, room_name: str | None = None
+    ) -> SearchResult:
         page, frame = await self.ensure_authenticated()
         event(
             "search.requested",

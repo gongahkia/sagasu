@@ -140,6 +140,10 @@ def parser():
         action="store_true",
         help="Print a structured report on stdout; progress is suppressed",
     )
+    smoke = commands.add_parser("smoke", help="Opt-in live read-only FBS session/search/bookings check", parents=[common])
+    smoke.add_argument("--live", action="store_true", help="Explicitly allow this command to access your saved FBS session")
+    smoke.add_argument("--timeout", type=int, default=180, help="Overall deadline in seconds, 1–600")
+    smoke.add_argument("--json", action="store_true")
     paths = commands.add_parser(
         "paths",
         help="Show active configuration and data paths without secrets",
@@ -218,6 +222,8 @@ def main(argv=None):
         )
     if args.command == "login" and not 1 <= args.timeout <= 1800:
         command_parser.error("login --timeout must be between 1 and 1800 seconds")
+    if args.command == "smoke" and (not args.live or not 1 <= args.timeout <= 600):
+        command_parser.error("smoke requires --live and --timeout between 1 and 600 seconds; no live check was run")
     as_json = getattr(args, "json", False)
     reporter = Reporter(
         spinner="none" if as_json else getattr(args, "spinner", "dots"),
@@ -261,6 +267,7 @@ def main(argv=None):
                         "env_file",
                         "browser_profile",
                         "personal_preferences",
+                        "action_history",
                     )
                 },
                 as_json,
@@ -301,6 +308,16 @@ def main(argv=None):
             return 0 if report["ok"] else 1
         settings.validate()
         settings.activate()
+        if args.command == "smoke":
+            from .smoke import run_smoke
+
+            report = asyncio.run(run_smoke(settings, timeout=args.timeout))
+            if as_json:
+                print(json.dumps(report, indent=2))
+            else:
+                for check in report["checks"]:
+                    reporter.check(check["name"], check["status"], "Read-only check passed." if check["status"] == "pass" else check["hint"])
+            return 0 if report["ok"] else 1
         if args.command == "mcp":
             try:
                 from .mcp_server import serve
