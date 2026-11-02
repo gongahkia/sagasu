@@ -159,11 +159,6 @@ class Redact(logging.Filter):
     def clean(self, message):
         for secret in self.secrets:
             message = message.replace(secret, "<redacted>")
-        message = re.sub(
-            r"(?i)(https?://api\.telegram\.org/(?:file/)?bot)[^/\s]+",
-            r"\1<redacted>",
-            message,
-        )
         message = re.sub(r"(https?://[^\s?]+)\?[^\s]+", r"\1?<redacted>", message)
         message = re.sub(r"(?i)(enter number\s+)\d{2,3}\b", r"\1<redacted>", message)
         return re.sub(
@@ -296,5 +291,5 @@ def configure_logging(
         handler.setFormatter(EventFormatter(structured=log_format == "json"))
         root.addHandler(handler)
     root.setLevel(logging.DEBUG if verbose else logging.INFO)
-    for name in ("httpx", "httpcore", "telegram"):
+    for name in ("httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)

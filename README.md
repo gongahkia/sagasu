@@ -4,12 +4,10 @@
 # `Sagasu`
 
 <p align="center">
-<img src="./asset/logo/icon_with_words.png" width=50% height=50%>
+<img src="./asset/logo/icon_with_words.png" width="50%" alt="Sagasu">
 </p>
 
-Telegram bot that finds and books available rooms in SMU.
-
-Access [`sagasu_bot`](https://t.me/sagasu_bot) ***live***.
+A [MCP Server](https://modelcontextprotocol.io/docs/2026-07-28/getting-started/intro) to help your [agents](https://cursor.com/help/ai-features/coding-agents) work with [SMU FBS](https://www.smubondue.com/facility-booking-system-fbs).
 
 ## Rationale
 
@@ -17,41 +15,45 @@ Access [`sagasu_bot`](https://t.me/sagasu_bot) ***live***.
 
 If anything, the sluggish impression it gives off results from the overly convoluted system users must navigate to search for available rooms.
 
-`Sagasu` is a Telegram bot that searches SMU FBS using user-specified filters, flags vacant facilities, and can book a selected or automatically chosen room after explicit confirmation.
+`Sagasu` is a MCP Server that gives your agents access to SMU FBS' search, book, cancel and all other user-specified interactions.
+
+## Stack
+
+...
 
 ## Usage
 
-The below instructions are for running `Sagasu` locally on your machine.
+> [!NOTE]  
+> `Sagasu` relies on Python 3.11+.
+
+The below are for locally running `Sagasu` on your machine.
+
+1. First run the below set-up instructions.
 
 ```console
-$ git clone https://github.com/gongahkia/sagasu && cd sagasu
+$ git clone https://github.com/gongahkia/sagasu
 $ python3 -m venv .venv
 $ source .venv/bin/activate
 $ python -m pip install -e .
 $ python -m playwright install chromium
 $ sagasu config init
-```
-
-Edit `.env` locally before starting: set `BOT_TOKEN` to your token from Telegram
-[@BotFather](https://t.me/BotFather), and `TELEGRAM_OWNER_ID` to your numeric user ID
-(available from [@userinfobot](https://t.me/userinfobot)). Keep the token private.
-Python 3.11 or later is required.
-
-```console
-$ sagasu doctor
+$ sagasu doctor --timeout 30
 $ sagasu login
-$ sagasu run
 ```
 
-Complete SMU Microsoft sign-in and MFA in the browser opened by `sagasu login`.
-Then open your own bot in Telegram, send `/start`, and choose **Find available
-rooms**. Use **Search settings** to change the date, time, or room filters. To
-book, select a room, enter a purpose and co-booker, and confirm the review.
-Keep `sagasu run` running while using the bot; Ctrl+C stops it.
+2. Then talk to your agent to ask them to interact with `Sagasu`. Below are some examples.
 
-On subsequent runs, use `source .venv/bin/activate` followed by `sagasu run`.
-See the [CLI guide](docs/cli.md) for configuration and troubleshooting, or the
-[MCP guide](docs/mcp.md) for the optional agent interface.
+```txt
+Find an SCIS1 group study room tomorrow from 2–4pm.
+
+Book any available room in that window for project work with my saved co-booker Alex.
+
+Show my bookings and cancel the one I no longer need.
+```
+
+## Architecture
+
+... add mermaid diagram
 
 ## Contributors
 

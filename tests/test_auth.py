@@ -6,8 +6,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import quote
 
-from bot.auth import owner_auth_notifier
-from bot.fbs_client import (
+from sagasu.fbs_client import (
     AuthenticationRequired,
     FBSClient,
     LOGIN_EMAIL_SELECTOR,
@@ -100,7 +99,6 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
             {
                 "SMU_LOGIN_EMAIL": "test@smu.edu.sg",
                 "SMU_LOGIN_PASSWORD": "private $test#secret",
-                "TELEGRAM_OWNER_ID": "42",
                 "SAGASU_AUTH_TIMEOUT_MS": "1000",
             },
             clear=True,
@@ -211,7 +209,7 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         await client._complete_interactive_authentication()
         field.fill.assert_awaited_once()
 
-    async def test_repeated_empty_email_stops_and_notifies_owner(self):
+    async def test_repeated_empty_email_stops_and_notifies_user(self):
         client = self.flow([("email", "email")] * 3)
         field = client.page.locator(LOGIN_EMAIL_SELECTOR).first
         field.input_value = AsyncMock(
@@ -401,32 +399,11 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(AuthenticationRequired, "SMU_LOGIN_PASSWORD"):
             await client._complete_interactive_authentication()
 
-    async def test_unsupported_step_notifies_owner_and_stops_headless(self):
+    async def test_unsupported_step_notifies_user_and_stops_headless(self):
         client = self.flow([("manual", "An interactive browser is required")])
         with self.assertRaisesRegex(AuthenticationRequired, "interactive browser"):
             await client._complete_interactive_authentication()
         client.auth_notify.assert_awaited_once()
-
-    async def test_notification_goes_to_owner_private_chat(self):
-        bot = Mock(send_message=AsyncMock())
-        await owner_auth_notifier(bot)("Enter number 42.")
-        bot.send_message.assert_awaited_once_with(
-            chat_id=42, text="🔐 Enter number 42.", parse_mode=None
-        )
-
-    async def test_notification_failure_is_sanitized_and_stops_login(self):
-        bot = Mock(send_message=AsyncMock(side_effect=RuntimeError("private token")))
-        with self.assertRaises(AuthenticationRequired) as caught:
-            await owner_auth_notifier(bot)("MFA")
-        self.assertNotIn("private token", str(caught.exception))
-        self.assertIn("/start", str(caught.exception))
-
-    async def test_unconfigured_owner_never_sends_mfa_to_requesting_chat(self):
-        os.environ.pop("TELEGRAM_OWNER_ID")
-        bot = Mock(send_message=AsyncMock())
-        with self.assertRaises(AuthenticationRequired):
-            await owner_auth_notifier(bot)("MFA")
-        bot.send_message.assert_not_awaited()
 
     async def test_classification_reads_visible_number_and_distinguishes_method_picker(
         self,

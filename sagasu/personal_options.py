@@ -1,4 +1,4 @@
-"""Shared FBS search choices used by Telegram and MCP preferences."""
+"""Supported FBS filter choices for agent searches and saved preferences."""
 
 SCRAPE_PARAM_CHOICES = {
     "date": [

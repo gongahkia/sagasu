@@ -1,149 +1,180 @@
-# Sagasu MCP
+# Sagasu for agents
 
-Sagasu exposes its existing FBS browser backend to local agents over **stdio**. It can search rooms, validate and submit reviewed bookings, inspect My Bookings and Task List, cancel reviewed bookings, approve reviewed tasks, renew the login session, and return details/acknowledgement screenshots. Telegram remains available as another interface.
+Sagasu is a private, single-user MCP server for SMU Facility Booking System
+searches, bookings, cancellations and task approvals. MCP clients use the same
+Playwright backend, saved browser session, contacts and search preferences.
+There is no public HTTP listener or OpenAI API dependency. Only connect trusted
+clients: their model provider may receive room details, co-booker addresses,
+current authentication prompts and receipt images.
 
-This is a personal, single-user server. It has no public HTTP listener, OAuth service, OpenAI API dependency, or hosted deployment. Access follows access to the local process and account. Connect only trusted MCP clients: their model/provider can receive booking details, co-booker addresses, and receipt images returned by tools. Passwords, cookies, and Telegram tokens stay in the host's private configuration.
-
-## Install
-
-From the repository root, using Python 3.11 or later:
+## Install and authenticate
 
 ```sh
+python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[mcp]'
+python -m pip install -e .
 python -m playwright install chromium
-sagasu mcp --help
+sagasu config init
+sagasu doctor --timeout 30
+sagasu login
 ```
 
-With uv instead of pip: `uv pip install --python .venv/bin/python -e '.[mcp]'`.
+Python 3.11+ is required. Complete SMU Microsoft sign-in and MFA in the private
+browser. Optional `SMU_LOGIN_EMAIL` and `SMU_LOGIN_PASSWORD` enable host-side
+autofill. Do not put passwords in agent messages or client command arguments.
+See [CLI configuration](cli.md) for private paths and headless login.
 
-The optional extra uses the official Python MCP SDK 2.x (tested with 2.3.0). Telegram-only installation does not require the extra. For the full test suite install `.[dev,mcp]`.
+Your client launches `sagasu mcp`; running it manually waits for protocol input.
+Only one process can own a profile at a time. Stop MCP before running standalone
+login or `doctor --session`. Close the existing server before starting another
+client with the same profile. Closing an agent can stop its server; keep it open until writes
+finish. Saved contacts/preferences and browser sessions survive restarts;
+operation IDs, reviews, authentication prompts and screenshots do not.
 
-Use the existing private `.env`, browser profile and saved session. `SMU_LOGIN_EMAIL` and `SMU_LOGIN_PASSWORD` enable autofill. For remote/headless renewal set `SAGASU_HEADLESS=true`, `BOT_TOKEN`, and `TELEGRAM_OWNER_ID`; open the bot's private Telegram chat and send `/start` beforehand. The owner approves Microsoft Authenticator on their phone. Without Telegram configuration, a previously authenticated session can still be used; interactive headed login is also available via `sagasu login` while MCP is stopped.
+## Connect an MCP client
 
-## Connect Codex
+Configure your client's standard stdio transport to launch the installed executable:
 
-Add this entry to your private `~/.codex/config.toml`, adjusting all paths for the checkout:
-
-```toml
-[mcp_servers.sagasu]
-command = "/absolute/path/to/sagasu/.venv/bin/python"
-args = ["-m", "bot", "mcp", "--env-file", "/absolute/path/to/sagasu/.env"]
-cwd = "/absolute/path/to/sagasu"
-startup_timeout_sec = 30
-tool_timeout_sec = 60
+```sh
+/absolute/path/to/sagasu/.venv/bin/sagasu mcp --env-file /absolute/path/to/sagasu/.env
 ```
 
-The agent starts the subprocess; do not start a second `sagasu mcp` in another terminal. Running it manually waits for MCP protocol input, which can look like an idle terminal. Banners/progress never go to stdout in this mode; stdout carries only MCP messages. Redacted logs go to stderr, with optional `--log-file /private/path/sagasu.jsonl --log-format json` arguments.
-
-For another stdio-compatible client, the equivalent configuration is:
+The equivalent command/arguments entry is:
 
 ```json
 {
-  "mcpServers": {
-    "sagasu": {
-      "command": "/absolute/path/to/sagasu/.venv/bin/python",
-      "args": ["-m", "bot", "mcp", "--env-file", "/absolute/path/to/sagasu/.env"],
-      "cwd": "/absolute/path/to/sagasu"
-    }
-  }
+  "command": "/absolute/path/to/sagasu/.venv/bin/sagasu",
+  "args": ["mcp", "--env-file", "/absolute/path/to/sagasu/.env"]
 }
 ```
 
-Each client's config location and support for `cwd` vary. Alternatively use the absolute `.venv/bin/sagasu` executable with `args = ["mcp", "--env-file", "/absolute/path/to/.env"]`; that works independently of the client's working directory. Keep credentials out of MCP arguments and committed config files. Existing environment variables override values in the selected `.env`.
+Your client controls its configuration file format and server lifecycle. Sagasu
+requires no client extension, harness SDK, provider API or custom bridge. The
+server uses the official Python MCP SDK with standard tools, resources, prompts
+and capability negotiation. It supports both current and legacy protocol
+connections through the SDK. Human-mode confirmation requires standard MCP form
+elicitation; agent mode does not.
 
-OpenAI's [official MCP setup documentation](https://learn.chatgpt.com/docs/extend/mcp) describes shared Codex configuration and stdio transport support. This change supplies an example; it does not change your global client configuration.
+Use an absolute executable and environment-file path so launching from another
+working directory works. Keep credentials in private host configuration. Allow
+at least 30 seconds for startup and 60 seconds per tool call; `wait_operation`
+returns within 30 seconds even while the underlying browser operation continues.
+Standard output carries only MCP messages; diagnostics go to standard error.
 
-## Keep Telegram available
+## Query to action
 
-Add `--telegram` to the MCP command arguments to run Telegram polling and MCP inside **one process**. Both use the same backend and browser lock. Stop any existing `sagasu run` first. The profile lock rejects independent processes sharing the same profile, including `login` and `doctor --session`.
+Agent submission is the default (`SAGASU_MCP_CONFIRMATION=agent`). A request such
+as “Book any available SCIS1 GSR tomorrow 14:00–16:00 for project work with my
+saved co-booker Alex” authorizes the agent to search, prepare the exact review,
+optionally validate, submit and return the actual FBS status/reference and image.
+It asks for missing required details or ambiguous contacts. A search-only request
+does not authorize a booking. Submitting a booking accepts FBS's displayed
+acknowledgement/declaration.
 
-The combined bot lasts only as long as the MCP client keeps its server subprocess running. Closing the agent stops it. A standalone Telegram bot still runs with `sagasu run`; stop that process before starting MCP. Multiple clients launching separate MCP subprocesses cannot share the same live profile. A shared authenticated network service is outside this implementation.
+`SAGASU_MCP_CONFIRMATION=human` instead requires a client-rendered MCP confirmation
+form through `confirm_review`; `submit_review` is not exposed. Clients without
+form elicitation can search and validate in this mode but cannot submit. Restart
+the server after changing the mode. `server_status` reports the active policy,
+negotiated form capability, current Singapore time, pending reviews and operations.
 
-MCP-initiated MFA notifications are sent privately to the configured Telegram owner. They are separate from Telegram's editable control panel; they never contain the password. MCP operation status says to check Telegram without returning the challenge number.
+## Agent workflow
 
-## Tool flow
+1. Call `server_status`. Follow its `submission_tool`; all booking times are SGT.
+2. Use `search_options`, `get_search_preferences` and `list_cobookers` as needed.
+3. Call `search_rooms` and keep its `operation_id`.
+4. Use `wait_operation` (default 20 seconds, maximum 30). Reuse that ID until
+   terminal. Timeout or caller cancellation does not cancel the browser operation.
+5. On `awaiting_mfa`, call `authentication_status`. Relay the current Microsoft
+   prompt and matching number privately to the user, who approves on their phone.
+   Wait again afterward. Never request passwords or approve MFA on their behalf.
+6. On successful search, call `available_rooms` for rooms free for the **entire**
+   interval, ranked by free time and then room name. Follow `next_offset`.
+7. Prepare `booking_review` with the exact room, purpose and either a saved
+   `cobooker_id` or a full SMU `co_booker` email/unique saved name.
+8. Optionally call `validate_booking` and wait. It exercises the form without
+   final submission and leaves the review available.
+9. Call `submit_review` in agent mode, or `confirm_review` in human mode.
+10. Wait for the write, inspect its actual `fbs_status`, and call
+    `operation_receipt` if `receipt_available` is true.
 
-| Tool | Behavior |
-| --- | --- |
-| `server_status` | Version, confirmation requirements, notification availability, retained operation IDs; no FBS request. |
-| `login` | Start actual FBS session verification/renewal. |
-| `search_rooms` | Start a search. Omit `config` to use shared personal preferences, initially rolling two-hour SCIS1 GSR defaults. Explicit config is a complete one-off override using `DD-Mon-YYYY` and half-hour `HH:MM` times in SGT. |
-| `search_options` | List the same supported filter values, time choices, durations and capacity codes as Telegram. |
-| `list_cobookers`, `save_cobooker`, `delete_cobooker` | Read, add, edit or remove saved contacts shared with the configured Telegram owner. |
-| `get_search_preferences`, `set_search_preferences`, `reset_search_preferences` | Read, patch or reset shared search defaults without contacting FBS or submitting a booking. |
-| `list_bookings`, `list_tasks` | Read FBS account data. Tasks include observed `can_approve`/`can_view` capabilities; listing does not submit an action. |
-| `operation_status` | Poll progress without holding an MCP call open during scraping or MFA. |
-| `operation_result` | Read a result, with `offset` and `limit` (1–50, default 20) for room/booking/task rows. Preserve FBS `total`/`complete` coverage information. |
-| `booking_review` | Choose an exact free room from a successful search and purpose, plus either `cobooker_id` or `co_booker` (full SMU email or a unique saved name). Returns an immutable review lasting ten minutes. |
-| `cancellation_review` | Choose an exact cancellable booking reference from a successful My Bookings operation, and supply a reason. |
-| `task_approval_review` | Choose one uniquely listed, actionable task reference from a successful Task List operation. Prepare a review without approving. |
-| `task_details` | Open that task's read-only VIEW action and capture its reference-verified booking details as a background operation. |
-| `get_review`, `discard_review` | Inspect or discard an unsubmitted review. |
-| `validate_booking` | Exercise the complete booking form for a review without final submission. Leaves the review available. |
-| `confirm_review` | Request human confirmation through MCP form elicitation, then enqueue the approved action once. |
-| `cancel_operation` | Stop reads/validation or a queued operation. Refuses to interrupt a running write. |
-| `operation_receipt` | Return an operation's in-memory PNG, including task details and approval evidence. Inspect `receipt_kind` in the operation result. |
-| `booking_receipt` | Compatible screenshot retrieval alias; also accepts task operation IDs. |
+Cancellation: `list_bookings` → wait → `cancellation_review` → submission tool →
+wait. Task approval: `list_tasks` → wait → optional `task_details` →
+`task_approval_review` → submission tool → wait. Approval of your task does not
+prove the whole booking is confirmed; inspect the returned status.
 
-Example agent request: “Search SCIS1 group study rooms for the next two hours. Show me the available rooms, then prepare a booking for my chosen room and co-booker. Validate it before asking me to confirm.”
+The `sagasu://workflow` MCP resource contains these sequences and recovery rules.
+The `book_room` MCP prompt takes a `request` string and guides the agent through
+the workflow. Neither reading a resource nor expanding a prompt submits an action.
 
-Start a search/read and keep its `operation_id`. Poll at a reasonable interval (for example 2–5 seconds); on `succeeded`, read `operation_result` and follow `pagination.next_offset` as needed. For booking, use `booking_review` with that search ID, then optionally `validate_booking`, then `confirm_review`. Poll the resulting write operation and request `booking_receipt` if `receipt_available` is true. Cancellation follows the same pattern from `list_bookings` and `cancellation_review`. Backend submission always rechecks the exact room or reference.
+## Searches and saved preferences
 
-For task approval: `list_tasks` → poll/read results → optional `task_details` and `operation_receipt` → `task_approval_review` → `confirm_review` → poll/read the approval result → `operation_receipt`. The backend rechecks the exact task's reference, room, time, request type, requester, and status, clears other checkbox selections, verifies only the reviewed task is selected, and clicks Approve Selected once. It requires a positive task status or a positive FBS acknowledgement together with removal of that exact task; disappearance alone is not success. Ambiguous outcomes disable that review and require manual reconciliation in FBS Task List/the booking before retrying. Task rejection is not implemented.
+`search_rooms()` uses saved defaults, initially SCIS1 group study rooms on levels
+2–4 for two hours starting at the next strictly future half-hour. A rolling window
+that would cross midnight advances to midnight on the next day.
 
-Approval means **your task was approved**, not that every participant has confirmed the booking. The result reports `task_status` and `booking_status_verified: false`. Screenshots use `receipt_kind: booking_details` when the exact booking is accessible in My Bookings, or `approval_acknowledgement` for the captured Task List acknowledgement. Receipt failure preserves a verified approval. The live Approve Selected control was inspected, but pending-task row actions, acknowledgement wording, and a full live approval still need verification when a pending request is available; the automated tests use local browser fixtures.
-
-`confirm_review` does not accept a model-supplied `confirmed=true` argument. Its approval parameter is supplied by the MCP client's human confirmation form. Decline, cancel, false, expiry, or missing form support results in no submission. Clients without form elicitation can search, inspect, and validate; use Telegram to complete a write. Client-side tool approval alone does not replace the form. Never configure an elicitation callback that automatically approves writes.
-
-The server uses SDK resolvers so confirmation works with both legacy and current MCP protocol connections. The MCP client is trusted to present the question to the human and faithfully return their answer.
-
-## Saved co-bookers and shared search preferences
-
-Telegram and MCP use a private SQLite store, by default `personal.sqlite3` beside the Telegram state file. `SAGASU_PREFERENCES_PATH` overrides it; relative paths resolve against the selected `.env`. Both processes must use the same store path and `TELEGRAM_OWNER_ID` to share the owner's data. MCP without an owner uses a separate local profile; other Telegram users have separate profiles. The database is created with mode 0600 and contains names, email addresses, and preferences; keep it private alongside the other runtime state. `sagasu paths` reports its resolved path. No OpenAI credentials are needed for these tools.
-
-Existing valid saved contacts and search settings are imported once from the configured private Telegram persistence file. Standalone MCP imports only the configured owner, so it can use existing data before the next Telegram interaction. Telegram also migrates each user's legacy fields on their first interaction. Existing contact IDs are preserved when valid; duplicate emails are normalized. Later edits and deletions in the shared store take precedence, so stale Telegram state does not resurrect removed contacts or reset preferences. The legacy persistence file is retained for conversation state. Migration reads only that configured trusted local file, never a client-supplied path.
-
-Use `list_cobookers` to obtain stable IDs. `save_cobooker(name, email)` updates an existing contact with that normalized email, or creates one. Supply `cobooker_id` to edit its name/address explicitly. Names may repeat; an ambiguous name cannot be used to book, so choose an exact ID. Deleting a contact affects future selection and does not cancel any booking. Contacts are limited to 200 per user and list results paginate. Changes made through MCP appear when Telegram next renders its contacts/settings, and Telegram saves are immediately available through MCP.
-
-`set_search_preferences` patches only supplied fields; omitted fields remain unchanged, and explicit `null` removes an override. Supported fields mirror Telegram: `date_raw` (e.g. `03 November 2026`), `start_time`, `duration_hrs`, `room_capacity`, `buildings`, `floors`, `facility_types`, and `equipment`. Obtain exact codes and filter names from `search_options`. An empty filter list uses the same default behavior as Telegram. For example:
+Use `preferences` for a partial, **one-off** override without changing saved defaults:
 
 ```json
 {
   "preferences": {
-    "date_raw": null,
-    "start_time": null,
-    "duration_hrs": 3,
+    "date_raw": "2099-11-01",
+    "start_time": "14:00",
+    "duration_hrs": 2,
     "floors": ["Level 2", "Level 3"]
   }
 }
 ```
 
-This restores rolling dates/starts while saving a three-hour duration and preferred floors. `get_search_preferences` returns both saved overrides and the current effective SGT search window. Fixed dates/start times remain fixed and can expire; actual searches reject past starts. `reset_search_preferences` restores default search behavior and keeps contacts. Settings and contacts persist across restarts, while operation IDs/reviews/receipts still expire as described below. Preference tools can run without form elicitation; they do not submit FBS actions. Actual booking, cancellation and approval retain their explicit confirmation requirement.
+Replace the example with your actual future date. Omitted fields retain defaults;
+explicit `null` clears that saved override for this search. A complete `config`
+uses `date`, `start_time` and `end_time` with optional filters. Supply `config` OR
+`preferences`, never both. Dates accept ISO `YYYY-MM-DD`; original `DD-Mon-YYYY`
+(`config.date`) and `DD Month YYYY` (`preferences.date_raw`) also work. Times use
+half-hour `HH:MM` boundaries and must form a future same-day interval.
 
-Example agent request: “Save Lexuan as a co-booker using this SMU email. Remember SCIS1 floors 2 and 3 with a rolling three-hour window. Search using those settings, then prepare a booking with Lexuan for me to review.” Contact emails and search settings are copied into each prepared review; later personal-data changes do not silently alter an existing review.
+`set_search_preferences` persists only supplied fields; `reset_search_preferences`
+restores defaults and keeps contacts. Supported filters include buildings, floors,
+facility types, capacity and equipment; obtain exact values from `search_options`.
+`save_cobooker` upserts by normalized SMU email or updates an exact ID;
+`delete_cobooker` removes only that contact. Names can repeat, so use IDs when
+ambiguous. These tools modify local preferences, never FBS bookings. Reviews
+snapshot contact/search details and are not changed by later preference edits.
 
-## Outcomes, lifetime, and debugging
+## Operations, receipts and recovery
 
-Operations report `queued`, `running`, `awaiting_mfa`, `succeeded`, `failed`, `cancelled`, or `outcome_unknown`. A successful operation means the backend finished; inspect its actual `fbs_status`. A booking marked **Pending Confirmation** is still awaiting FBS confirmation. Cancellation may also return a pending outcome instead of a final cancellation.
+Jobs progress through `queued`, `running`, `awaiting_mfa`, `succeeded`, `failed`,
+`cancelled` or `outcome_unknown`. Status includes `terminal`, `next_tool` and
+`poll_after_ms`. `operation_result` paginates rooms/bookings/tasks (limit 1–50).
+Keep FBS's own `total`/`complete` fields when reporting partially read listings.
+`cancel_operation` stops queued jobs or running reads/validation; it refuses to
+interrupt running writes. `discard_review` abandons an unsubmitted review.
 
-An uncertain write is not retried. Inspect My Bookings by reference before preparing another attempt. Expired/missing IDs after restart do not prove a write failed. There is no durable write journal or automatic replay. The process tries to let active writes finish during shutdown, but an MCP client can force-kill its subprocess sooner; use My Bookings to reconcile any interrupted attempt.
+Repeated `submit_review` calls with the **same review ID** return the original
+operation while retained, including failed/uncertain outcomes. They do not submit
+again. Another review is a new action. Backend writes recheck exact rooms or
+references, enforce future starts, and verify FBS's actual result. **Pending
+Confirmation** and **Pending Cancellation** are not final confirmations.
 
-The server retains at most 32 operations and 32 reviews. Completed operations/receipts expire after an hour and older completed records can be evicted sooner when full. Reviews expire after ten minutes and are consumed before a write is queued. Images stay in memory and are limited to 4 MiB; a missing screenshot does not undo a verified booking. Save useful receipts in your client before disconnecting. Active jobs fill a bounded queue rather than growing memory without limit.
+An `outcome_unknown` or an interrupted write requires reconciliation in My
+Bookings/Task List before creating another review. Do not infer failure from a
+missing row or expired ID. No action is automatically replayed after restart.
+Reviews expire after ten minutes; up to 32 operations and 32 reviews are retained.
+Completed operations expire after one hour and may be evicted sooner at capacity.
 
-`agent.operation_started` links the public `agent_operation_id` to the existing logging `operation_id`; subsequent browser/login/calendar events share that trace. `agent.operation_failed` records the exception type without raw values. Use the [CLI logging guide](cli.md#output-and-logging), and run `sagasu doctor` for browser/network/configuration issues. Session checks require MCP/Telegram to release the profile first.
+Receipts are in-memory PNGs limited to 4 MiB. `operation_receipt` returns the image;
+`booking_receipt` remains an alias. Check `receipt_kind` for task details versus
+approval acknowledgement. Missing screenshots do not undo verified actions.
+Authentication prompts are also transient and cleared on completion/cancellation;
+ordinary operation statuses and logs do not include matching numbers.
 
-## ChatGPT web / private tunnels
+Private logs contain operation/step IDs, timings and sanitized exception types.
+Run `sagasu doctor` for setup problems; see [CLI logging](cli.md). Tests use fake
+backends/local browser fixtures and do not submit real bookings or approvals.
 
-ChatGPT web cannot directly launch this local stdio command. OpenAI's [Secure MCP Tunnel documentation](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) supports forwarding to a local stdio server using `tunnel-client`. That route needs a Platform tunnel, the appropriate workspace permissions, and a restricted runtime key, configured separately; none are provisioned by Sagasu.
-
-Use the absolute Sagasu MCP command above as the tunnel's local MCP command, and keep its host and tunnel client online. The tunnel has a 120-second request deadline, so Sagasu returns operation IDs for long scraping/MFA work instead of holding the tool call open. Verify that the ChatGPT client/tunnel supports form elicitation before attempting writes; otherwise finish those actions through Telegram. An end-to-end ChatGPT tunnel connection has not been tested here. MCP does not keep the browser running while its host is asleep or powered off.
-
-## Tests
+## Development checks
 
 ```sh
-python -m pip install -e '.[dev,mcp]'
+python -m pip install -e '.[dev]'
 python -m unittest discover -v
+pre-commit run --all-files
 ```
-
-Tests exercise a fake FBS backend, actual MCP client/server exchanges, and local Chromium DOM fixtures. They cover a subprocess stdio handshake, user confirmation/refusal, one-shot writes, pagination, MFA status, receipt image content, cancellation/approval safety, exact checkbox selection, wrong/stale acknowledgement handling, expiry, and queue bounds. Install Chromium before running the full suite. Tests never create/cancel/approve live FBS requests or send Telegram prompts.

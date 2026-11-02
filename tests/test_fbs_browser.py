@@ -6,7 +6,7 @@ from playwright.async_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from bot.fbs_client import FBSError, FBSClient, LayoutChanged, SearchConfig
+from sagasu.fbs_client import FBSError, FBSClient, LayoutChanged, SearchConfig
 
 
 class NavigationTest(unittest.IsolatedAsyncioTestCase):
@@ -115,7 +115,7 @@ class RoomSelectionTest(unittest.IsolatedAsyncioTestCase):
         frame = Mock()
         config = SearchConfig("01-Nov-2026", "10:00", "12:00")
         with patch(
-            "bot.fbs_calendar.read_complete_calendar", AsyncMock(return_value=[])
+            "sagasu.fbs_calendar.read_complete_calendar", AsyncMock(return_value=[])
         ) as reader:
             self.assertEqual(await client._read_availability(frame, ["A"], config), [])
         reader.assert_awaited_once_with(frame, ["A"], config)
@@ -175,7 +175,7 @@ class TargetedSearchTest(unittest.IsolatedAsyncioTestCase):
 
 class BrowserCleanupTest(unittest.IsolatedAsyncioTestCase):
     async def test_close_timeout_still_stops_driver_and_releases_lock(self):
-        import bot.fbs_client as module
+        import sagasu.fbs_client as module
 
         client = FBSClient(keep_alive=False)
         client.context = AsyncMock()

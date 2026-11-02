@@ -4,8 +4,8 @@ import json
 import logging
 import unittest
 
-from bot.console import Reporter, Redact, EventFormatter
-from bot.observability import ContextFilter, event, observed_operation, observed_step
+from sagasu.console import Reporter, Redact, EventFormatter
+from sagasu.observability import ContextFilter, event, observed_operation, observed_step
 
 
 class TraceTest(unittest.IsolatedAsyncioTestCase):
@@ -21,7 +21,7 @@ class TraceTest(unittest.IsolatedAsyncioTestCase):
         async def search(tag):
             await read(tag)
 
-        with self.assertLogs("bot.observability", level="INFO") as logs:
+        with self.assertLogs("sagasu.observability", level="INFO") as logs:
             await asyncio.gather(search("a"), search("b"))
         roots = [r for r in logs.records if r.event == "operation.started"]
         self.assertEqual(len({r.operation_id for r in roots}), 2)
@@ -44,7 +44,7 @@ class TraceTest(unittest.IsolatedAsyncioTestCase):
             except ValueError:
                 raise RuntimeError("secret redirect?session=private") from None
 
-        with self.assertLogs("bot.observability", level="INFO") as logs:
+        with self.assertLogs("sagasu.observability", level="INFO") as logs:
             with self.assertRaises(RuntimeError):
                 await broken()
         record = next(r for r in logs.records if r.event == "operation.failed")
@@ -60,7 +60,7 @@ class TraceTest(unittest.IsolatedAsyncioTestCase):
         async def cancelled():
             raise asyncio.CancelledError()
 
-        with self.assertLogs("bot.observability", level="INFO") as logs:
+        with self.assertLogs("sagasu.observability", level="INFO") as logs:
             with self.assertRaises(asyncio.CancelledError):
                 await cancelled()
             event("outside")
@@ -79,7 +79,7 @@ class TraceTest(unittest.IsolatedAsyncioTestCase):
             except RuntimeError:
                 return "verified"
 
-        with self.assertLogs("bot.observability", level="INFO") as logs:
+        with self.assertLogs("sagasu.observability", level="INFO") as logs:
             self.assertEqual(await recovered(), "verified")
         self.assertEqual(logs.records[-1].fields["outcome"], "completed_with_issues")
 

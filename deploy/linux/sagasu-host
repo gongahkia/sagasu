@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Use identical browser/state paths for the service and manual diagnostics.
+# Use identical browser/preferences paths for agents and manual diagnostics.
 set -euo pipefail
 
 if [[ $EUID -eq 0 ]]; then
@@ -14,7 +14,7 @@ export PLAYWRIGHT_BROWSERS_PATH=/var/lib/sagasu/browsers
 export SAGASU_HEADLESS=true
 export SAGASU_BROWSER_CHANNEL=chromium
 export SAGASU_BROWSER_PROFILE=/var/lib/sagasu/profile
-export SAGASU_STATE_PATH=/var/lib/sagasu/bot_state.pickle
+export SAGASU_PREFERENCES_PATH=/var/lib/sagasu/personal.sqlite3
 export SAGASU_AUTH_ARTIFACT_DIR=/var/lib/sagasu/auth
 export PYTHONUNBUFFERED=1
 cd /var/lib/sagasu

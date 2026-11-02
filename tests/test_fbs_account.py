@@ -2,9 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
-from bot import bot
-from bot.fbs_account import capture_booking_evidence, parse_tasks
-from bot.fbs_client import (
+from sagasu.fbs_account import capture_booking_evidence, parse_tasks
+from sagasu.fbs_client import (
     BookingRequest,
     FBSClient,
     LayoutChanged,
@@ -131,7 +130,9 @@ class EvidenceTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_opens_only_exact_reference_view_and_captures_details(self):
         client, listing, views, body = self.setup_evidence()
-        with patch("bot.fbs_account.open_account_tab", AsyncMock(return_value=listing)):
+        with patch(
+            "sagasu.fbs_account.open_account_tab", AsyncMock(return_value=listing)
+        ):
             self.assertEqual(
                 await capture_booking_evidence(client, "BK-TEST"), b"png-bytes"
             )
@@ -145,14 +146,18 @@ class EvidenceTest(unittest.IsolatedAsyncioTestCase):
         parent = Mock()
         parent.get_by_text.return_value.all = AsyncMock(return_value=[notice])
         client.page.frames.insert(0, parent)
-        with patch("bot.fbs_account.open_account_tab", AsyncMock(return_value=listing)):
+        with patch(
+            "sagasu.fbs_account.open_account_tab", AsyncMock(return_value=listing)
+        ):
             await capture_booking_evidence(client, "BK-TEST")
         notice.wait_for.assert_awaited_once_with(state="hidden", timeout=15000)
         body.screenshot.assert_awaited_once()
 
     async def test_wrong_details_reference_never_sends_a_receipt(self):
         client, listing, _, body = self.setup_evidence("BK-OTHER")
-        with patch("bot.fbs_account.open_account_tab", AsyncMock(return_value=listing)):
+        with patch(
+            "sagasu.fbs_account.open_account_tab", AsyncMock(return_value=listing)
+        ):
             with self.assertRaises(LayoutChanged):
                 await capture_booking_evidence(client, "BK-TEST")
         body.screenshot.assert_not_awaited()
@@ -187,9 +192,9 @@ class EvidenceTest(unittest.IsolatedAsyncioTestCase):
             return_value={"status": "verified", "reference_number": "BK-TEST"}
         )
         with (
-            patch("bot.fbs_client.require_future_booking"),
+            patch("sagasu.fbs_client.require_future_booking"),
             patch(
-                "bot.fbs_account.capture_booking_evidence",
+                "sagasu.fbs_account.capture_booking_evidence",
                 AsyncMock(side_effect=LayoutChanged("changed")),
             ),
         ):
@@ -198,70 +203,3 @@ class EvidenceTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn("receipt_error", result)
         self.assertNotIn("receipt_png", result)
         control.click.assert_awaited_once()
-
-
-class TelegramAccountTest(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
-        self.message = Mock(
-            chat=SimpleNamespace(type="private"), reply_text=AsyncMock()
-        )
-        self.status = Mock(edit_text=AsyncMock())
-        self.message.reply_text.return_value = self.status
-        self.context = SimpleNamespace(
-            bot=Mock(send_photo=AsyncMock(), send_document=AsyncMock()), user_data={}
-        )
-
-    async def test_receipt_is_sent_to_user_privately_and_falls_back_to_original_png(
-        self,
-    ):
-        self.context.bot.send_photo.side_effect = RuntimeError("too tall")
-        query = SimpleNamespace(from_user=SimpleNamespace(id=7), message=self.message)
-        await bot.send_booking_receipt(
-            query, self.context, {"reference_number": "BK-TEST", "receipt_png": b"png"}
-        )
-        self.assertEqual(self.context.bot.send_photo.await_args.kwargs["chat_id"], 7)
-        self.assertEqual(self.context.bot.send_document.await_args.kwargs["chat_id"], 7)
-        self.assertEqual(
-            self.context.bot.send_document.await_args.kwargs["document"], b"png"
-        )
-
-    async def test_delivery_failure_preserves_confirmed_message(self):
-        self.context.bot.send_photo.side_effect = RuntimeError()
-        self.context.bot.send_document.side_effect = RuntimeError()
-        query = SimpleNamespace(from_user=SimpleNamespace(id=7), message=self.message)
-        await bot.send_booking_receipt(
-            query, self.context, {"reference_number": "BK-TEST", "receipt_png": b"png"}
-        )
-        self.assertIn("booking is recorded", self.message.reply_text.await_args.args[0])
-
-    async def test_tasks_rejects_group_chat_without_accessing_fbs(self):
-        self.message.chat.type = "group"
-        with patch.object(bot, "check_task_list", AsyncMock()) as backend:
-            await bot.show_task_list(self.message, self.context)
-        backend.assert_not_awaited()
-
-    async def test_tasks_empty_success_and_backend_failure_are_distinct(self):
-        with patch.object(
-            bot,
-            "check_task_list",
-            AsyncMock(return_value=parse_tasks(task_snapshot([], 0))),
-        ):
-            await bot.show_task_list(self.message, self.context)
-        self.assertIn("Task List is empty", self.status.edit_text.await_args.args[0])
-        with patch.object(
-            bot, "check_task_list", AsyncMock(side_effect=LayoutChanged("unreadable"))
-        ):
-            await bot.show_task_list(self.message, self.context)
-        self.assertIn("Could not check", self.status.edit_text.await_args.args[0])
-
-    async def test_pending_tasks_show_request_and_status_with_partial_warning(self):
-        with patch.object(
-            bot,
-            "check_task_list",
-            AsyncMock(return_value=parse_tasks(task_snapshot(total=40))),
-        ):
-            await bot.show_task_list(self.message, self.context)
-        text = self.status.edit_text.await_args.args[0]
-        self.assertIn("Pending Approval", text)
-        self.assertIn("Booking Approval", text)
-        self.assertIn("Showing 1 of 40", text)

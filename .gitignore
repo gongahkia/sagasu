@@ -7,11 +7,9 @@ booking_log/*.json
 .env
 mvenv/
 .venv/
-bot/bot_state.pickle
-bot/personal.sqlite3*
-bot/.fbs-profile/
 artifacts/
 AGENTS.md
 *.egg-info/
 /build/
 /dist/
+.sagasu/

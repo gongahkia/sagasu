@@ -12,14 +12,14 @@ from dataclasses import asdict
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
-from bot.fbs_client import AuthenticationRequired, BookingOutcomeUnknown
-from bot.mcp_service import AgentError, AgentService, Backend
-from bot.fbs_tasks import TaskApprovalOutcomeUnknown
+from sagasu.fbs_client import AuthenticationRequired, BookingOutcomeUnknown
+from sagasu.mcp_service import AgentError, AgentService, Backend
+from sagasu.fbs_tasks import TaskApprovalOutcomeUnknown
 
 try:
     from mcp import Client, StdioServerParameters
     from mcp_types import ElicitResult
-    from bot.mcp_server import create_server, serve
+    from sagasu.mcp_server import create_server, serve
 except ImportError:
     Client = None
 
@@ -196,8 +196,8 @@ class ServiceTests(ServiceCase):
             self.service.result(job.id, -1)
 
     async def test_default_uses_rolling_bot_config(self):
-        with patch("bot.mcp_service.search_config_from_bot") as default:
-            from bot.fbs_client import SearchConfig
+        with patch("sagasu.mcp_service.search_config_from_preferences") as default:
+            from sagasu.fbs_client import SearchConfig
 
             default.return_value = SearchConfig.from_mapping(CONFIG)
             await self.finish(self.service.search())
@@ -327,21 +327,13 @@ class ServiceTests(ServiceCase):
     async def test_mfa_status_does_not_expose_number(self):
         self.backend.mfa = True
         self.backend.gate = asyncio.Event()
-        notify = AsyncMock()
-        self.service.notify = notify
         operation = self.service.start("login")
         await asyncio.sleep(0)
         job = self.service.get(operation["operation_id"])
         self.assertEqual(job.status, "awaiting_mfa")
         self.assertNotIn("88", json.dumps(job.public()))
-        notify.assert_awaited_once_with("Approve this sign-in using 88")
+        self.assertIn("88", self.service.authentication_status(job.id)["prompt"])
         await self.service.cancel(job.id)
-
-    async def test_missing_notifier_fails_safely(self):
-        self.backend.mfa = True
-        job = await self.finish(self.service.start("login"))
-        self.assertEqual(job.status, "failed")
-        self.assertEqual(job.error["code"], "AuthenticationRequired")
 
     async def test_reads_can_stop_but_active_writes_cannot(self):
         review = await self.review()
@@ -390,19 +382,19 @@ class ServiceTests(ServiceCase):
             self.service.start("tasks")
 
 
-@unittest.skipIf(Client is None, "Install .[mcp] for MCP protocol tests")
+@unittest.skipIf(Client is None, "Install Sagasu for MCP protocol tests")
 class ProtocolTests(ServiceCase):
     def enable_personal_data(self):
-        from bot.personal import PersonalStore
+        from sagasu.personal import PersonalStore
 
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.service.profile = PersonalStore(
-            Path(temporary.name) / "personal.sqlite3", "telegram:42"
+            Path(temporary.name) / "personal.sqlite3", "local"
         )
 
     async def test_personal_tools_roundtrip_and_persist_across_services(self):
-        from bot.personal import PersonalStore
+        from sagasu.personal import PersonalStore
 
         self.enable_personal_data()
         async with Client(create_server(self.service)) as client:
@@ -541,7 +533,7 @@ class ProtocolTests(ServiceCase):
             )
             self.assertTrue(tools["confirm_review"].annotations.destructive_hint)
             status = await self.call(client, "server_status")
-            self.assertFalse(status["mfa_notifications"])
+            self.assertEqual(status["authentication_prompts"], "authentication_status")
             result = await client.call_tool(
                 "search_rooms", {"config": {**CONFIG, "password": "do-not-accept"}}
             )
@@ -660,13 +652,10 @@ class ProtocolTests(ServiceCase):
             env = {
                 key: value
                 for key, value in os.environ.items()
-                if not key.startswith(("SAGASU_", "SMU_", "TELEGRAM_"))
-                and key != "BOT_TOKEN"
+                if not key.startswith(("SAGASU_", "SMU_"))
             }
             env.update(
                 SAGASU_BROWSER_PROFILE=str(path / "browser"),
-                BOT_TOKEN="",
-                TELEGRAM_OWNER_ID="",
                 SMU_LOGIN_PASSWORD="",
                 SMU_LOGIN_EMAIL="",
             )
@@ -674,7 +663,7 @@ class ProtocolTests(ServiceCase):
             env_file.write_text("")
             params = StdioServerParameters(
                 command=sys.executable,
-                args=["-m", "bot", "mcp", "--env-file", str(env_file)],
+                args=["-m", "sagasu", "mcp", "--env-file", str(env_file)],
                 env=env,
                 cwd=str(Path(__file__).resolve().parents[1]),
             )
@@ -682,14 +671,16 @@ class ProtocolTests(ServiceCase):
                 status = await self.call(client, "server_status")
                 self.assertEqual(status["transport"], "stdio")
                 self.assertEqual(status["operations"], [])
-                self.assertFalse(status["mfa_notifications"])
+                self.assertEqual(
+                    status["authentication_prompts"], "authentication_status"
+                )
 
 
-@unittest.skipIf(Client is None, "Install .[mcp] for MCP runtime tests")
+@unittest.skipIf(Client is None, "Install Sagasu for MCP runtime tests")
 class RuntimeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_combined_mode_owns_profile_and_closes_both_adapters(self):
-        from bot.config import Settings
-        from bot.runtime import AlreadyRunning, InstanceLock
+    async def test_runtime_closes_browser_and_jobs_when_protocol_fails(self):
+        from sagasu.config import Settings
+        from sagasu.runtime import InstanceLock
 
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -697,62 +688,34 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
         ):
             env = Path(directory) / ".env"
             env.write_text(
-                "BOT_TOKEN=123:abcdefghijklmnopqrstuvwx\nTELEGRAM_OWNER_ID=42\nSAGASU_BROWSER_PROFILE=browser\nSAGASU_STATE_PATH=state.pickle\n"
+                "SAGASU_BROWSER_PROFILE=browser\nSAGASU_PREFERENCES_PATH=personal.sqlite3\n"
             )
             settings = Settings.load(env)
-            app = Mock()
-            app.running = False
-            app.updater.running = False
-            app.__aenter__ = AsyncMock(return_value=app)
-            app.__aexit__ = AsyncMock()
 
-            async def start():
-                app.running = True
+            def server_factory(service, *, lifespan, allow_agent_submission=False):
+                self.assertTrue(allow_agent_submission)
 
-            async def start_polling(**kwargs):
-                app.updater.running = True
-
-            async def stop():
-                app.running = False
-
-            async def stop_polling():
-                app.updater.running = False
-
-            app.start = AsyncMock(side_effect=start)
-            app.stop = AsyncMock(side_effect=stop)
-            app.updater.start_polling = AsyncMock(side_effect=start_polling)
-            app.updater.stop = AsyncMock(side_effect=stop_polling)
-
-            def server_factory(service, *, lifespan):
                 async def run():
                     async with lifespan(None):
-                        self.assertTrue(app.running)
-                        self.assertIsNotNone(service.notify)
-                        with self.assertRaises(AlreadyRunning):
-                            with InstanceLock(settings.profile):
-                                pass
+                        raise RuntimeError("protocol disconnected")
 
-                return Mock(run_stdio_async=AsyncMock(side_effect=run))
+                return Mock(run_stdio_async=run)
 
             with (
-                patch("bot.mcp_server.create_server", side_effect=server_factory),
-                patch("bot.bot.build_application", return_value=app),
+                patch("sagasu.mcp_server.create_server", side_effect=server_factory),
                 patch(
-                    "bot.mcp_server.close_shared_browser", new_callable=AsyncMock
+                    "sagasu.mcp_server.close_shared_browser", new_callable=AsyncMock
                 ) as close,
             ):
-                await serve(settings, with_telegram=True)
+                with self.assertRaisesRegex(RuntimeError, "protocol disconnected"):
+                    await serve(settings)
                 close.assert_awaited_once()
-            app.start.assert_awaited_once()
-            app.stop.assert_awaited_once()
-            app.updater.stop.assert_awaited_once()
-            app.__aexit__.assert_awaited_once()
             with InstanceLock(settings.profile):
                 pass
 
     async def test_locked_profile_fails_before_starting_server(self):
-        from bot.config import Settings
-        from bot.runtime import AlreadyRunning, InstanceLock
+        from sagasu.config import Settings
+        from sagasu.runtime import AlreadyRunning, InstanceLock
 
         with (
             tempfile.TemporaryDirectory() as directory,
@@ -764,7 +727,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             server = Mock(run_stdio_async=AsyncMock())
             with (
                 InstanceLock(settings.profile),
-                patch("bot.mcp_server.create_server", return_value=server),
+                patch("sagasu.mcp_server.create_server", return_value=server),
             ):
                 with self.assertRaises(AlreadyRunning):
                     await serve(settings)
@@ -775,7 +738,7 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
     async def test_validate_and_book_explicitly_select_submit_flag(self):
         execute = AsyncMock(return_value={"status": "ok"})
         backend = Backend()
-        with patch("bot.mcp_service.execute_booking", execute):
+        with patch("sagasu.mcp_service.execute_booking", execute):
             await backend.run("validate", "request", None, None)
             self.assertFalse(execute.await_args.kwargs["submit"])
             await backend.run("book", "request", None, None)

@@ -7,13 +7,13 @@ config:
 	python3 -m playwright install chromium
 
 start:
-	python3 -m bot run
+	python3 -m sagasu mcp
 
 doctor:
-	python3 -m bot doctor
+	python3 -m sagasu doctor
 
 login:
-	python3 -m bot login
+	python3 -m sagasu login
 
 test:
 	python3 -m unittest discover -v

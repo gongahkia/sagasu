@@ -1,7 +1,7 @@
 import unittest
 
-from bot.fbs_client import LayoutChanged, SearchConfig
-from bot.fbs_calendar import calendar_rooms
+from sagasu.fbs_client import LayoutChanged, SearchConfig
+from sagasu.fbs_calendar import calendar_rooms
 
 
 class CalendarCoverageTest(unittest.TestCase):

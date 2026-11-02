@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
-from bot.fbs_client import (
+from sagasu.fbs_client import (
     BookingRequest,
     BookingUnavailable,
     BookingOutcomeUnknown,
@@ -146,7 +146,7 @@ class CalendarDragTest(unittest.IsolatedAsyncioTestCase):
 
 
 class ValidationBoundaryTest(unittest.IsolatedAsyncioTestCase):
-    @patch("bot.fbs_client.require_future_booking")
+    @patch("sagasu.fbs_client.require_future_booking")
     async def test_validate_only_never_clicks_final_confirmation(self, future):
         client = FBSClient()
         client._wait_for_idle = AsyncMock()
@@ -246,11 +246,11 @@ class ExpiredBookingTest(unittest.IsolatedAsyncioTestCase):
             "Meeting",
             "friend@smu.edu.sg",
         )
-        with patch("bot.fbs_client.datetime", wraps=datetime) as clock:
+        with patch("sagasu.fbs_client.datetime", wraps=datetime) as clock:
             clock.now.return_value = datetime(2026, 11, 1, 5, tzinfo=timezone.utc)
             for submit in (False, True):
                 with self.subTest(submit=submit):
-                    with patch("bot.fbs_client.FBSClient") as browser:
+                    with patch("sagasu.fbs_client.FBSClient") as browser:
                         with self.assertRaises(BookingUnavailable):
                             await execute_booking(request, submit=submit)
                         browser.assert_not_called()

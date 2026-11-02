@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Install into an existing Ubuntu VM. Does not provision cloud resources or start polling.
+# Install into an existing Ubuntu VM. Does not provision cloud resources or start an agent runtime.
 set -euo pipefail
 
 if [[ ${1:-} == --help ]]; then
     printf '%s\n' \
         'Usage: sudo bash deploy/linux/install.sh' \
         'Target: Ubuntu 24.04 on ARM64 or x86-64.' \
-        'Installs Sagasu, Chromium, sagasu-host and a stopped systemd service.' \
+        'Installs Sagasu, Chromium and the sagasu-host agent launcher.' \
         'Preserves /etc/sagasu/sagasu.env and all /var/lib/sagasu state.'
     exit 0
 fi
@@ -29,7 +29,6 @@ case $(uname -m) in
     aarch64|x86_64) ;;
     *) printf '%s\n' 'Unsupported CPU architecture.' >&2; exit 2 ;;
 esac
-command -v systemctl >/dev/null
 if systemctl is-active --quiet sagasu.service; then
     printf '%s\n' 'Stop Sagasu before updating: sudo systemctl stop sagasu' >&2
     exit 2
@@ -59,12 +58,9 @@ if [[ ! -e /etc/sagasu/sagasu.env ]]; then
 fi
 install -o root -g root -m 0755 \
     "$SAGASU_INSTALL_SOURCE/deploy/linux/sagasu-host" /usr/local/bin/sagasu-host
-install -o root -g root -m 0644 \
-    "$SAGASU_INSTALL_SOURCE/deploy/linux/sagasu.service" /etc/systemd/system/sagasu.service
-systemctl daemon-reload
 printf '%s\n' \
-    'Installed. The service has not been started or enabled.' \
+    'Installed the private agent runtime. No service was started.' \
     'Next: sudoedit /etc/sagasu/sagasu.env' \
-    'Then: sudo sagasu-host doctor --timeout 30' \
-    'Stop any other bot using this token before starting the VM service.' \
-    'Start: sudo systemctl enable --now sagasu'
+    'Check: sudo sagasu-host doctor --timeout 30' \
+    'Login: sudo sagasu-host login' \
+    'MCP command for an agent running as sagasu: /usr/local/bin/sagasu-host mcp'

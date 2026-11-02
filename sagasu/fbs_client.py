@@ -2,7 +2,7 @@
 
 The client is intentionally single-user.  It stores browser session state in a
 local Playwright profile and supports optional privately configured credentials
-and owner-approved MFA renewal.  Booking submission is opt-in through ``submit=True`` only.
+and user-approved MFA renewal.  Booking submission is opt-in through ``submit=True`` only.
 """
 
 from __future__ import annotations
@@ -614,7 +614,7 @@ class FBSClient:
                 event("auth.state", state=state)
             if state_changed:
                 await self._capture_auth_state(state)
-                # Number matching is sent privately to the owner, never to a group/search message.
+                # Number matching goes only to the private agent authentication prompt.
                 await self.progress(
                     "Open Microsoft Authenticator to approve sign-in"
                     if state == "authenticator"
@@ -629,7 +629,7 @@ class FBSClient:
                     await self.auth_notify(prompt)
                 elif self.headless:
                     raise AuthenticationRequired(
-                        "Headless sign-in needs a private Telegram MFA notifier. Start sagasu run."
+                        "Headless sign-in needs an agent authentication prompt callback. Use sagasu mcp or sagasu login."
                     )
                 else:
                     await self.progress(prompt)
@@ -860,7 +860,7 @@ class FBSClient:
         ):
             return (
                 "manual",
-                "Microsoft requires an interactive verification step beyond Authenticator push approval. Complete it in an interactive browser; do not send passwords or verification codes to Telegram.",
+                "Microsoft requires an interactive verification step beyond Authenticator push approval. Complete it in an interactive browser; do not send passwords or verification codes in agent chat.",
             )
         if await self.page.locator(LOGIN_PASSWORD_SELECTOR).count():
             return "password", (
@@ -1728,8 +1728,8 @@ class FBSClient:
             await added_checkbox.check()
 
 
-def search_config_from_bot(config: dict) -> SearchConfig:
-    """Translate the Telegram bot's compact config into the live FBS contract."""
+def search_config_from_preferences(config: dict) -> SearchConfig:
+    """Translate saved agent search preferences into the live FBS contract."""
 
     now = datetime.now(FBS_TIMEZONE)
     duration = float(config.get("duration_hrs", 2))

@@ -1,6 +1,6 @@
 import unittest
 
-from bot.fbs_client import (
+from sagasu.fbs_client import (
     BookingRequest,
     RoomAvailability,
     SearchConfig,

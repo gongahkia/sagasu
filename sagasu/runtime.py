@@ -10,7 +10,7 @@ class AlreadyRunning(RuntimeError):
 
 class InstanceLock:
     def __init__(self, profile):
-        self.path = Path(profile) / ".sagasu-bot.lock"
+        self.path = Path(profile) / ".sagasu-sagasu.lock"
         self.stream = None
 
     def __enter__(self):
@@ -34,7 +34,7 @@ class InstanceLock:
             self.stream.close()
             self.stream = None
             raise AlreadyRunning(
-                "Another Sagasu process is using this browser profile. Stop it before starting run, mcp, login, or a session check. Use mcp --telegram to share one browser in one process."
+                "Another Sagasu process is using this browser profile. Stop it before starting mcp, login, or a session check. Close the other client first."
             ) from None
         return self
 

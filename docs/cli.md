@@ -1,173 +1,112 @@
 # Sagasu CLI
 
-Sagasu runs a personal Telegram bot and an optional MCP server for coding agents. The CLI handles setup, diagnostics, Microsoft login, and runtime management. Booking requires explicit confirmation in Telegram or a supported MCP client's user confirmation form. See [MCP setup](mcp.md) for agent connections.
-
-## Install and start
-
-From the repository root:
+Sagasu is an agent-first SMU room assistant. The CLI handles private
+configuration, diagnostics, Microsoft login and MCP client setup. Python 3.11+
+is required. The main install includes the official MCP SDK.
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python -m pip install -e .
 python -m playwright install chromium
-sagasu --help
-```
-
-The editable install adds `sagasu` to the active environment. `python -m bot` and `.venv/bin/python -m bot` provide the same interface without relying on shell activation. Python 3.11+ is required. There is no Rust build or Node dependency.
-
-```sh
 sagasu config init
-# Edit .env privately: set BOT_TOKEN and your numeric TELEGRAM_OWNER_ID.
-sagasu doctor
-sagasu run
+sagasu doctor --timeout 30
+sagasu login
 ```
 
-`config init` creates a template with mode 0600 and refuses to overwrite an existing file. Existing `.env` files are preserved. The default browser channel for the CLI is Chromium; pass `--browser chrome` for an installed Google Chrome channel. Playwright's branded Chrome installer does not support Fedora; bundled Chromium may use a fallback Linux build and still needs the host libraries required by that build.
-
-`python -m bot.bot` and `python bot/bot.py` still start the bot when run without arguments. They also accept CLI commands/help. `make start`, `make doctor`, `make login`, and `make test` work from an activated environment. On startup, the bot checks token syntax and reports rejected tokens without showing the token or a raw traceback. It verifies Telegram connectivity before reporting that it is connected.
+Complete SMU sign-in/MFA in the private browser, then connect an agent using the
+[MCP guide](mcp.md). The client launches `sagasu mcp`. There is no background chat
+service. `python -m sagasu` is equivalent to the installed `sagasu` command.
 
 ## Commands
 
 | Command | Behavior |
 | --- | --- |
-| `sagasu run` | Start Telegram polling; Ctrl+C stops the bot and closes its shared browser. |
-| `sagasu mcp` | Serve a private stdio MCP connection. Install `.[mcp]` first; the agent launches this command. |
-| `sagasu mcp --telegram` | Also run Telegram polling in the same process, sharing the browser/profile safely. |
-| `sagasu doctor` | Check Python/dependencies, config, writable data paths, isolated browser startup, FBS/Telegram HTTPS reachability, and Telegram token acceptance. Sends no Telegram messages. |
-| `sagasu doctor --offline` | Check local setup/browser startup; skip service requests and token verification. |
-| `sagasu doctor --session` | Also check the actual saved FBS session with the bot stopped. No manual login or credential submission. |
-| `sagasu doctor --json` | Structured report on stdout, exit 1 if a health check fails. |
-| `sagasu login` | Open the bot's own profile and use configured credentials (or manual entry) and wait for MFA approval, then save the authenticated session. Does not require a Telegram token. |
-| `sagasu config init` | Create a private configuration template without overwriting anything. |
-| `sagasu config show --json` | Inspect configuration with token and owner ID redacted. |
-| `sagasu paths` | Show environment-file, browser-profile, Telegram state and personal-preferences paths. |
-| `sagasu --version` | Show the installed Sagasu version. |
+| `mcp` | Serve a private stdio MCP session. The client launches this process. |
+| `login` | Open the private browser, use optional configured autofill, wait for manual sign-in/MFA, and save the session. |
+| `doctor` | Check dependencies, configuration, storage, isolated browser startup and FBS HTTPS reachability. No booking/account writes. |
+| `doctor --offline` | Check local setup without network requests. |
+| `doctor --session` | Also verify the saved FBS session without submitting credentials. Stop MCP first. |
+| `doctor --json` | Structured report; exit 1 if checks fail. |
+| `config init` | Create a private `.env` with mode 0600; never overwrite an existing file. |
+| `config show --json` | Show resolved configuration without private credential values. |
+| `paths` | Show environment file, browser profile and preferences database paths. |
+| `--version` | Show installed version. |
 
-A successful network check establishes reachability, not authentication or calendar correctness. A syntactically valid token is not proof Telegram accepts it; online doctor checks acceptance separately. Doctor reports session validity only with `--session`. If FBS is unreachable, it skips opening your saved profile and reports that distinction. Offline mode cannot be combined with `--session`.
+`doctor --timeout 1..60` sets each probe deadline; browser startup/session checks
+are separate bounded operations. Login defaults to 600 seconds and accepts
+`--timeout 1..1800`. Offline mode and session verification cannot be combined.
+Reachability does not prove an authenticated session or calendar correctness.
 
-Default doctor probe timeout is 10 seconds; override with `--timeout 1..60`. Independent FBS and Telegram probes run concurrently. Browser startup and token/session checks are separate bounded operations, so the whole command may take longer than one probe timeout. Login defaults to 600 seconds, configurable with `login --timeout 1..1800`. An FBS outage is reported separately from an expired session; increasing MFA timeouts does not fix an unreachable site.
+## Private configuration
+
+A checkout defaults to `.env`, `.sagasu/browser`, `.sagasu/personal.sqlite3` and
+`artifacts/auth`. A wheel uses the user's application-state directory for private
+state and the current directory's `.env`. `sagasu paths` reports resolved locations.
+Relative configured paths resolve against the selected environment file.
+
+Precedence: explicit CLI browser override → exported environment variables →
+selected `.env` → defaults. Variable interpolation is disabled so passwords are
+read literally. Never source `.env` in a shell.
+
+| Setting | Purpose |
+| --- | --- |
+| `SAGASU_MCP_CONFIRMATION` | `agent` (default) submits reviewed actions on your request without another form; `human` requires an MCP client confirmation form. Restart the server after changing it. |
+| `SAGASU_BROWSER_CHANNEL` | `chromium` by default; supported installed Chrome/Edge channels are also accepted. |
+| `SAGASU_BROWSER_PROFILE` | Private browser profile path. |
+| `SAGASU_PREFERENCES_PATH` | Private SQLite contacts/search preferences path. |
+| `SAGASU_AUTH_TIMEOUT_MS` | Sign-in/MFA deadline, 1000–1800000 milliseconds. |
+| `SMU_LOGIN_EMAIL` | Optional Microsoft username autofill. |
+| `SMU_LOGIN_PASSWORD` | Optional private password autofill; requires an email. |
+| `SAGASU_HEADLESS` | `true` to run without a desktop. Saved sessions or configured credentials are needed. |
+| `SAGASU_STAY_SIGNED_IN` | Accept Microsoft's stay-signed-in prompt; defaults to true. |
+
+In MCP, authentication challenges are read using `authentication_status` for the
+awaiting operation. The agent relays the number/prompt; you approve Authenticator
+on your phone. No credential or verification-code input tool is exposed. For
+headless standalone login, prompts appear in the local terminal. Unsupported
+interactive verification methods still require a visible browser.
+
+Session-only cookies are privately saved/restored inside the profile, retaining
+original expiration. SMU can still expire/revoke them. Login, MCP and session
+checks share a kernel lock; close the active client before renewing standalone
+login. The lock file is intentionally retained; process exit releases ownership.
+Do not commit/upload browser profiles, preference databases or authentication
+artifacts.
 
 ## Output and logging
 
-Common options work before or after the command:
+Common options work before or after a command:
 
 ```sh
-sagasu --env-file /path/to/private.env doctor --browser chromium
-sagasu run --no-spinner --no-color
-sagasu run --verbose --log-file artifacts/sagasu.log
-sagasu run --verbose --log-format json --log-file artifacts/sagasu.jsonl
-sagasu doctor --timeout 5 --json > artifacts/doctor.json
+sagasu --env-file /private/sagasu.env doctor --browser chromium
+sagasu mcp --log-format json --log-file artifacts/sagasu.jsonl
+sagasu login --no-spinner --no-color
 ```
 
-- `--spinner dots|line|none` chooses the progress style. `--no-spinner` disables animation.
-- Animation is enabled only on a terminal, not in redirected output, CI, or `TERM=dumb`. Non-Unicode streams fall back to an ASCII spinner.
-- `--no-color` and the `NO_COLOR` environment variable disable colors.
-- `--quiet` prints only warnings/errors; structured JSON still prints.
-- `--verbose` enables redacted debug logs. Raw authentication tracebacks remain suppressed.
-- `--log-file PATH` enables rotating logs (1 MB, three backups). The current log is created with mode 0600. Tokens, Telegram token URLs and URL query strings are redacted.
-- Human progress/log output goes to stderr. Configuration values, paths, version/help and JSON reports go to stdout.
+Human progress and logs use stderr. JSON command results/configuration use stdout;
+MCP stdout carries only protocol messages. Spinners appear only in capable
+terminals. `--quiet` hides informational console output, `--verbose` adds redacted
+diagnostics, and `--log-file` enables private rotating logs (1 MB, three backups).
+`--log-format json` emits JSON Lines with timestamps, operation/step IDs and timing.
+`NO_COLOR` or `--no-color` disables colors.
 
-`--log-format text` (default) adds UTC timestamps, operation/step IDs and timings. `--log-format json` emits one JSON object per stderr/file line, with `schema_version: 1`; startup messages also use JSON and the banner/spinner are disabled. CLI command results still use stdout as before. Quiet mode hides informational console records but preserves them in an explicitly configured log file.
+Logs omit passwords, cookies, MFA numbers, booking purpose/co-booker data and
+screenshot contents. Exceptions record types and code locations without raw
+values, locals or browser tracebacks. Treat logs as private operational data.
+Submission verification does not imply a pending booking is already confirmed.
 
-Each search, booking, Task List check and cancellation has a task-local `operation_id`. Related browser, authentication, filter, calendar, form, submission, verification and receipt events keep that ID even across awaited calls. `step.started` pairs with `step.completed`, `step.failed` or `step.cancelled` using `step_id`; durations and total elapsed times are milliseconds. A start with no finish identifies an operation still waiting. `--verbose` adds filter-control counts and calendar extraction phases. Results include room/task counts and actual FBS statuses: submission verification does not mean a **Pending Confirmation** booking is already confirmed.
+Exit codes: 0 success/help, 1 health/runtime failure, 2 configuration/usage error,
+130 keyboard interruption. Let active writes finish before shutting down; inspect
+FBS after an uncertain or forcibly interrupted action rather than replaying it.
 
-Failures record exception types, cause/context types and file/function/line locations without exception values, locals, source lines or raw browser tracebacks. An operation whose handler recovers from a failed step ends with `outcome: completed_with_issues`; inspect its failed step or warning events. Cancellation uncertainty, selection retries and receipt delivery fallback have distinct events. Function arguments are never automatically recorded. Search window/room metadata is included, while passwords, tokens, cookies, email addresses, booking purpose, co-booker data, MFA numbers and screenshot contents are excluded or redacted. These private logs are still useful operational data: keep them out of public issue attachments unless reviewed.
+## Ubuntu host
 
-For example, use `jq 'select(.operation_id == "YOUR_ID")' artifacts/sagasu.jsonl` to isolate one request. Filter failures with `jq 'select(.event == "step.failed" or .event == "operation.failed" or .event == "cancellation.outcome_unknown")' artifacts/sagasu.jsonl`. The same IDs appear in timestamped text logs.
-
-Exit codes: 0 success/help, 1 runtime or doctor failure, 2 configuration/usage error, 130 keyboard cancellation. `run_polling` handles normal Ctrl+C shutdown itself and may return success after a clean stop. Closing active browser operations is part of shutdown; let the bot finish shutting down before restarting it.
-
-## Configuration and private state
-
-In a checkout, `.env`, `bot/.fbs-profile`, `bot/bot_state.pickle`, and `bot/personal.sqlite3` are the defaults. When installed as a wheel outside a checkout, state uses the user's application-state directory and the default environment file is `.env` in the current directory. `sagasu paths` reports the resolved locations.
-
-Precedence: explicit CLI browser override, then exported environment variables, then the selected environment file, then defaults. Relative profile/state paths are resolved against that environment file's directory. `--env-file` selects an explicit file regardless of working directory. Variable interpolation in `.env` is disabled so credential values are treated literally.
-
-Relevant settings:
-
-- `BOT_TOKEN`: BotFather token; required for run, not for login or configuration commands.
-- `TELEGRAM_OWNER_ID`: your positive numeric Telegram user ID. If unset, the bot accepts other users; doctor/startup warn about this.
-- `SAGASU_BROWSER_CHANNEL`: defaults to `chromium` for CLI commands.
-- `SAGASU_BROWSER_PROFILE`: private browser profile override.
-- `SAGASU_STATE_PATH`: private Telegram persistence-file override.
-- `SAGASU_PREFERENCES_PATH`: shared private contacts/search-settings database; defaults to `personal.sqlite3` beside the Telegram state file.
-- `SAGASU_AUTH_TIMEOUT_MS`: interactive authentication timeout, 1000–1800000 ms.
-- `SMU_LOGIN_EMAIL`: optional username prefill.
-- `SMU_LOGIN_PASSWORD`: optional password autofill, read from private configuration; requires an email and owner ID. Omit it to type the password yourself.
-- `SAGASU_HEADLESS=true`: run Chromium without a desktop. Saved sessions and automatic credentials work in this mode; `doctor --session` still never submits credentials.
-
-Session-only cookies are atomically saved as `.sagasu-session.json` inside the browser profile with mode 0600, then restored before FBS navigation. Original expiration values are preserved; SMU can still expire/revoke the session and require MFA. Browser profile and Telegram state contain private data and must not be committed or uploaded. `login`, `run`, and session checks take the same kernel lock to prevent concurrent profile use. Stop the bot before renewing login or running `doctor --session`. The persistent lock file is intentionally not deleted; the operating system releases ownership when the process exits.
-
-The CLI does not reuse the removed public scraper's profile. If you encounter FBS/Microsoft login after migration, complete it in the bot's own Chrome window.
-
-## Booking in Telegram
-
-The private chat uses one persistent control message. Menus, questions, progress, MFA prompts, validation results and errors update that message. **Back** returns to the relevant previous screen; **Home** returns to the main menu. Room results show eight rooms per page; My Bookings and Task List show four items per page. Handled private commands and text answers are removed where Telegram permits. Existing chat history from older versions is not removed automatically; clear it manually once if desired.
-
-Successful bookings and verified cancellations use one separate receipt message. A new screenshot replaces the previous receipt, keeping one control message and one current receipt. Their message IDs survive normal bot restarts. Deleted messages are recreated when needed. Navigating away stops a pending search or other read operation; late progress and stale buttons cannot overwrite the current screen. Final booking and cancellation actions must finish before navigation resumes.
-
-Send `/start` and choose **Find available rooms** (use **Search settings** or `/config` first to adjust the date/time). Open a room and tap **Book this room →**, or choose **Auto-pick best room**.
-
-The default search lasts two hours and starts at the next strictly future half-hour in Singapore time: at 13:24 it searches 13:30–15:30; at 13:30 it searches 14:00–16:00. Defaults are resolved again for each search rather than saved as a fixed time. `/config` and `/status` show the current resolved window. Explicit date, time and duration choices are preserved; choose **Rolling date** / **Next half-hour (rolling)** in their pickers or **Reset to defaults** to restore automatic timing. Start-time choices include every half-hour. Since the current FBS search covers one date, a rolling window that would cross midnight advances to 00:00 on the following date instead of shortening the duration.
-
-Past starts are rejected before scraping, opening room details or asking booking questions. Settings display a warning immediately for a manually selected past start. The bot rechecks after long searches and during questions so a window that expires while you are using the bot cannot produce a new booking review. It clears expired results and drafts while retaining saved co-bookers.
-
-Sagasu asks for the booking purpose, then the co-booker. Pick a saved name or send a full SMU email address. New co-bookers can be used once or saved with a name for future bookings. `/cobookers` also lets you add/remove saved people independently of a booking. Saved contacts belong to your Telegram user and survive bot restarts in the private shared preferences database; `/logout` keeps them. Existing valid contacts and search settings migrate once from Telegram state. The configured owner shares them with MCP; other Telegram users remain isolated. A deleted contact stays deleted even if the legacy state still contains an older copy.
-
-`/config` reads/writes the same search defaults used by MCP's default searches: date/start, duration, capacity, buildings, floors, facility types, and equipment. MCP changes appear when a menu is next rendered; no unsolicited messages are sent. Reset clears only search preferences and keeps contacts. The shared SQLite database uses transactional writes and mode 0600. See [MCP personal-data tools](mcp.md#saved-co-bookers-and-shared-search-preferences) for agent-side contact editing, exact contact IDs and preference patching. Changing preferences or a contact does not alter an already prepared booking review.
-
-Review the exact room, date, time, purpose and co-booker. **Validate only** checks the FBS form without submitting and keeps the review's confirmation buttons available. **Confirm & book** performs the actual booking and accepts the displayed FBS acknowledgement/declaration. A review expires after 10 minutes. Questions expire after 15 minutes of inactivity; `/cancel` ends questions and discards pending reviews while keeping saved contacts. Back buttons let you change answers, including returning from review to edit the booking.
-
-Validation and booking use FBS’s specific-facility search, select the exact room, and read only that room’s calendar. Initial room discovery still uses your configured building/floor/type filters. A missing target never falls back to other rooms.
-
-The requested start must be in the future in Singapore time (SGT), even when the room is empty and the end time has not passed. Sagasu checks before opening the browser, after the availability search, and before final confirmation. If the start has passed, choose a later time in `/config` and search again. FBS policy rejections are reported directly and are not retried as lost calendar selections.
-
-After submission is verified in My Bookings, Sagasu opens **VIEW** for that exact reference and sends a screenshot of the booking details to the requesting user's private Telegram chat. The caption includes the reference, room, time and FBS status. The image is held in memory, with no receipt files added to Telegram persistence or the repository. If Telegram cannot accept it as a photo, Sagasu tries the original PNG as a document. Screenshot or delivery failure keeps the booking marked as verified and explains how to find the reference in FBS; it never triggers another booking. **Validate only** does not create or send a receipt.
-
-Use `/tasks` (alias `/tasklist`) or **FBS Task List** in `/start` to check for requests awaiting your action. This feature is available in private chats and uses the same session/MFA flow as searches. It lists each task's reference, facility, dates/times, request type, requester and status. If FBS paginates the list, the response states how many items were read and directs you to FBS for the remainder. An unreadable or failed check is reported as a failure, never as an empty list.
-
-Where FBS exposes the controls, **Details** opens the exact task's booking details and sends a screenshot without approval. **Review approval** opens a five-minute review with **Confirm task approval** and **Back to tasks**. Only confirmation submits approval; the backend rechecks the task and selects exactly one checkbox before using Approve Selected. Changed, duplicate, or ambiguous tasks stop before submission. An uncertain result disables the review and directs you to FBS; it is never automatically retried. Rejection remains in FBS.
-
-Verified approval updates the existing control message and replaces the receipt screenshot. The receipt shows the booking details when accessible, otherwise FBS's approval acknowledgement; the caption distinguishes them. An approved task does not guarantee the entire booking is confirmed. Screenshot failure does not undo approval. The pending-task flow is covered by local Chromium fixtures; a full live approval check is still required when a pending task is available.
-
-Use `/bookings` (alias `/cancelbooking`) or **My bookings** in `/start` to read existing bookings in a private chat. Cancellation buttons appear only for rows where FBS exposes its CANCEL action. Select one to review its reference, facility, time, status and cancellation reason, then choose **Confirm cancellation** or **Keep booking**. **Back** and **Keep booking** return to the same listing page without submitting cancellation. Reviews expire after five minutes and are single-use; `/cancel` discards pending cancellation reviews and `/logout` clears management state. The displayed reason is “Cancelled by booker via Sagasu” when FBS requests a reason.
-
-Before acting, Sagasu reloads My Bookings and requires the same exact reference, room, date/time, status and cancellation permission. Changed or inaccessible rows require a fresh review. After clicking CANCEL once, it handles a supported booking-cancellation confirmation, then requires that reference's FBS status to become **Cancelled**; **Pending Cancellation** is reported as pending. Missing rows and lost responses never count as proof of cancellation. An uncertain outcome disables the review and asks you to check FBS, without retrying the cancellation. An unrecognized confirmation form stops safely and requires inspection in FBS. If FBS paginates My Bookings, the list states its coverage and directs you to FBS for unlisted entries.
-
-Once cancellation is verified, Sagasu opens that exact reference's details and captures its cancellation receipt. Capture or delivery failures keep the cancellation result and reference visible in the control message; they never trigger another cancellation. Pending cancellations do not produce a success receipt.
-
-Availability uses the calendar’s full dates as well as its clock labels: an unavailable period from midnight to the following midnight stays blocked. Booking selection interpolates half-hour boundaries within FBS’s hourly headers and scrolls the target into view. Sagasu verifies FBS retained the exact selection before clicking Make Booking and retries a lost selection once. Validation checks the selected room and full start/end datetimes on the FBS booking form. If final confirmation is attempted but cannot be verified in My Bookings, Sagasu disables that review and asks you to check FBS before retrying.
-
-`/book` starts the questions for your selected room. The old `/book purpose | email` shortcut remains supported. Room/time details are captured when the questions start, and old question buttons cannot modify a new setup. Favorite selection uses stable contact IDs, so removing one contact does not make an old button choose someone else. If a co-booker shares the same email as an existing saved person, saving updates that person's name instead of creating a duplicate.
-
-## Remote sign-in with phone approval
-
-Configure these on the host running Sagasu, using a private `.env` or the host's secret store:
-
-```dotenv
-BOT_TOKEN=your-bot-token
-TELEGRAM_OWNER_ID=your-numeric-id
-SMU_LOGIN_EMAIL=your.name@smu.edu.sg
-SMU_LOGIN_PASSWORD='your-private-password'
-SAGASU_BROWSER_CHANNEL=chromium
-SAGASU_HEADLESS=true
-```
-
-Keep `.env` readable only by your account (`chmod 600 .env` on Linux/macOS). Quote password values containing `#` or spaces; dotenv interpolation is disabled. Passwords are excluded from config output and redacted from logs. Sagasu disables Chrome password saving and automatic password-manager sign-in in its private profile before launch. Never send passwords or one-time verification codes to Telegram. Browser profiles and saved sessions are also private credentials.
-
-Start the bot with `sagasu run`. Open its **private Telegram chat** and send `/start` before searching; Telegram must allow the bot to message you. When FBS needs renewal, Sagasu fills credentials only on supported HTTPS Microsoft sign-in origins, chooses password sign-in when offered, and selects Microsoft Authenticator push approval. The owner's private control message displays Microsoft's [matching number](https://learn.microsoft.com/en-us/entra/identity/authentication/how-to-mfa-number-match). Open Authenticator and approve the sign-in you just initiated. Search or booking validation continues after Microsoft returns to FBS. Numbers that appear late or change update the same message; identical prompts are shown once per login attempt. Matching numbers are excluded from persisted screen text and logs.
-
-`sagasu login` can also use this flow when a valid bot token and owner ID are configured; this standalone CLI command sends its own private MFA notification rather than using the running bot's control message. Stop a running bot first because both commands lock the same profile. Without headless mode or configured credentials, the browser still allows manual login. `doctor` never sends MFA notifications or enters credentials.
-
-Headless login ignores Microsoft's hidden autofill fields and uses its supplied alternate-method continuation to leave a device-passkey prompt. Both the current Microsoft sign-in page and the older page format are supported. Continuations must stay on a supported HTTPS Microsoft origin; repeated redirects stop the attempt.
-
-To check login and session reuse without a desktop, stop the running bot, run `SAGASU_HEADLESS=true sagasu login --browser chromium`, approve the Telegram prompt in Authenticator, then run `SAGASU_HEADLESS=true sagasu doctor --session --browser chromium --timeout 60`. The second command opens a new browser without submitting credentials or requesting MFA, so a pass verifies saved-session reuse. These commands do not book rooms.
-
-The host needs Python, Playwright's Chromium and its operating-system libraries, network access to FBS/Microsoft/Telegram, and persistent storage for the browser profile. Only one Sagasu instance should use the profile and bot token. A desktop is unnecessary for an Authenticator push flow; a CAPTCHA, forced password change, unsupported verification method, or SMU policy requiring a managed device can still require interactive access. Password rejection/denial stops the attempt; Sagasu does not repeatedly submit passwords or automatically resend MFA pushes. If Microsoft redirects back to an empty email screen, Sagasu restores the email once. A repeated reset or a new password challenge after submission stops with a private diagnostic instead of waiting indefinitely. Authentication waits for `SAGASU_AUTH_TIMEOUT_MS` (10 minutes by default), then reports failure; start a new search when ready.
-
-The supplied Unicode banner appears on interactive `run` startup. Quiet mode and redirected output omit it; narrow or non-Unicode terminals show `SAGASU`.
-
-## Rattles attribution
-
-The small Python port in `bot/_vendor/rattles.py` uses the frame/timing model and selected presets from [vyfor/rattles](https://github.com/vyfor/rattles), pinned to revision `6eabf671ee86ddd773f458b9c25ef9d3f00ae53b`. It is a subset, not a full Rust binding. The preset origins include [sindresorhus/cli-spinners](https://github.com/sindresorhus/cli-spinners). Both MIT license notices are included under `bot/_vendor/licenses` and in built wheels.
+`deploy/linux/install.sh` installs a private runtime, Chromium and the
+`sagasu-host` wrapper on Ubuntu 24.04. It creates no daemon or public listener.
+An agent on that host launches `/usr/local/bin/sagasu-host mcp` as the `sagasu`
+service account. Configure `/etc/sagasu/sagasu.env` privately; browser/preferences
+live in `/var/lib/sagasu`. `sudo sagasu-host doctor` and `sudo sagasu-host login`
+use the same paths. Headless MFA prompts come through the connected agent or the
+standalone login terminal. The installer does not grant agents sudo access or
+provision a remote MCP transport.

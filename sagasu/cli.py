@@ -1,4 +1,4 @@
-"""Sagasu's command-line interface and optional, human-confirmed MCP server."""
+"""Sagasu's command-line interface and agent-first MCP runtime."""
 
 import argparse
 import asyncio
@@ -15,7 +15,6 @@ from .config import (
     DEFAULT_ENV,
     Settings,
     TEMPLATE,
-    TOKEN_PATTERN,
 )
 from .console import Reporter, configure_logging
 from .runtime import AlreadyRunning, InstanceLock
@@ -95,35 +94,18 @@ def parser():
     )
     result = argparse.ArgumentParser(
         prog="sagasu",
-        description="Personal Telegram assistant for SMU room searches and confirmed bookings.",
-        epilog="Start with: sagasu doctor --browser chromium. Bookings require confirmation through Telegram or an MCP client's user prompt.",
+        description="Agent assistant for SMU room searches, bookings and account management.",
+        epilog="Start with: sagasu doctor, then sagasu login. Your agent launches sagasu mcp.",
         parents=[common],
     )
     result.add_argument("--version", action="version", version=f"sagasu {__version__}")
     commands = result.add_subparsers(dest="command", metavar="COMMAND")
     commands.add_parser(
-        "run", help="Run the Telegram bot until Ctrl+C", parents=[common]
+        "mcp", help="Serve the local agent MCP connection over stdio", parents=[common]
     )
-    mcp = commands.add_parser(
-        "mcp",
-        help="Serve a private local MCP connection over stdio (install .[mcp])",
-        parents=[common],
-    )
-    mcp.add_argument(
-        "--telegram",
-        action="store_true",
-        help="Also run Telegram polling in this process, sharing the browser safely",
-    )
-    mcp_config = commands.add_parser(
-        "mcp-config",
-        help="Print secret-free Codex/Pi/generic client configuration; does not edit client files",
-        parents=[common],
-    )
-    mcp_config.add_argument("--client", choices=("codex", "pi", "generic"), required=True)
-    mcp_config.add_argument("--telegram", action="store_true")
     login = commands.add_parser(
         "login",
-        help="Sign in to FBS/MFA using the bot's private browser profile",
+        help="Sign in to FBS/MFA using the private browser profile",
         parents=[common],
     )
     login.add_argument(
@@ -140,12 +122,12 @@ def parser():
     doctor.add_argument(
         "--offline",
         action="store_true",
-        help="Skip FBS/Telegram requests and token verification",
+        help="Skip FBS network requests",
     )
     doctor.add_argument(
         "--session",
         action="store_true",
-        help="Check the saved FBS session (stop the bot first; no manual login)",
+        help="Check the saved FBS session (stop the MCP server first; no manual login)",
     )
     doctor.add_argument(
         "--timeout",
@@ -166,7 +148,7 @@ def parser():
     paths.add_argument("--json", action="store_true")
     config = commands.add_parser(
         "config",
-        help="Create or inspect configuration without exposing tokens",
+        help="Create or inspect configuration without exposing credentials",
         parents=[common],
     )
     actions = config.add_subparsers(dest="config_action", required=True)
@@ -192,13 +174,10 @@ def print_values(values, as_json=False):
 
 async def login(settings, reporter, timeout):
     from .fbs_client import FBSClient
-    from .auth import owner_auth_notifier
-    from contextlib import AsyncExitStack
-    from telegram import Bot
 
     with InstanceLock(settings.profile):
         reporter.write(
-            "Using configured SMU credentials when available. Approve Microsoft MFA when prompted; never send your password to the bot."
+            "Complete Microsoft sign-in and MFA. Credentials remain in your private host configuration."
         )
         with reporter.progress("Opening private FBS login") as progress:
 
@@ -210,29 +189,12 @@ async def login(settings, reporter, timeout):
             os.environ["SAGASU_AUTH_TIMEOUT_MS"] = str(timeout * 1000)
             try:
                 async with asyncio.timeout(timeout):
-                    async with AsyncExitStack() as stack:
-                        notify = None
-                        if (
-                            TOKEN_PATTERN.fullmatch(settings.token)
-                            and settings.owner_id
-                        ):
-                            settings.validate()
-                            telegram = await stack.enter_async_context(
-                                Bot(settings.token)
-                            )
-                            notify = owner_auth_notifier(telegram)
-                        if settings.public()["headless"] and notify is None:
-                            raise ConfigError(
-                                "Headless login requires a valid BOT_TOKEN and TELEGRAM_OWNER_ID for private MFA prompts."
-                            )
-                        client = await stack.enter_async_context(
-                            FBSClient(
-                                keep_alive=False,
-                                profile_path=settings.profile,
-                                progress=update,
-                                auth_notify=notify,
-                            )
-                        )
+                    async with FBSClient(
+                        keep_alive=False,
+                        profile_path=settings.profile,
+                        progress=update,
+                        auth_notify=update,
+                    ) as client:
                         await client.ensure_authenticated()
                 progress.finish(
                     "Authenticated FBS controls verified; private session saved."
@@ -242,48 +204,6 @@ async def login(settings, reporter, timeout):
                     os.environ.pop("SAGASU_AUTH_TIMEOUT_MS", None)
                 else:
                     os.environ["SAGASU_AUTH_TIMEOUT_MS"] = previous
-
-
-def run(settings, reporter):
-    from .bot import build_application
-    from .fbs_client import close_shared_browser
-
-    reporter.banner()
-    settings.persistence.parent.mkdir(parents=True, exist_ok=True)
-    with InstanceLock(settings.profile):
-        if not settings.owner_id:
-            reporter.write(
-                "WARNING: TELEGRAM_OWNER_ID is unset; this instance accepts any Telegram user.",
-                error=True,
-            )
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            with reporter.progress("Connecting to Telegram") as progress:
-
-                async def ready(application):
-                    progress.finish(
-                        "Telegram connected. Open your bot and send /start. Ctrl+C stops Sagasu."
-                    )
-
-                application = build_application(
-                    settings.token, settings.persistence, post_init=ready
-                )
-                application.run_polling(close_loop=False, bootstrap_retries=0)
-        finally:
-            try:
-                if not loop.is_closed():
-                    loop.run_until_complete(close_shared_browser())
-            except Exception:
-                reporter.write(
-                    "WARNING: Browser cleanup did not finish; close any remaining Sagasu Chrome window.",
-                    error=True,
-                )
-            finally:
-                loop.close()
-                asyncio.set_event_loop(None)
-        reporter.write("Sagasu stopped.")
-    return 0
 
 
 def main(argv=None):
@@ -317,22 +237,17 @@ def main(argv=None):
             with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
                 stream.write(TEMPLATE)
             reporter.write(
-                f"Created {path}. Set BOT_TOKEN and TELEGRAM_OWNER_ID locally, then run sagasu doctor."
+                f"Created {path}. Configure optional SMU sign-in locally, then run sagasu doctor."
             )
             return 0
         settings = Settings.load(
             getattr(args, "env_file", None), getattr(args, "browser", None)
         )
-        if args.command == "mcp-config":
-            from .mcp_config import client_config
-
-            print(client_config(settings, args.client, telegram=args.telegram))
-            return 0
         configure_logging(
             reporter,
             verbose=getattr(args, "verbose", False),
             log_file=getattr(args, "log_file", None),
-            secrets=(settings.token, settings.values.get("SMU_LOGIN_PASSWORD", "")),
+            secrets=(settings.values.get("SMU_LOGIN_PASSWORD", ""),),
             log_format=getattr(args, "log_format", "text"),
         )
         if args.command == "config":
@@ -345,7 +260,6 @@ def main(argv=None):
                     for key in (
                         "env_file",
                         "browser_profile",
-                        "telegram_state",
                         "personal_preferences",
                     )
                 },
@@ -385,25 +299,21 @@ def main(argv=None):
             if as_json:
                 print(json.dumps(report, indent=2))
             return 0 if report["ok"] else 1
-        if args.command in {"run", "login", "mcp"}:
-            settings.validate(
-                require_token=args.command == "run"
-                or (args.command == "mcp" and args.telegram)
-            )
+        settings.validate()
         settings.activate()
         if args.command == "mcp":
             try:
                 from .mcp_server import serve
             except ImportError:
                 raise ConfigError(
-                    "MCP support is not installed or incompatible. Install the project with: python -m pip install -e '.[mcp]'"
+                    "Agent runtime dependencies are missing or incompatible. Install the project with: python -m pip install -e ."
                 ) from None
-            asyncio.run(serve(settings, with_telegram=args.telegram))
+            asyncio.run(serve(settings))
             return 0
         if args.command == "login":
             asyncio.run(login(settings, reporter, args.timeout))
             return 0
-        return run(settings, reporter)
+        return 0
     except ConfigError as error:
         if as_json:
             print(
@@ -428,13 +338,9 @@ def main(argv=None):
         reporter.write("Cancelled; Sagasu stopped.")
         return 130
     except Exception as error:
-        # Library exceptions (especially InvalidToken) can contain credentials.
+        # Library exceptions can contain private configuration values.
         name = type(error).__name__
-        if name == "InvalidToken":
-            message = "Telegram rejected BOT_TOKEN. Replace it locally with a valid @BotFather token."
-        elif name == "Conflict":
-            message = "Another process is polling this Telegram bot. Stop the other instance and retry."
-        elif name in {"TimedOut", "NetworkError", "ConnectError", "TimeoutError"}:
+        if name in {"TimedOut", "NetworkError", "ConnectError", "TimeoutError"}:
             message = "The operation timed out or a service is unreachable. Run sagasu doctor to check connectivity."
         elif name == "AuthenticationRequired":
             message = "FBS authentication did not finish. Run sagasu doctor, then retry sagasu login when FBS is reachable."

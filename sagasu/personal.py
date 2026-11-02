@@ -1,6 +1,6 @@
-"""Private, transactional personal data shared by Telegram and MCP.
+"""Private, transactional contacts and search preferences for local agents.
 
-Connections are short-lived; no database handles or credentials enter bot state.
+Connections are short-lived; no database handles or credentials enter operation state.
 """
 
 import json
@@ -105,29 +105,10 @@ class PersonalStore:
         self.path, self.scope = Path(path).expanduser().resolve(), scope
 
     @classmethod
-    def from_environment(cls, *, persistence_path=None, owner_id=None):
-        from .config import DEFAULT_PERSISTENCE
+    def from_environment(cls):
+        from .config import DEFAULT_PREFERENCES
 
-        state = Path(
-            persistence_path or os.getenv("SAGASU_STATE_PATH") or DEFAULT_PERSISTENCE
-        )
-        path = os.getenv("SAGASU_PREFERENCES_PATH") or state.with_name(
-            "personal.sqlite3"
-        )
-        owner = owner_id if owner_id is not None else os.getenv("TELEGRAM_OWNER_ID", "")
-        return cls(path, f"telegram:{owner}" if owner else "local")
-
-    def for_user(self, user_id):
-        if (
-            isinstance(user_id, bool)
-            or not str(user_id).isascii()
-            or not str(user_id).isdigit()
-            or int(user_id) <= 0
-        ):
-            raise PersonalDataError(
-                "A positive Telegram user ID is required for personal data."
-            )
-        return PersonalStore(self.path, f"telegram:{user_id}")
+        return cls(os.getenv("SAGASU_PREFERENCES_PATH") or DEFAULT_PREFERENCES)
 
     @contextmanager
     def _db(self, *, write=False):
@@ -179,13 +160,6 @@ class PersonalStore:
                     (self.scope,),
                 )
             }
-
-    def is_migrated(self):
-        with self._db() as db:
-            row = db.execute(
-                "SELECT migrated FROM profiles WHERE scope=?", (self.scope,)
-            ).fetchone()
-            return bool(row and row[0])
 
     def save_contact(self, name, email, *, contact_id=None):
         name, email = valid_contact(name, email)
@@ -277,10 +251,10 @@ class PersonalStore:
                     current.pop(key, None)
                 else:
                     current[key] = value
-            from .fbs_client import search_config_from_bot
+            from .fbs_client import search_config_from_preferences
 
             try:
-                search_config_from_bot(current)
+                search_config_from_preferences(current)
             except (ValueError, TypeError):
                 raise PersonalDataError(
                     "Those preferences do not produce a valid same-day search window. Change the start or duration."
@@ -290,66 +264,3 @@ class PersonalStore:
                 (self.scope, json.dumps(current)),
             )
         return current
-
-    def import_legacy(self, user_data):
-        """Import plain, validated fields once; canonical edits/deletions always win."""
-        with self._db(write=True) as db:
-            row = db.execute(
-                "SELECT migrated FROM profiles WHERE scope=?", (self.scope,)
-            ).fetchone()
-            if row and row[0]:
-                return
-            search = {}
-            legacy_search = user_data.get("scrape_config") or {}
-            for key, value in (
-                legacy_search.items() if isinstance(legacy_search, dict) else ()
-            ):
-                if key in SEARCH_KEYS:
-                    try:
-                        search.update(validate_preferences({key: value}))
-                    except PersonalDataError:
-                        pass
-            search = {key: value for key, value in search.items() if value is not None}
-            contacts = user_data.get("saved_cobookers") or {}
-            for key, person in (
-                list(contacts.items())[:200] if isinstance(contacts, dict) else ()
-            ):
-                try:
-                    name, email = valid_contact(person.get("name"), person.get("email"))
-                    if not isinstance(key, str) or not re.fullmatch(
-                        r"[A-Za-z0-9_-]{1,16}", key
-                    ):
-                        key = secrets.token_urlsafe(6)
-                    db.execute(
-                        "INSERT OR IGNORE INTO contacts(scope,id,name,email) VALUES(?,?,?,?)",
-                        (self.scope, key, name, email),
-                    )
-                except (PersonalDataError, AttributeError):
-                    continue
-            db.execute(
-                "INSERT INTO profiles(scope,search,migrated) VALUES(?,?,1) ON CONFLICT(scope) DO UPDATE SET migrated=1",
-                (self.scope, json.dumps(search)),
-            )
-
-
-async def migrate_telegram_state(store, path, *, owner_id):
-    """Read only the configured, trusted local Telegram pickle; never an MCP path."""
-    if not Path(path).is_file() or not owner_id:
-        return
-    profile = store.for_user(owner_id)
-    if profile.is_migrated():
-        return
-    from telegram.ext import PicklePersistence
-
-    try:
-        data = await PicklePersistence(filepath=str(path)).get_user_data()
-    except Exception:
-        raise PersonalDataError(
-            "Existing Telegram state could not be migrated. Check the configured private state file before starting MCP."
-        ) from None
-    profile.import_legacy(data.get(int(owner_id), {}))
-
-
-def profile_for(context):
-    profile = getattr(context, "personal_profile", None)
-    return profile if isinstance(profile, PersonalStore) else None

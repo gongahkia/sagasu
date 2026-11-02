@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 
 from playwright.async_api import async_playwright
 
-from bot.fbs_account import TASK_SNAPSHOT, parse_tasks
-from bot.fbs_client import LayoutChanged
-from bot.fbs_tasks import (
+from sagasu.fbs_account import TASK_SNAPSHOT, parse_tasks
+from sagasu.fbs_client import LayoutChanged
+from sagasu.fbs_tasks import (
     TaskUnavailable,
     TaskApprovalOutcomeUnknown,
     add_task_capabilities,
@@ -105,11 +105,11 @@ class BrowserApprovalTests(unittest.IsolatedAsyncioTestCase):
             return result
 
         self.read = read
-        patched = patch("bot.fbs_tasks.read_task_list", read)
+        patched = patch("sagasu.fbs_tasks.read_task_list", read)
         patched.start()
         self.addCleanup(patched.stop)
         receipt = patch(
-            "bot.fbs_tasks.capture_booking_evidence",
+            "sagasu.fbs_tasks.capture_booking_evidence",
             AsyncMock(return_value=b"booking-details-png"),
         )
         self.details_receipt = receipt.start()
@@ -219,13 +219,13 @@ class BrowserApprovalTests(unittest.IsolatedAsyncioTestCase):
 class TaskWrapperTests(unittest.IsolatedAsyncioTestCase):
     async def test_readonly_is_default_and_submission_is_explicit(self):
         with (
-            patch("bot.fbs_tasks.FBSClient"),
+            patch("sagasu.fbs_tasks.FBSClient"),
             patch(
-                "bot.fbs_tasks.capture_task_details",
+                "sagasu.fbs_tasks.capture_task_details",
                 AsyncMock(return_value={"status": "details"}),
             ) as details,
             patch(
-                "bot.fbs_tasks.approve_task",
+                "sagasu.fbs_tasks.approve_task",
                 AsyncMock(return_value={"status": "approved"}),
             ) as approve,
         ):

@@ -9,7 +9,7 @@ import ssl
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .config import ConfigError, TOKEN_PATTERN
+from .config import ConfigError
 
 
 @dataclass
@@ -86,35 +86,6 @@ async def browser_check(settings, timeout):
         )
 
 
-async def token_check(settings, timeout):
-    try:
-        from telegram import Bot
-        from telegram.error import InvalidToken
-    except ImportError:
-        return Check("telegram.token", "fail", "python-telegram-bot is not installed.")
-    try:
-        async with asyncio.timeout(timeout):
-            async with Bot(settings.token):
-                pass  # initialize performs getMe; never sends a Telegram message.
-        return Check(
-            "telegram.token", "pass", "Telegram accepted the configured token."
-        )
-    except InvalidToken:
-        return Check(
-            "telegram.token",
-            "fail",
-            "Telegram rejected the configured token.",
-            "Replace BOT_TOKEN locally using @BotFather.",
-        )
-    except Exception:
-        return Check(
-            "telegram.token",
-            "fail",
-            "Could not verify the token with Telegram.",
-            "Check Telegram connectivity and retry. Raw request details are suppressed.",
-        )
-
-
 async def session_check(settings, timeout):
     if not settings.profile.is_dir():
         return Check(
@@ -179,7 +150,7 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
             f"Python {platform.python_version()} on {platform.system()}.",
         )
     )
-    for distribution in ("python-telegram-bot", "playwright", "python-dotenv"):
+    for distribution in ("mcp", "playwright", "python-dotenv"):
         try:
             version = importlib.metadata.version(distribution)
             add(Check(f"dependency.{distribution}", "pass", f"Installed ({version})."))
@@ -208,52 +179,19 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
             ),
         )
     )
-    valid_token = bool(TOKEN_PATTERN.fullmatch(settings.token))
-    add(
-        Check(
-            "config.token",
-            "pass" if valid_token else "fail",
-            (
-                "Token format looks valid; value redacted."
-                if valid_token
-                else "BOT_TOKEN is missing, malformed, or still a placeholder."
-            ),
-            (
-                ""
-                if valid_token
-                else "Set your real @BotFather token in the environment file."
-            ),
-        )
-    )
     try:
-        settings.validate(require_token=False)
+        settings.validate()
         add(
             Check(
-                "config.owner",
-                "pass" if settings.owner_id else "warn",
-                (
-                    "Owner ID is configured."
-                    if settings.owner_id
-                    else "No owner restriction: any Telegram user can access this bot."
-                ),
-                (
-                    ""
-                    if settings.owner_id
-                    else "Set TELEGRAM_OWNER_ID to your numeric Telegram user ID."
-                ),
+                "config.settings",
+                "pass",
+                "Agent configuration is valid; credentials redacted.",
             )
         )
     except ConfigError as error:
-        add(
-            Check(
-                "config.owner",
-                "fail",
-                str(error),
-            )
-        )
+        add(Check("config.settings", "fail", str(error)))
     for name, target in (
         ("profile", settings.profile),
-        ("state", settings.persistence),
         ("preferences", settings.preferences),
     ):
         if target.exists() and (
@@ -265,7 +203,7 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
                     f"storage.{name}",
                     "fail",
                     "The configured path has the wrong file type.",
-                    "The profile must be a directory; Telegram state and personal preferences must be files.",
+                    "The profile must be a directory; personal preferences must be a file.",
                 )
             )
             continue
@@ -288,66 +226,37 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
         )
     add(await browser_check(settings, timeout))
     if offline:
-        add(
-            Check(
-                "network",
-                "skip",
-                "Offline mode: FBS, Telegram and session requests skipped.",
-            )
-        )
+        add(Check("network", "skip", "Offline mode: FBS and session requests skipped."))
     else:
-        outcomes = await asyncio.gather(
-            probe("fbs.intranet.smu.edu.sg", "/home", timeout),
-            probe("api.telegram.org", "/", timeout),
-        )
-        for name, (kind, status) in zip(("fbs", "telegram"), outcomes):
-            if kind == "http" and 200 <= status < 400:
-                add(
-                    Check(
-                        f"network.{name}", "pass", f"HTTPS responded (HTTP {status})."
-                    )
+        kind, status = await probe("fbs.intranet.smu.edu.sg", "/home", timeout)
+        reachable = kind == "http" and 200 <= status < 400
+        if reachable:
+            add(Check("network.fbs", "pass", f"HTTPS responded (HTTP {status})."))
+        else:
+            add(
+                Check(
+                    "network.fbs",
+                    "warn" if kind == "http" and status in (401, 403) else "fail",
+                    (
+                        f"HTTPS responded (HTTP {status})."
+                        if kind == "http"
+                        else f"HTTPS check failed: {kind}."
+                    ),
+                    "Check https://fbs.intranet.smu.edu.sg/home in a normal browser on this computer.",
                 )
-            elif kind == "http":
-                add(
-                    Check(
-                        f"network.{name}",
-                        "warn" if status in (401, 403) else "fail",
-                        f"HTTPS responded (HTTP {status}).",
-                        "Check the service in a normal browser on this computer.",
-                    )
-                )
-            else:
-                add(
-                    Check(
-                        f"network.{name}",
-                        "fail",
-                        f"HTTPS check failed: {kind}.",
-                        (
-                            "For FBS, test https://fbs.intranet.smu.edu.sg/home in a normal browser; an outage or network policy may prevent access."
-                            if name == "fbs"
-                            else "Check network access to api.telegram.org."
-                        ),
-                    )
-                )
-        if valid_token and outcomes[1][0] == "http":
-            add(await token_check(settings, timeout))
-        if session:
-            if outcomes[0][0] == "http" and 200 <= outcomes[0][1] < 400:
-                add(await session_check(settings, timeout))
-            else:
-                add(
-                    Check(
-                        "session",
-                        "skip",
-                        "FBS is not reachable; no profile was opened.",
-                    )
-                )
+            )
+        if session and reachable:
+            add(await session_check(settings, timeout))
+        elif session:
+            add(
+                Check("session", "skip", "FBS is not reachable; no profile was opened.")
+            )
         else:
             add(
                 Check(
                     "session",
                     "skip",
-                    "Session validity not checked; use doctor --session with the bot stopped.",
+                    "Session validity not checked; use doctor --session with the MCP server stopped.",
                 )
             )
     return {

@@ -1,7 +1,7 @@
 """Transport-independent, single-user agent operations over the existing FBS client.
 
 Jobs and receipts deliberately live only in memory. Nothing is replayed on restart.
-The transport must obtain human approval before calling ``confirm``.
+The transport enforces the host's human-form or agent-submission policy.
 """
 
 import asyncio
@@ -11,7 +11,7 @@ import time
 import math
 from dataclasses import dataclass, field
 
-from .booking_flow import SMU_EMAIL_RE
+from .personal import SMU_EMAIL_RE
 from .fbs_client import (
     AuthenticationRequired,
     BookingOutcomeUnknown,
@@ -21,7 +21,7 @@ from .fbs_client import (
     SearchConfig,
     execute_booking,
     require_future_booking,
-    search_config_from_bot,
+    search_config_from_preferences,
 )
 from .fbs_account import (
     CancellationOutcomeUnknown,
@@ -41,7 +41,7 @@ class AgentError(ValueError):
 
 
 class Backend:
-    """Use one process/browser lock for Telegram and agent callers alike."""
+    """Serialize agent operations over the private FBS browser."""
 
     @observed_operation("agent.backend")
     async def run(self, kind, payload, progress, notify):
@@ -98,6 +98,8 @@ class Job:
     error: dict | None = None
     receipt: bytes | None = field(default=None, repr=False)
     task: asyncio.Task | None = field(default=None, repr=False)
+    auth_prompt: str | None = field(default=None, repr=False)
+    auth_event: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
 
     @property
     def terminal(self):
@@ -115,7 +117,11 @@ class Job:
             "error": self.error,
             "terminal": self.terminal,
             "poll_after_ms": None if self.terminal else 2000,
-            "next_tool": "operation_result" if self.terminal else "wait_operation",
+            "next_tool": (
+                "authentication_status"
+                if self.status == "awaiting_mfa"
+                else "operation_result" if self.terminal else "wait_operation"
+            ),
         }
 
 
@@ -124,16 +130,15 @@ class AgentService:
         self,
         *,
         backend=None,
-        notify=None,
         clock=time.time,
         limit=32,
         ttl=3600,
         profile=None,
     ):
         self.backend = backend or Backend()
-        self.notify = notify
         self.clock, self.limit, self.ttl = clock, limit, ttl
         self.jobs, self.reviews = {}, {}
+        self.submitted_reviews = {}
         self.queue = asyncio.Lock()
         self.closed = False
         self.profile = profile
@@ -162,7 +167,7 @@ class AgentService:
         preferences = self.personal_profile().preferences()
         return {
             "preferences": preferences,
-            "effective_search": asdict(search_config_from_bot(preferences)),
+            "effective_search": asdict(search_config_from_preferences(preferences)),
             "timezone": "Asia/Singapore",
             "rolling_start": not preferences.get("start_time"),
             "rolling_date": not preferences.get("date_raw"),
@@ -177,6 +182,11 @@ class AgentService:
         for key, review in list(self.reviews.items()):
             if review["expires_at"] <= now:
                 del self.reviews[key]
+        self.submitted_reviews = {
+            review_id: operation_id
+            for review_id, operation_id in self.submitted_reviews.items()
+            if operation_id in self.jobs
+        }
 
     def get(self, operation_id):
         self.prune()
@@ -218,19 +228,18 @@ class AgentService:
         async def progress(stage):
             # Never put an MFA challenge, account identity, or credential into status.
             job.status, job.stage = "running", stage
+            job.auth_prompt = None
+            job.auth_event.clear()
             job.updated_at = self.clock()
 
         async def notify(message):
             job.status, job.stage = (
                 "awaiting_mfa",
-                "Check your private Telegram chat and approve this sign-in in Authenticator",
+                "Read authentication_status and approve Microsoft sign-in in Authenticator",
             )
             job.updated_at = self.clock()
-            if self.notify is None:
-                raise AuthenticationRequired(
-                    "Configure private Telegram MFA notifications or use sagasu login first."
-                )
-            await self.notify(message)
+            job.auth_prompt = message
+            job.auth_event.set()
 
         try:
             async with self.queue:
@@ -277,6 +286,16 @@ class AgentService:
                 "code": type(error).__name__,
                 "message": job.stage
                 + ". Run sagasu doctor and inspect the redacted server logs.",
+                "retry_safe": job.kind not in WRITE_KINDS and not unknown,
+                "next_action": (
+                    reconcile + "; do not repeat the action automatically."
+                    if unknown
+                    else (
+                        "Run login, complete SMU sign-in/MFA, then retry the read."
+                        if isinstance(error, AuthenticationRequired)
+                        else "Check server health and refresh the source search or listing."
+                    )
+                ),
             }
             event(
                 "agent.operation_failed",
@@ -286,6 +305,8 @@ class AgentService:
                 outcome=job.status,
             )
         finally:
+            job.auth_prompt = None
+            job.auth_event.clear()
             job.updated_at = self.clock()
             event(
                 "agent.operation_finished",
@@ -327,9 +348,32 @@ class AgentService:
         # Validate pagination before waiting, and keep the job reference if pruned later.
         self.result(operation_id, offset, limit)
         job = self.get(operation_id)
-        if not job.terminal:
-            await asyncio.wait([job.task], timeout=timeout)
+        if not job.terminal and job.status != "awaiting_mfa":
+            prompt_ready = asyncio.create_task(job.auth_event.wait())
+            try:
+                await asyncio.wait(
+                    [job.task, prompt_ready],
+                    timeout=timeout,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                prompt_ready.cancel()
+                await asyncio.gather(prompt_ready, return_exceptions=True)
         return self.result(operation_id, offset, limit)
+
+    def authentication_status(self, operation_id):
+        """Expose the current MFA prompt only on an explicit private agent call."""
+        job = self.get(operation_id)
+        return {
+            "operation_id": job.id,
+            "status": job.status,
+            "prompt": job.auth_prompt if job.status == "awaiting_mfa" else None,
+            "action": (
+                "Relay the prompt to the user and wait for their Authenticator approval. Never ask for their password."
+                if job.status == "awaiting_mfa"
+                else "No active authentication prompt."
+            ),
+        }
 
     def available_rooms(self, operation_id, offset=0, limit=20):
         """Filter before pagination; preserve the full discovery snapshot for reviews."""
@@ -341,11 +385,17 @@ class AgentService:
         config = SearchConfig.from_mapping(result["config"])
         require_future_booking(config)
         rooms = [
-            RoomAvailability(row["name"], [TimeSlot(**slot) for slot in row["timeslots"]])
+            RoomAvailability(
+                row["name"], [TimeSlot(**slot) for slot in row["timeslots"]]
+            )
             for row in result["rooms"]
         ]
         available = sorted(
-            [room for room in rooms if room.is_free(config.start_time, config.end_time)],
+            [
+                room
+                for room in rooms
+                if room.is_free(config.start_time, config.end_time)
+            ],
             key=lambda room: (-room.free_minutes, room.name.lower()),
         )
         return {
@@ -366,15 +416,16 @@ class AgentService:
 
         if config is not None and preferences is not None:
             raise AgentError("Provide config OR preferences, not both.")
+        patch = validate_preferences(preferences if preferences is not None else {})
         try:
             if config is None:
                 merged = self.profile.preferences() if self.profile else {}
-                for key, value in validate_preferences(preferences or {}).items():
+                for key, value in patch.items():
                     if value is None:
                         merged.pop(key, None)
                     else:
                         merged[key] = value
-                search = search_config_from_bot(merged)
+                search = search_config_from_preferences(merged)
             else:
                 search = SearchConfig.from_mapping(config)
             require_future_booking(search)
@@ -528,10 +579,18 @@ class AgentService:
         if review["kind"] == "book":
             require_future_booking(review["payload"].search)
         job = self.start(review["kind"], review["payload"])
+        self.submitted_reviews[review_id] = job["operation_id"]
         del self.reviews[
             review_id
         ]  # Consume before yielding; concurrent/replayed confirmations fail.
         return job
+
+    def submit(self, review_id):
+        """Agent-mode replay protection: the same review always identifies one job."""
+        self.prune()
+        if review_id in self.submitted_reviews:
+            return self.get(self.submitted_reviews[review_id]).public()
+        return self.confirm(review_id)
 
     def discard(self, review_id):
         self.review(review_id)
