@@ -72,8 +72,12 @@ class Backend:
         async with FBSClient(
             progress=progress,
             auth_notify=notify,
-            interactive=kind not in {"session", "smoke"},
+            interactive=kind not in {"session", "smoke", "reconcile"},
         ) as client:
+            if kind == "reconcile":
+                from .reconciliation import reconcile
+
+                return await reconcile(client, payload)
             if kind == "alternatives":
                 from .alternatives import find_alternatives
 
@@ -142,6 +146,8 @@ class Job:
     verified_result: dict | None = field(default=None, repr=False)
     recovered: bool = False
     history_warning: str | None = None
+    summary: dict = field(default_factory=dict)
+    reconciliation: dict | None = None
 
     @property
     def terminal(self):
@@ -160,11 +166,19 @@ class Job:
             "recovered": self.recovered,
             "history_warning": self.history_warning,
             "terminal": self.terminal,
+            "reconciliation": self.reconciliation,
+            "reconciliation_required": self.status == "outcome_unknown"
+            and not (self.reconciliation or {}).get("action_outcome_verified"),
             "poll_after_ms": None if self.terminal else 2000,
             "next_tool": (
-                "authentication_status"
-                if self.status == "awaiting_mfa"
-                else "operation_result" if self.terminal else "wait_operation"
+                "reconcile_operation"
+                if self.status == "outcome_unknown"
+                and not (self.reconciliation or {}).get("action_outcome_verified")
+                else (
+                    "authentication_status"
+                    if self.status == "awaiting_mfa"
+                    else "operation_result" if self.terminal else "wait_operation"
+                )
             ),
         }
 
@@ -224,7 +238,15 @@ class AgentService:
     def prune(self):
         now = self.clock()
         for key, job in list(self.jobs.items()):
-            if job.terminal and now - job.updated_at >= self.ttl:
+            if (
+                job.terminal
+                and now - job.updated_at >= self.ttl
+                and (
+                    self.journal
+                    or job.status != "outcome_unknown"
+                    or (job.reconciliation or {}).get("action_outcome_verified")
+                )
+            ):
                 del self.jobs[key]
         for key, review in list(self.reviews.items()):
             if review["expires_at"] <= now:
@@ -263,6 +285,8 @@ class AgentService:
                         else None
                     ),
                     recovered=True,
+                    summary=saved["summary"],
+                    reconciliation=saved.get("reconciliation"),
                 )
             raise AgentError(
                 "Unknown or expired operation. Read operations expire on restart; inspect action_history and FBS before repeating a write."
@@ -279,17 +303,55 @@ class AgentService:
             )
         if len(self.jobs) >= self.limit:
             # Retain active jobs; bound memory even if a client never polls results.
-            oldest = next((key for key, job in self.jobs.items() if job.terminal), None)
+            oldest = next(
+                (
+                    key
+                    for key, job in self.jobs.items()
+                    if job.terminal
+                    and (
+                        self.journal
+                        or job.status != "outcome_unknown"
+                        or (job.reconciliation or {}).get("action_outcome_verified")
+                    )
+                ),
+                None,
+            )
             if oldest is None:
                 raise AgentError(
                     "Operation queue is full. Wait for an operation to finish."
                 )
             del self.jobs[oldest]
+        summary = action_summary(kind, payload) if kind in WRITE_KINDS else {}
+        if kind in WRITE_KINDS:
+            from .reconciliation import identity
+
+            wanted = identity(kind, summary)
+            for previous in self.jobs.values():
+                if (
+                    wanted is not None
+                    and previous.kind == kind
+                    and wanted == identity(kind, previous.summary)
+                ):
+                    if not previous.terminal or (
+                        previous.status == "outcome_unknown"
+                        and not (previous.reconciliation or {}).get(
+                            "action_outcome_verified"
+                        )
+                    ):
+                        raise AgentError(
+                            "A matching action is active or unresolved. Inspect/reconcile operation "
+                            + previous.id
+                            + " before submitting a new review."
+                        )
         job = Job(
-            secrets.token_urlsafe(16), kind, self.clock(), updated_at=self.clock()
+            secrets.token_urlsafe(16),
+            kind,
+            self.clock(),
+            updated_at=self.clock(),
+            summary=summary,
         )
         if kind in WRITE_KINDS and self.journal:
-            self.journal.reserve(job, review_id, action_summary(kind, payload))
+            self.journal.reserve(job, review_id, summary)
         self.jobs[job.id] = job
         job.task = asyncio.create_task(self._run(job, copy.deepcopy(payload)))
         event("agent.operation_queued", agent_operation_id=job.id, kind=kind)
@@ -299,6 +361,29 @@ class AgentService:
         if self.journal is None:
             raise AgentError("Durable action history is not configured.")
         return self.journal.history(offset, limit)
+
+    def reconcile_operation(self, operation_id):
+        original = self.get(operation_id)
+        if original.kind not in WRITE_KINDS or not original.terminal:
+            raise AgentError(
+                "Choose a finished booking, cancellation or task approval operation. Active writes must finish first."
+            )
+        if not original.summary:
+            raise AgentError(
+                "This action has no verifiable history metadata; inspect FBS manually."
+            )
+        reference = (original.result or {}).get(
+            "reference_number"
+        ) or original.summary.get("reference_number")
+        return self.start(
+            "reconcile",
+            {
+                "operation_id": original.id,
+                "kind": original.kind,
+                "summary": copy.deepcopy(original.summary),
+                "reference_number": reference,
+            },
+        )
 
     def _checkpoint(self, job, result):
         job.verified_result = safe_fields(result, RESULT_KEYS)
@@ -358,6 +443,18 @@ class AgentService:
                 backend_started = True
                 result = await self.backend.run(job.kind, payload, progress, notify)
                 result = copy.deepcopy(result)
+                if job.kind == "reconcile":
+                    observed = (
+                        self.journal.record_reconciliation(
+                            payload["operation_id"], result, self.clock()
+                        )
+                        if self.journal
+                        else {**result, "observed_at": self.clock()}
+                    )
+                    result["original_operation_id"] = payload["operation_id"]
+                    result["observed_at"] = observed["observed_at"]
+                    if payload["operation_id"] in self.jobs:
+                        self.jobs[payload["operation_id"]].reconciliation = observed
                 receipt = result.pop("receipt_png", None)
                 if receipt is not None:
                     if isinstance(receipt, bytes) and len(receipt) <= 4 * 1024 * 1024:

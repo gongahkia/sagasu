@@ -271,6 +271,11 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
         """Read private durable booking/cancellation/approval history, including interrupted outcomes, original operation/review IDs and minimal room/time/reference metadata. No credentials, purpose, co-booker emails or screenshots are stored. Nothing is replayed. Reconcile outcome_unknown in FBS before creating a new review. operation_result can read recorded writes after restart."""
         return safe(service.action_history, offset, limit)
 
+    @server.tool(annotations=read)
+    async def reconcile_operation(operation_id: str) -> dict[str, Any]:
+        """Start a read-only comparison of a finished write with current FBS bookings/tasks, using its exact reference or immutable room/date/time history. Records observed evidence locally without replaying the action. Absence, partial listings, or ambiguous matches never authorize retry. Pending confirmation is separate from confirmed. Poll with wait_operation; original historical outcomes are preserved."""
+        return safe(service.reconcile_operation, operation_id)
+
     @server.tool(annotations=local)
     async def available_rooms(
         operation_id: str,
@@ -611,7 +616,7 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
                 ],
                 "recovery": {
                     "awaiting_mfa": "Call authentication_status, relay the current prompt/number, and wait for the user to approve Microsoft sign-in. Never request passwords in chat.",
-                    "outcome_unknown": "Read My Bookings/Task List and reconcile the exact reference; do not retry the write.",
+                    "outcome_unknown": "Use reconcile_operation, then wait_operation to inspect current FBS evidence. Never infer success or safe retry from a missing row; unresolved matching actions block new submissions.",
                     "expired_operation": "Read jobs expire. Inspect action_history and operation_result for durable write outcomes, then reconcile uncertain writes in FBS before preparing another review.",
                     "pending_confirmation": "A submitted booking may still require other FBS participants to approve.",
                 },

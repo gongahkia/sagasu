@@ -95,6 +95,9 @@ class ActionJournal:
                 "CREATE TABLE IF NOT EXISTS actions (operation_id TEXT PRIMARY KEY, review_id TEXT UNIQUE, kind TEXT NOT NULL, status TEXT NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL, summary TEXT NOT NULL, result TEXT, error_code TEXT)"
             )
             connection.execute("PRAGMA user_version=1")
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS reconciliations (operation_id TEXT PRIMARY KEY, observed_at REAL NOT NULL, evidence TEXT NOT NULL)"
+            )
             with connection:
                 yield connection
         except JournalError:
@@ -109,6 +112,28 @@ class ActionJournal:
 
     def reserve(self, job, review_id, summary):
         with self._db() as db:
+            db.execute("BEGIN IMMEDIATE")
+            from .reconciliation import identity
+
+            wanted = identity(job.kind, summary)
+            for row in db.execute(
+                "SELECT * FROM actions WHERE kind=? AND status IN ('queued','running','outcome_unknown')",
+                (job.kind,),
+            ).fetchall():
+                previous = self._with_reconciliation(db, self._record(row))
+                if (
+                    wanted is not None
+                    and identity(job.kind, previous["summary"]) == wanted
+                ):
+                    # Even verified reconciliation must not race an active write.
+                    if previous["status"] != "outcome_unknown" or not (
+                        previous.get("reconciliation") or {}
+                    ).get("action_outcome_verified"):
+                        raise JournalError(
+                            "A matching action is active or unresolved. Reconcile operation "
+                            + previous["operation_id"]
+                            + " before preparing another submission."
+                        )
             db.execute(
                 "INSERT INTO actions VALUES(?,?,?,?,?,?,?,?,?)",
                 (
@@ -171,7 +196,69 @@ class ActionJournal:
                 + ("review_id=?" if review_id is not None else "operation_id=?"),
                 (review_id if review_id is not None else operation_id,),
             ).fetchone()
-            return self._record(row)
+            return self._with_reconciliation(db, self._record(row))
+
+    @staticmethod
+    def _with_reconciliation(db, record):
+        if record is None:
+            return None
+        row = db.execute(
+            "SELECT observed_at,evidence FROM reconciliations WHERE operation_id=?",
+            (record["operation_id"],),
+        ).fetchone()
+        record["reconciliation"] = (
+            {**json.loads(row[1]), "observed_at": row[0]} if row else None
+        )
+        record["reconciliation_required"] = record[
+            "status"
+        ] == "outcome_unknown" and not (record["reconciliation"] or {}).get(
+            "action_outcome_verified", False
+        )
+        return record
+
+    def record_reconciliation(self, operation_id, result, now):
+        allowed = {
+            "confirmed",
+            "pending_confirmation",
+            "cancelled",
+            "approved",
+            "matching_booking_found",
+            "not_found",
+            "unresolved",
+            "ambiguous",
+        }
+        state = result.get("state")
+        if state not in allowed:
+            raise JournalError(
+                "The reconciliation evidence is invalid; the original outcome was preserved."
+            )
+        data = safe_fields(
+            result,
+            {
+                "state",
+                "reference_number",
+                "fbs_status",
+                "source_complete",
+                "action_outcome_verified",
+                "booking_status_verified",
+            },
+        )
+        # A caller cannot assert verification for an absence or ambiguous match.
+        data["action_outcome_verified"] = (
+            state in {"confirmed", "pending_confirmation", "cancelled", "approved"}
+            and result.get("action_outcome_verified") is True
+        )
+        data["safe_to_retry"] = False
+        with self._db() as db:
+            if not db.execute(
+                "SELECT 1 FROM actions WHERE operation_id=?", (operation_id,)
+            ).fetchone():
+                raise JournalError("The original action history entry is unavailable.")
+            db.execute(
+                "INSERT INTO reconciliations VALUES(?,?,?) ON CONFLICT(operation_id) DO UPDATE SET observed_at=excluded.observed_at,evidence=excluded.evidence",
+                (operation_id, now, json.dumps(data)),
+            )
+        return {**data, "observed_at": now}
 
     def history(self, offset=0, limit=20):
         if (
@@ -190,7 +277,9 @@ class ActionJournal:
                 (limit, offset),
             ).fetchall()
             return {
-                "actions": [self._record(row) for row in rows],
+                "actions": [
+                    self._with_reconciliation(db, self._record(row)) for row in rows
+                ],
                 "total": total,
                 "next_offset": offset + limit if offset + limit < total else None,
                 "automatic_replay": False,

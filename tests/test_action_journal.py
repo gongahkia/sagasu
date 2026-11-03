@@ -175,7 +175,11 @@ class JournalServiceTests(ServiceCase):
         self.assertEqual(self.service.journal.get(job.id)["status"], "outcome_unknown")
 
     async def test_history_failure_stops_already_queued_writes(self):
-        first, second = await self.review(), await self.review()
+        first = await self.review()
+        source = await self.finish(self.service.start("bookings"))
+        second = self.service.review_cancellation(
+            source.id, ROW["reference_number"], "Cancel this booking"
+        )
         backend_calls = []
         original_update = self.service.journal.update
 
