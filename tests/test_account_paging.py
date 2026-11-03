@@ -11,6 +11,38 @@ from sagasu.fbs_paging import collect_pages
 
 
 class AccountPagingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_real_task_reader_collects_capabilities_and_targets_later_page(self):
+        from sagasu.fbs_account import read_task_list
+        from tests.test_fbs_account import HEADERS
+
+        headers = "".join("<th>" + name + "</th>" for name in HEADERS)
+        await self.page.set_content(
+            """<input id="txtSearch_c1" value=""><div id="GridViewTask">
+        <button title="First Page" onclick="i=0;render()">First</button><table><tr>"""
+            + headers
+            + """</tr></table>
+        <div id="GridViewTask_content"></div><span>2 ITEM(S) TOTAL</span>
+        <button id="next" title="Next Page" onclick="i++;render()">Next</button></div>
+        <script>let i=0;function render(){document.querySelector('#GridViewTask_content').innerHTML=
+        '<table><tr class="row"><td>BK-'+i+'</td><td>23-Nov-2026 11:00 - 14:00</td><td>LKS</td><td>Room A</td><td>Booking Approval</td><td>A student</td><td>Pending Approval</td><td><a id="row_BtnView" href="#">VIEW</a></td></tr></table>';
+        document.querySelector('#next').disabled=i===1;}render();</script>"""
+        )
+        self.client.ensure_authenticated = AsyncMock()
+        self.client.progress = AsyncMock()
+        with patch(
+            "sagasu.fbs_account.open_account_tab", AsyncMock(return_value=self.page)
+        ):
+            result = await read_task_list(self.client)
+            self.assertTrue(result["complete"])
+            self.assertEqual(
+                [row["reference_number"] for row in result["tasks"]], ["BK-0", "BK-1"]
+            )
+            self.assertTrue(all(row["can_view"] for row in result["tasks"]))
+            self.assertFalse(any(row["can_approve"] for row in result["tasks"]))
+            result = await read_task_list(self.client, reference="BK-1")
+            self.assertTrue(result["reference_found"])
+            self.assertEqual(result["tasks"][0]["reference_number"], "BK-1")
+
     async def test_real_booking_reader_aggregates_pages_and_targets_reference(self):
         from sagasu.fbs_account import read_bookings
 
