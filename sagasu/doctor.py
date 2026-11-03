@@ -87,6 +87,23 @@ async def browser_check(settings, timeout):
 
 
 async def session_check(settings, timeout):
+    if os.name != "nt":
+        from .host import control, run_operation
+
+        if (await control(settings, "status")).get("running"):
+            try:
+                async with asyncio.timeout(timeout):
+                    await run_operation(settings, "session_status")
+                return Check(
+                    "session", "pass", "Saved session verified through the shared host."
+                )
+            except Exception:
+                return Check(
+                    "session",
+                    "fail",
+                    "Shared-host session verification failed or timed out.",
+                    "Run sagasu login to renew the session; inspect sagasu host status for queued work.",
+                )
     if not settings.profile.is_dir():
         return Check(
             "session",

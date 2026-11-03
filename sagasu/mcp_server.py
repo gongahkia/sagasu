@@ -1,6 +1,7 @@
 """Optional stdio MCP adapter. Importing Sagasu's regular CLI needs no MCP SDK."""
 
 import json
+import os
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
@@ -211,6 +212,15 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
             "version": __version__,
             "transport": "stdio",
             "single_user": True,
+            "host_pid": os.getpid(),
+            "authentication_configuration": {
+                "headless": os.getenv("SAGASU_HEADLESS", "false").lower()
+                in {"1", "true", "yes"},
+                "email_configured": bool(os.getenv("SMU_LOGIN_EMAIL")),
+                "password_configured": bool(os.getenv("SMU_LOGIN_PASSWORD")),
+                "session_status_tool": "session_status",
+                "session_valid": "unknown_until_checked",
+            },
             "authentication_prompts": "authentication_status",
             "confirmation": (
                 "Agent may submit reviewed FBS actions requested by the user, without an extra confirmation form."
@@ -287,6 +297,21 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
     async def list_tasks() -> dict[str, Any]:
         """Start reading FBS Task List and per-task approval/details capabilities. Does not change tasks. Poll the operation ID."""
         return safe(service.start, "tasks")
+
+    @server.tool(annotations=read)
+    async def session_status() -> dict[str, Any]:
+        """Verify the saved session without submitting credentials or starting MFA. Uses the shared browser queue."""
+        return safe(service.start, "session")
+
+    @server.tool(annotations=read)
+    async def smoke_check() -> dict[str, Any]:
+        """Opt-in read-only session/search/bookings compatibility check. Never renews authentication or submits bookings."""
+        from .fbs_client import search_config_from_preferences
+
+        config = search_config_from_preferences(
+            service.profile.preferences() if service.profile else {}
+        )
+        return safe(service.start, "smoke", config)
 
     @server.tool(annotations=read)
     async def login() -> dict[str, Any]:

@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -28,6 +29,10 @@ class WireProtocolTests(unittest.IsolatedAsyncioTestCase):
             SAGASU_PREFERENCES_PATH=str(root / "personal.sqlite3"),
             SAGASU_JOURNAL_PATH=str(root / "actions.sqlite3"),
         )
+        from sagasu.config import Settings
+
+        with patch.dict(os.environ, environment, clear=True):
+            self.host_settings = Settings.load(env_file)
         self.process = await asyncio.create_subprocess_exec(
             sys.executable,
             "-m",
@@ -38,6 +43,7 @@ class WireProtocolTests(unittest.IsolatedAsyncioTestCase):
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=environment,
         )
         self.stderr = asyncio.create_task(self.process.stderr.read())
         self.sequence = 0
@@ -96,6 +102,9 @@ class WireProtocolTests(unittest.IsolatedAsyncioTestCase):
                 self.process.kill()
                 await self.process.wait()
                 self.fail("Server did not shut down after stdin EOF")
+        from sagasu.host import control
+
+        await control(self.host_settings, "stop")
         errors = (await self.stderr).decode(errors="replace")
         self.assertEqual(self.process.returncode, 0, errors)
         combined = json.dumps(self.responses) + errors

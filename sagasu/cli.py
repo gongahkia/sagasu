@@ -101,9 +101,19 @@ def parser():
     )
     result.add_argument("--version", action="version", version=f"sagasu {__version__}")
     commands = result.add_subparsers(dest="command", metavar="COMMAND")
-    commands.add_parser(
+    mcp = commands.add_parser(
         "mcp", help="Serve the local agent MCP connection over stdio", parents=[common]
     )
+    mcp.add_argument(
+        "--direct",
+        action="store_true",
+        help="Own the browser directly (single client; Windows fallback)",
+    )
+    commands.add_parser("host-run", help=argparse.SUPPRESS, parents=[common])
+    host = commands.add_parser(
+        "host", help="Inspect or stop the shared local browser host", parents=[common]
+    )
+    host.add_argument("action", choices=("status", "stop"))
     login = commands.add_parser(
         "login",
         help="Sign in to FBS/MFA using the private browser profile",
@@ -188,22 +198,22 @@ def print_values(values, as_json=False):
 
 
 async def login(settings, reporter, timeout):
-    from .fbs_client import FBSClient
+    from .host import run_operation
 
-    with InstanceLock(settings.profile):
-        reporter.write(
-            "Complete Microsoft sign-in and MFA. Credentials remain in your private host configuration."
-        )
-        with reporter.progress("Opening private FBS login") as progress:
+    reporter.write(
+        "Complete Microsoft sign-in and MFA. Credentials remain in your private host configuration."
+    )
+    with reporter.progress("Opening private FBS login") as progress:
 
-            async def update(stage):
-                progress.message = stage
-                reporter.write(stage)
+        async def update(stage):
+            progress.message = stage
+            reporter.write(stage)
 
-            previous = os.environ.get("SAGASU_AUTH_TIMEOUT_MS")
-            os.environ["SAGASU_AUTH_TIMEOUT_MS"] = str(timeout * 1000)
-            try:
-                async with asyncio.timeout(timeout):
+        async with asyncio.timeout(timeout):
+            if os.name == "nt":
+                from .fbs_client import FBSClient
+
+                with InstanceLock(settings.profile):
                     async with FBSClient(
                         keep_alive=False,
                         profile_path=settings.profile,
@@ -211,14 +221,9 @@ async def login(settings, reporter, timeout):
                         auth_notify=update,
                     ) as client:
                         await client.ensure_authenticated()
-                progress.finish(
-                    "Authenticated FBS controls verified; private session saved."
-                )
-            finally:
-                if previous is None:
-                    os.environ.pop("SAGASU_AUTH_TIMEOUT_MS", None)
-                else:
-                    os.environ["SAGASU_AUTH_TIMEOUT_MS"] = previous
+            else:
+                await run_operation(settings, "login", notify=update)
+        progress.finish("Authenticated FBS controls verified; private session saved.")
 
 
 def main(argv=None):
@@ -339,7 +344,26 @@ def main(argv=None):
                         ),
                     )
             return 0 if report["ok"] else 1
+        if args.command in {"host", "host-run"}:
+            from .host import control, serve_host
+
+            if args.command == "host-run":
+                configure_logging(
+                    reporter,
+                    log_file=settings.profile.parent / "host.log",
+                    secrets=(settings.values.get("SMU_LOGIN_PASSWORD", ""),),
+                )
+                asyncio.run(serve_host(settings))
+                return 0
+            result = asyncio.run(control(settings, args.action))
+            print_values(result, as_json=True)
+            return 1 if args.action == "stop" and result.get("busy") else 0
         if args.command == "mcp":
+            if not args.direct and os.name != "nt":
+                from .host import bridge_stdio
+
+                asyncio.run(bridge_stdio(settings))
+                return 0
             try:
                 from .mcp_server import serve
             except ImportError:

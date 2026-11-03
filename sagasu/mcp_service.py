@@ -65,7 +65,25 @@ class Backend:
             return await execute_booking(
                 payload, submit=kind == "book", progress=progress, auth_notify=notify
             )
-        async with FBSClient(progress=progress, auth_notify=notify) as client:
+        async with FBSClient(
+            progress=progress,
+            auth_notify=notify,
+            interactive=kind not in {"session", "smoke"},
+        ) as client:
+            if kind == "session":
+                await client.ensure_authenticated()
+                return {"authenticated": True}
+            if kind == "smoke":
+                await client.ensure_authenticated()
+                result = await client.search(payload)
+                bookings = await read_bookings(client)
+                return {
+                    "rooms_read": len(result.rooms),
+                    "bookable_rooms": len(result.bookable_rooms),
+                    "rows_read": len(bookings["bookings"]),
+                    "total": bookings["total"],
+                    "complete": bookings["complete"],
+                }
             if kind == "search":
                 return (await client.search(payload)).to_dict()
             if kind == "login":
