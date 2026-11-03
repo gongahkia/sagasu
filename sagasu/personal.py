@@ -120,7 +120,7 @@ class PersonalStore:
             self.path.chmod(0o600)
             connection = sqlite3.connect(self.path, timeout=2)
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in {0, 1, 2}:
+            if version not in {0, 1}:
                 raise PersonalDataError(
                     "Personal data uses an unsupported schema version; no data was changed."
                 )
@@ -133,12 +133,11 @@ class PersonalStore:
                         "CREATE TABLE IF NOT EXISTS contacts (scope TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,email))"
                     )
                     connection.execute("PRAGMA user_version=1")
-            if version < 2:
-                with connection:
-                    connection.execute(
-                        "CREATE TABLE IF NOT EXISTS booking_templates (scope TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,name))"
-                    )
-                    connection.execute("PRAGMA user_version=2")
+            # Additive table keeps existing readers/rollback compatible with schema 1.
+            with connection:
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS booking_templates (scope TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,name))"
+                )
             if write:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection
