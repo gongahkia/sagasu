@@ -205,12 +205,16 @@ class SearchResult:
 
     @property
     def booking_horizon(self) -> dict | None:
-        affected = [room.name for room in self.rooms if any(
-            slot.status == "outside_booking_horizon"
-            and time_to_minutes(slot.start) < time_to_minutes(self.config.end_time)
-            and time_to_minutes(slot.end) > time_to_minutes(self.config.start_time)
-            for slot in room.timeslots
-        )]
+        affected = [
+            room.name
+            for room in self.rooms
+            if any(
+                slot.status == "outside_booking_horizon"
+                and time_to_minutes(slot.start) < time_to_minutes(self.config.end_time)
+                and time_to_minutes(slot.end) > time_to_minutes(self.config.start_time)
+                for slot in room.timeslots
+            )
+        ]
         if not affected:
             return None
         all_blocked = len(affected) == len(self.rooms)
@@ -222,8 +226,8 @@ class SearchResult:
             "message": (
                 f"FBS marks the requested time as outside the booking horizon for all {len(self.rooms)} checked rooms. "
                 "For a future date, it is too far ahead to book these rooms yet; retry closer to the date."
-                if all_blocked else
-                "Some checked rooms are outside their booking horizon. Other rooms were checked at the same date and time; use the available choices."
+                if all_blocked
+                else "Some checked rooms are outside their booking horizon. Other rooms were checked at the same date and time; use the available choices."
             ),
             "scope": "Checked rooms only; booking horizons may differ for other facilities.",
         }
@@ -300,7 +304,8 @@ def minutes_to_time(value: int) -> str:
 def parse_event_title(title: str) -> TimeSlot | None:
     horizon = re.search(
         r"\((\d{2}:\d{2})-(\d{2}:\d{2})\)\s*\(not within booking horizon\)",
-        title, re.IGNORECASE,
+        title,
+        re.IGNORECASE,
     )
     if horizon:
         return TimeSlot(horizon.group(1), horizon.group(2), "outside_booking_horizon")
@@ -1113,7 +1118,9 @@ class FBSClient:
             request.search.start_time, request.search.end_time
         ):
             if result.booking_horizon:
-                await self.progress("Checking other rooms at the same time for booking-horizon restrictions")
+                await self.progress(
+                    "Checking other rooms at the same time for booking-horizon restrictions"
+                )
                 try:
                     alternatives = await self.search(request.search)
                 except FBSError:
@@ -1123,10 +1130,14 @@ class FBSClient:
                         "Retry the search. No booking was submitted."
                     ) from None
                 diagnosis = alternatives.booking_horizon
-                message = (diagnosis["message"] if diagnosis else
-                           "The requested room is outside its booking horizon.")
+                message = (
+                    diagnosis["message"]
+                    if diagnosis
+                    else "The requested room is outside its booking horizon."
+                )
                 raise BookingUnavailable(
-                    message + f" Checked {len(alternatives.rooms)} rooms at the same date/time; "
+                    message
+                    + f" Checked {len(alternatives.rooms)} rooms at the same date/time; "
                     f"{len(alternatives.bookable_rooms)} alternatives are available. "
                     "Run a fresh search to review alternatives before booking. No booking was submitted."
                 )

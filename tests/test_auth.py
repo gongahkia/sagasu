@@ -355,13 +355,17 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         client.page.keyboard.press.assert_awaited_once_with("Escape")
 
     async def test_aborted_passkey_navigation_accepts_verified_credential_picker(self):
-        client = self.flow([
-            ("webauthn", "passkey"),
-            ("sign_in", "loading"),
-            ("password_choice", "password"),
-            ("password_choice", "password"),
-        ])
-        client.page.evaluate.return_value = "https://login.microsoftonline.com/tenant/resume"
+        client = self.flow(
+            [
+                ("webauthn", "passkey"),
+                ("sign_in", "loading"),
+                ("password_choice", "password"),
+                ("password_choice", "password"),
+            ]
+        )
+        client.page.evaluate.return_value = (
+            "https://login.microsoftonline.com/tenant/resume"
+        )
         client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_ABORTED")
         client.page.wait_for_load_state = AsyncMock()
         await client._complete_interactive_authentication()
@@ -369,7 +373,9 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_aborted_passkey_navigation_rejects_unexpected_screen(self):
         client = self.flow([("webauthn", "passkey"), ("email", "email")])
-        client.page.evaluate.return_value = "https://login.microsoftonline.com/tenant/resume"
+        client.page.evaluate.return_value = (
+            "https://login.microsoftonline.com/tenant/resume"
+        )
         client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_ABORTED")
         client.page.wait_for_load_state = AsyncMock()
         with self.assertRaises(PlaywrightError):
@@ -377,8 +383,12 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_passkey_navigation_preserves_other_browser_errors(self):
         client = self.flow([("webauthn", "passkey")])
-        client.page.evaluate.return_value = "https://login.microsoftonline.com/tenant/resume"
-        client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_CONNECTION_RESET")
+        client.page.evaluate.return_value = (
+            "https://login.microsoftonline.com/tenant/resume"
+        )
+        client.page.goto.side_effect = PlaywrightError(
+            "Page.goto: net::ERR_CONNECTION_RESET"
+        )
         with self.assertRaises(PlaywrightError):
             await client._complete_interactive_authentication()
 
