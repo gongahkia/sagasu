@@ -336,6 +336,87 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
         return safe(service.result, operation_id, offset, limit)
 
     @server.tool(annotations=local)
+    async def list_booking_templates() -> dict[str, Any]:
+        """List private saved room/time/purpose/co-booker snapshots for future repeat plans. Does not book."""
+        rows = safe(safe(service.personal_profile).templates)
+        return {"templates": rows, "total": len(rows)}
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        )
+    )
+    async def save_booking_template(
+        name: str,
+        room: str,
+        start_time: str,
+        end_time: str,
+        purpose: str,
+        co_booker: str | None = None,
+        cobooker_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Save/update an explicitly requested template by name. Stores a snapshot of room, times, purpose and co-booker email; later contact changes do not rewrite it. Does not book."""
+        if bool(co_booker) == bool(cobooker_id):
+            raise ToolError("Supply a co-booker email/name OR saved co-booker ID.")
+        store = safe(service.personal_profile)
+        email = (
+            safe(store.resolve_contact, cobooker_id or co_booker)
+            if cobooker_id or "@" not in co_booker
+            else co_booker
+        )
+        return safe(
+            store.save_template, name, room, start_time, end_time, purpose, email
+        )
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False, destructive_hint=True, open_world_hint=False
+        )
+    )
+    async def delete_booking_template(template_id: str) -> dict[str, Any]:
+        """Delete one local template when requested. Existing repeat plans and reviews retain their snapshots."""
+        return safe(safe(service.personal_profile).delete_template, template_id)
+
+    @server.tool(annotations=read)
+    async def repeat_bookings(
+        date: str,
+        bookings_operation_id: str | None = None,
+        reference_numbers: list[str] | None = None,
+        template_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Plan 1–8 existing bookings/templates on a new SGT date (ISO accepted), preserving each room/time. Read My Bookings first for references. Retrieves available details, checks each slot separately, and reports missing purpose/co-booker fields. Never submits. Use repeat_booking_review for each desired slot, then the normal submission tool only when requested."""
+        return safe(
+            service.repeat_bookings,
+            date,
+            bookings_operation_id,
+            reference_numbers,
+            template_ids,
+        )
+
+    @server.tool(annotations=local)
+    async def repeat_booking_review(
+        operation_id: str,
+        slot_index: int,
+        room: str | None = None,
+        purpose: str | None = None,
+        co_booker: str | None = None,
+        cobooker_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Prepare one exact repeat-plan slot as an ordinary ten-minute booking review. Defaults to its source room/details; ask for missing fields or explicitly choose an available alternative. Plans are snapshots; final booking rechecks live FBS. Never submits a group implicitly."""
+        return safe(
+            service.repeat_review,
+            operation_id,
+            slot_index,
+            room,
+            purpose,
+            co_booker,
+            cobooker_id,
+        )
+
+    @server.tool(annotations=local)
     async def booking_review(
         search_operation_id: str,
         room: str,

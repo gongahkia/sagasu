@@ -70,6 +70,10 @@ class Backend:
             auth_notify=notify,
             interactive=kind not in {"session", "smoke"},
         ) as client:
+            if kind == "repeat":
+                from .repeat import repeat_plan
+
+                return await repeat_plan(client, payload)
             if kind == "session":
                 await client.ensure_authenticated()
                 return {"authenticated": True}
@@ -562,6 +566,14 @@ class AgentService:
     def review_booking(
         self, search_operation_id, room, purpose, co_booker=None, cobooker_id=None
     ):
+        result = self._completed(search_operation_id, "search")
+        return self._review_booking_result(
+            result, room, purpose, co_booker, cobooker_id
+        )
+
+    def _review_booking_result(
+        self, result, room, purpose, co_booker=None, cobooker_id=None
+    ):
         if cobooker_id is not None:
             if co_booker is not None:
                 raise AgentError(
@@ -574,7 +586,6 @@ class AgentService:
             raise AgentError(
                 "Provide a co-booker email or choose a saved co-booker ID."
             )
-        result = self._completed(search_operation_id, "search")
         search = SearchConfig.from_mapping(result["config"])
         require_future_booking(search)
         from .fbs_client import RoomAvailability, TimeSlot
@@ -596,6 +607,87 @@ class AgentService:
             search, room, purpose.strip(), co_booker.strip().lower()
         )
         return self._review("book", request, request.to_dict())
+
+    def repeat_bookings(
+        self,
+        date,
+        bookings_operation_id=None,
+        reference_numbers=None,
+        template_ids=None,
+    ):
+        from .repeat import booking_window, normalize_date
+
+        references = reference_numbers or []
+        templates = template_ids or []
+        if (
+            not 1 <= len(references) + len(templates) <= 8
+            or len(set(references)) != len(references)
+            or len(set(templates)) != len(templates)
+        ):
+            raise AgentError("Choose 1–8 unique booking references or template IDs.")
+        sources = []
+        try:
+            date = normalize_date(date)
+            if references:
+                result = self._completed(bookings_operation_id, "bookings")
+                for ref in references:
+                    matches = [
+                        row
+                        for row in result["bookings"]
+                        if row["reference_number"] == ref
+                    ]
+                    if len(matches) != 1:
+                        raise AgentError(
+                            "Choose references uniquely present in the source bookings listing."
+                        )
+                    sources.append(
+                        {**copy.deepcopy(matches[0]), **booking_window(matches[0])}
+                    )
+            saved = self.personal_profile().templates() if templates else []
+            for key in templates:
+                matches = [row for row in saved if row["id"] == key]
+                if len(matches) != 1:
+                    raise AgentError("Choose an existing booking template ID.")
+                sources.append(copy.deepcopy(matches[0]))
+            for source in sources:
+                require_future_booking(
+                    SearchConfig(date, source["start_time"], source["end_time"])
+                )
+        except (ValueError, TypeError, BookingUnavailable):
+            raise AgentError(
+                "Choose a future target date and source bookings with verifiable same-day times."
+            ) from None
+        return self.start("repeat", {"date": date, "sources": sources})
+
+    def repeat_review(
+        self,
+        operation_id,
+        slot_index,
+        room=None,
+        purpose=None,
+        co_booker=None,
+        cobooker_id=None,
+    ):
+        plan = self._completed(operation_id, "repeat")
+        if type(slot_index) is not int or not 0 <= slot_index < len(plan["slots"]):
+            raise AgentError("Choose a slot index from the completed repeat plan.")
+        slot = plan["slots"][slot_index]
+        if "search" not in slot:
+            raise AgentError(
+                "This slot could not be checked; refresh its source and availability."
+            )
+        details = slot["details"]
+        return self._review_booking_result(
+            slot["search"],
+            room or slot["source"]["room"],
+            purpose if purpose is not None else details.get("purpose") or "",
+            (
+                co_booker
+                if co_booker is not None
+                else (None if cobooker_id else details.get("co_booker"))
+            ),
+            cobooker_id,
+        )
 
     def review_cancellation(self, bookings_operation_id, reference_number, reason):
         result = self._completed(bookings_operation_id, "bookings")

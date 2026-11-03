@@ -120,7 +120,7 @@ class PersonalStore:
             self.path.chmod(0o600)
             connection = sqlite3.connect(self.path, timeout=2)
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in {0, 1}:
+            if version not in {0, 1, 2}:
                 raise PersonalDataError(
                     "Personal data uses an unsupported schema version; no data was changed."
                 )
@@ -133,6 +133,12 @@ class PersonalStore:
                         "CREATE TABLE IF NOT EXISTS contacts (scope TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,email))"
                     )
                     connection.execute("PRAGMA user_version=1")
+            if version < 2:
+                with connection:
+                    connection.execute(
+                        "CREATE TABLE IF NOT EXISTS booking_templates (scope TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,name))"
+                    )
+                    connection.execute("PRAGMA user_version=2")
             if write:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection
@@ -208,6 +214,78 @@ class PersonalStore:
             ).rowcount:
                 raise PersonalDataError("That saved co-booker no longer exists.")
         return {"deleted": True, "id": contact_id}
+
+    def templates(self):
+        with self._db() as db:
+            return [
+                {"id": key, "name": name, **json.loads(payload)}
+                for key, name, payload in db.execute(
+                    "SELECT id,name,payload FROM booking_templates WHERE scope=? ORDER BY name",
+                    (self.scope,),
+                )
+            ]
+
+    def save_template(self, name, room, start_time, end_time, purpose, co_booker):
+        from .fbs_client import SearchConfig
+
+        if (
+            not all(
+                isinstance(v, str) and v.strip()
+                for v in (name, room, purpose, co_booker)
+            )
+            or len(name) > 80
+            or len(room) > 200
+            or len(purpose) > 200
+        ):
+            raise PersonalDataError(
+                "Provide a template name, room, purpose, and co-booker within their length limits."
+            )
+        try:
+            SearchConfig("01-Jan-2099", start_time, end_time)
+        except (ValueError, TypeError):
+            raise PersonalDataError(
+                "Template times must describe a same-day interval on half-hour boundaries."
+            ) from None
+        if not SMU_EMAIL_RE.fullmatch(co_booker.strip()):
+            raise PersonalDataError(
+                "The template needs a valid full SMU co-booker email."
+            )
+        payload = {
+            "room": room.strip(),
+            "start_time": start_time,
+            "end_time": end_time,
+            "purpose": purpose.strip(),
+            "co_booker": co_booker.strip().casefold(),
+        }
+        with self._db(write=True) as db:
+            existing = db.execute(
+                "SELECT id FROM booking_templates WHERE scope=? AND name=?",
+                (self.scope, name.strip()),
+            ).fetchone()
+            if (
+                not existing
+                and db.execute(
+                    "SELECT COUNT(*) FROM booking_templates WHERE scope=?",
+                    (self.scope,),
+                ).fetchone()[0]
+                >= 100
+            ):
+                raise PersonalDataError("Saved templates are limited to 100.")
+            key = existing[0] if existing else secrets.token_urlsafe(12)
+            db.execute(
+                "INSERT INTO booking_templates VALUES(?,?,?,?) ON CONFLICT(scope,id) DO UPDATE SET name=excluded.name,payload=excluded.payload",
+                (self.scope, key, name.strip(), json.dumps(payload)),
+            )
+        return {"id": key, "name": name.strip(), **payload}
+
+    def delete_template(self, template_id):
+        with self._db(write=True) as db:
+            if not db.execute(
+                "DELETE FROM booking_templates WHERE scope=? AND id=?",
+                (self.scope, template_id),
+            ).rowcount:
+                raise PersonalDataError("That booking template no longer exists.")
+        return {"deleted": True, "id": template_id}
 
     def resolve_contact(self, value):
         saved = self.contacts()
