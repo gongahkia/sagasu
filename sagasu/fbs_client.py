@@ -64,6 +64,13 @@ _SHARED_CONTEXT: BrowserContext | None = None
 class FBSError(RuntimeError):
     """Base FBS client failure."""
 
+    default_reason = None
+
+    def __init__(self, message, *, reason=None, details=None):
+        super().__init__(message)
+        self.reason = reason or self.default_reason
+        self.details = details or {}
+
 
 class CalendarSelectionLost(FBSError):
     """The calendar did not retain exactly the requested room/time selection."""
@@ -76,9 +83,13 @@ class BookingOutcomeUnknown(FBSError):
 class AuthenticationRequired(FBSError):
     """The saved browser session is absent or expired."""
 
+    default_reason = "session_expired"
+
 
 class LayoutChanged(FBSError):
     """The live FBS DOM no longer matches the expected structure."""
+
+    default_reason = "layout_changed"
 
 
 def calendar_time_x(headers: list[dict], value: str, header_minutes: int) -> float:
@@ -117,6 +128,8 @@ def calendar_time_x(headers: list[dict], value: str, header_minutes: int) -> flo
 
 class BookingUnavailable(FBSError):
     """The requested room or timeslot is no longer available."""
+
+    default_reason = "room_unavailable"
 
 
 @dataclass(frozen=True)
@@ -672,7 +685,14 @@ class FBSClient:
                     await self.progress(prompt)
                 notifications.add((state, prompt))
             if state == "failed" or (state == "manual" and self.headless):
-                raise AuthenticationRequired(prompt)
+                raise AuthenticationRequired(
+                    prompt,
+                    reason=(
+                        "sign_in_rejected"
+                        if state == "failed"
+                        else "interactive_verification_required"
+                    ),
+                )
 
             trusted = self._trusted_login_url(self.page.url)
             if state == "email" and trusted:
@@ -696,7 +716,8 @@ class FBSClient:
                     email_submissions += 1
                 elif not login_email and self.headless:
                     raise AuthenticationRequired(
-                        "Set SMU_LOGIN_EMAIL for headless sign-in."
+                        "Set SMU_LOGIN_EMAIL for headless sign-in.",
+                        reason="missing_email",
                     )
             elif state == "password" and trusted:
                 if password_submitted and state_changed:
@@ -709,7 +730,8 @@ class FBSClient:
                     password_submitted = True
                 elif not password and self.headless:
                     raise AuthenticationRequired(
-                        "Set SMU_LOGIN_PASSWORD for headless password sign-in."
+                        "Set SMU_LOGIN_PASSWORD for headless password sign-in.",
+                        reason="missing_password",
                     )
             elif (
                 state == "stay_signed_in"
@@ -798,7 +820,7 @@ class FBSClient:
         )
         if self.auth_notify:
             await self.auth_notify(message)
-        raise AuthenticationRequired(message)
+        raise AuthenticationRequired(message, reason="authentication_timeout")
 
     async def _passkey_resume_url(self) -> str | None:
         """Read Microsoft's supplied method-picker continuation without calling its APIs."""
@@ -1127,7 +1149,8 @@ class FBSClient:
                     raise BookingUnavailable(
                         "The requested room is outside its booking horizon. "
                         "Other rooms could not be checked, so a shared booking-horizon restriction is unverified. "
-                        "Retry the search. No booking was submitted."
+                        "Retry the search. No booking was submitted.",
+                        reason="outside_booking_horizon",
                     ) from None
                 diagnosis = alternatives.booking_horizon
                 message = (
@@ -1139,7 +1162,15 @@ class FBSClient:
                     message
                     + f" Checked {len(alternatives.rooms)} rooms at the same date/time; "
                     f"{len(alternatives.bookable_rooms)} alternatives are available. "
-                    "Run a fresh search to review alternatives before booking. No booking was submitted."
+                    "Run a fresh search to review alternatives before booking. No booking was submitted.",
+                    reason="outside_booking_horizon",
+                    details={
+                        "checked_rooms": len(alternatives.rooms),
+                        "available_total": len(alternatives.bookable_rooms),
+                        "all_checked_rooms_affected": bool(
+                            diagnosis and diagnosis["all_checked_rooms_affected"]
+                        ),
+                    },
                 )
             raise BookingUnavailable(
                 f"{request.room} is no longer free from "

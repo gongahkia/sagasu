@@ -39,6 +39,7 @@ from .fbs_account import (
     read_task_list,
 )
 from .observability import event, observed_operation
+from .errors import public_failure
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
 
 WRITE_KINDS = {"book", "cancel", "approve_task"}
@@ -379,6 +380,8 @@ class AgentService:
                     )
                 ),
             }
+            if not unknown:
+                job.error.update(public_failure(error))
             event(
                 "agent.operation_failed",
                 level=40,

@@ -118,6 +118,50 @@ class WorkflowServiceTests(ServiceCase):
 
 @unittest.skipIf(Client is None, "Install Sagasu for MCP protocol tests")
 class WorkflowProtocolTests(ServiceCase):
+    async def test_actionable_failure_survives_mcp_without_raw_exception_text(self):
+        from sagasu.fbs_client import AuthenticationRequired, BookingUnavailable
+
+        async with Client(
+            create_server(self.service, allow_agent_submission=True)
+        ) as client:
+            for reason, error in [
+                (
+                    "missing_password",
+                    AuthenticationRequired(
+                        "PRIVATE PASSWORD", reason="missing_password"
+                    ),
+                ),
+                ("session_expired", AuthenticationRequired("PRIVATE ACCOUNT")),
+                (
+                    "outside_booking_horizon",
+                    BookingUnavailable(
+                        "PRIVATE PAGE TEXT",
+                        reason="outside_booking_horizon",
+                        details={
+                            "checked_rooms": 7,
+                            "available_total": 0,
+                            "password": "PRIVATE PASSWORD",
+                        },
+                    ),
+                ),
+            ]:
+                review = await self.review()
+                self.backend.error = error
+                operation = await self.call(
+                    client, "validate_booking", review_id=review["review_id"]
+                )
+                status = await self.call(
+                    client, "wait_operation", operation_id=operation["operation_id"]
+                )
+                self.assertEqual(status["error"]["reason"], reason)
+                self.assertNotIn("PRIVATE", json.dumps(status))
+                if reason == "outside_booking_horizon":
+                    self.assertEqual(status["error"]["details"]["checked_rooms"], 7)
+                    self.assertIsNone(status["error"]["next_tool"])
+                else:
+                    self.assertEqual(status["error"]["next_tool"], "login")
+                self.backend.error = None
+
     async def test_mfa_prompt_is_available_privately_without_external_notifier(self):
         self.backend.mfa = True
         self.backend.gate = asyncio.Event()

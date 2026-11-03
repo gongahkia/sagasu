@@ -18,6 +18,7 @@ from .config import (
 )
 from .console import Reporter, configure_logging
 from .runtime import AlreadyRunning, InstanceLock
+from .errors import public_failure
 
 
 def timeout_value(value):
@@ -377,7 +378,10 @@ def main(argv=None):
     except Exception as error:
         # Library exceptions can contain private configuration values.
         name = type(error).__name__
-        if name in {"TimedOut", "NetworkError", "ConnectError", "TimeoutError"}:
+        failure = public_failure(error)
+        if failure:
+            message = failure["message"] + " " + failure["next_action"]
+        elif name in {"TimedOut", "NetworkError", "ConnectError", "TimeoutError"}:
             message = "The operation timed out or a service is unreachable. Run sagasu doctor to check connectivity."
         elif name == "AuthenticationRequired":
             message = "FBS authentication did not finish. Run sagasu doctor, then retry sagasu login when FBS is reachable."
@@ -386,7 +390,12 @@ def main(argv=None):
         if as_json:
             print(
                 json.dumps(
-                    {"ok": False, "error": "operation_failed", "message": message}
+                    {
+                        "ok": False,
+                        "error": "operation_failed",
+                        "message": message,
+                        **failure,
+                    }
                 )
             )
         else:
