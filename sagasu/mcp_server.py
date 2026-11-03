@@ -273,10 +273,33 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
 
     @server.tool(annotations=local)
     async def available_rooms(
-        operation_id: str, offset: int = 0, limit: int = 20
+        operation_id: str,
+        offset: int = 0,
+        limit: int = 20,
+        preferred_rooms: list[str] | None = None,
     ) -> dict[str, Any]:
-        """List only rooms free for the FULL requested interval from a successful search, ranked by free time and room name. Filters before pagination and returns names usable in booking_review. Fails if the search start has passed."""
-        return safe(service.available_rooms, operation_id, offset, limit)
+        """List rooms free for the FULL interval, ranked by explicit preferred room order then name, with match reasons and horizon recovery instructions. Filters/ranks before pagination. Fails if the search start has passed."""
+        return safe(
+            service.available_rooms, operation_id, offset, limit, preferred_rooms
+        )
+
+    @server.tool(annotations=read)
+    async def search_alternatives(
+        operation_id: str,
+        shift_minutes: int = 0,
+        buildings: list[str] | None = None,
+        floors: list[str] | None = None,
+        preferred_rooms: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Start up to six read-only alternative searches from a completed search. Timing is unchanged unless shift_minutes (0–120, half-hour steps) is explicitly allowed; duration/date remain fixed. Optional buildings/floors replace ONLY those filters; all others remain. Ask before relaxing constraints the user required. No changed scope means no redundant FBS query. Use wait_operation and report each probe's coverage/horizon/failures; an empty result does not imply all campus rooms are unavailable."""
+        return safe(
+            service.search_alternatives,
+            operation_id,
+            shift_minutes,
+            buildings,
+            floors,
+            preferred_rooms,
+        )
 
     @server.tool(annotations=local)
     async def wait_operation(

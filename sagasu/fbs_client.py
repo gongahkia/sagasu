@@ -209,12 +209,22 @@ class SearchResult:
 
     @property
     def bookable_rooms(self) -> list[RoomAvailability]:
+        return self.ranked_rooms()
+
+    def ranked_rooms(self, preferred_rooms=()) -> list[RoomAvailability]:
         rooms = [
             room
             for room in self.rooms
             if room.is_free(self.config.start_time, self.config.end_time)
         ]
-        return sorted(rooms, key=lambda room: (-room.free_minutes, room.name.lower()))
+        priorities = {name: index for index, name in enumerate(preferred_rooms)}
+        return sorted(
+            rooms,
+            key=lambda room: (
+                priorities.get(room.name, len(priorities)),
+                room.name.casefold(),
+            ),
+        )
 
     @property
     def booking_horizon(self) -> dict | None:

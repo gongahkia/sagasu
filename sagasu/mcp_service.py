@@ -54,6 +54,10 @@ class Backend:
 
     @observed_operation("agent.backend")
     async def run(self, kind, payload, progress, notify):
+        if kind == "alternatives" and not payload["configs"]:
+            from .alternatives import report
+
+            return report(payload["source"], [])
         if kind in {"approve_task", "task_details"}:
             return await execute_task_action(
                 payload,
@@ -70,6 +74,10 @@ class Backend:
             auth_notify=notify,
             interactive=kind not in {"session", "smoke"},
         ) as client:
+            if kind == "alternatives":
+                from .alternatives import find_alternatives
+
+                return await find_alternatives(client, payload)
             if kind == "repeat":
                 from .repeat import repeat_plan
 
@@ -496,7 +504,7 @@ class AgentService:
             ),
         }
 
-    def available_rooms(self, operation_id, offset=0, limit=20):
+    def available_rooms(self, operation_id, offset=0, limit=20, preferred_rooms=None):
         """Filter before pagination; preserve the full discovery snapshot for reviews."""
         from .fbs_client import RoomAvailability, TimeSlot, SearchResult
 
@@ -511,27 +519,109 @@ class AgentService:
             )
             for row in result["rooms"]
         ]
-        available = sorted(
-            [
-                room
-                for room in rooms
-                if room.is_free(config.start_time, config.end_time)
-            ],
-            key=lambda room: (-room.free_minutes, room.name.lower()),
+        preferred_rooms = self._room_preferences(preferred_rooms)
+        snapshot = SearchResult(config, rooms, result.get("scraped_at", ""))
+        available = snapshot.ranked_rooms(preferred_rooms)
+        horizon = snapshot.booking_horizon
+        horizon_blocked = bool(
+            horizon and horizon["all_checked_rooms_affected"] and not available
         )
         return {
             "operation_id": operation_id,
             "config": copy.deepcopy(result["config"]),
             "rooms": [
-                {"name": room.name, "free_minutes": room.free_minutes}
+                {
+                    "name": room.name,
+                    "free_minutes": room.free_minutes,
+                    "match_reasons": [
+                        "Free for the entire requested interval",
+                        "Included by the requested FBS filters",
+                    ]
+                    + (
+                        [
+                            f"Explicit room preference {preferred_rooms.index(room.name)+1}"
+                        ]
+                        if room.name in preferred_rooms
+                        else []
+                    ),
+                }
                 for room in available[offset : offset + limit]
             ],
             "searched_total": len(rooms),
             "available_total": len(available),
-            "booking_horizon": SearchResult(config, rooms, "").booking_horizon,
+            "booking_horizon": horizon,
+            "scraped_at": result.get("scraped_at"),
+            "ranking": "Explicit room preference, then room name",
+            "suggested_action": (
+                "choose_room"
+                if available
+                else (
+                    "wait_for_booking_window"
+                    if horizon_blocked
+                    else "consider_alternatives"
+                )
+            ),
             "next_offset": offset + limit if offset + limit < len(available) else None,
-            "next_tool": "booking_review" if available else "search_rooms",
+            "next_tool": (
+                "booking_review"
+                if available
+                else None if horizon_blocked else "search_alternatives"
+            ),
         }
+
+    @staticmethod
+    def _room_preferences(preferred_rooms):
+        values = preferred_rooms or []
+        if (
+            not isinstance(values, list)
+            or len(values) > 20
+            or any(
+                not isinstance(v, str) or not v.strip() or len(v) > 200 for v in values
+            )
+            or len(set(values)) != len(values)
+        ):
+            raise AgentError(
+                "Provide up to 20 unique preferred room names in priority order."
+            )
+        return values
+
+    def search_alternatives(
+        self,
+        operation_id,
+        shift_minutes=0,
+        buildings=None,
+        floors=None,
+        preferred_rooms=None,
+    ):
+        from .alternatives import candidates
+        from .personal import validate_preferences
+
+        source = self._completed(operation_id, "search")
+        require_future_booking(SearchConfig.from_mapping(source["config"]))
+        if (
+            type(shift_minutes) is not int
+            or not 0 <= shift_minutes <= 120
+            or shift_minutes % 30
+        ):
+            raise AgentError(
+                "Time flexibility must be 0–120 minutes in half-hour increments."
+            )
+        patch = {
+            key: value
+            for key, value in [("buildings", buildings), ("floors", floors)]
+            if value is not None
+        }
+        validate_preferences(patch)
+        preferred_rooms = self._room_preferences(preferred_rooms)
+        configs = candidates(source, shift_minutes, buildings, floors)
+        return self.start(
+            "alternatives",
+            {
+                "source": copy.deepcopy(source),
+                "configs": configs,
+                "preferred_rooms": preferred_rooms,
+            },
+        )
 
     def search(self, config=None, preferences=None):
         from .personal import validate_preferences
