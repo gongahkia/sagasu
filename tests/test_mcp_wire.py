@@ -104,7 +104,8 @@ class WireProtocolTests(unittest.IsolatedAsyncioTestCase):
                 self.fail("Server did not shut down after stdin EOF")
         from sagasu.host import control
 
-        await control(self.host_settings, "stop")
+        if os.name != "nt":
+            await control(self.host_settings, "stop")
         errors = (await self.stderr).decode(errors="replace")
         self.assertEqual(self.process.returncode, 0, errors)
         combined = json.dumps(self.responses) + errors

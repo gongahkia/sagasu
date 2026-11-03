@@ -600,6 +600,21 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
                     "Submit using the advertised submission_tool only when the user requested the action",
                     "wait_operation, inspect actual fbs_status, and operation_receipt when available",
                 ],
+                "repeat_booking": [
+                    "Read list_bookings/wait_operation for source references, or list_booking_templates for saved snapshots",
+                    "repeat_bookings: explicit future date and up to eight reference/template IDs",
+                    "wait_operation: inspect every slot, including missing fields, unavailable rooms and partial failures",
+                    "repeat_booking_review: one chosen slot; supply missing fields and review the exact room/time/co-booker",
+                    "Use the advertised submission_tool only on the user's request; each slot has an independent outcome",
+                    "Save or delete templates only when requested; changing a template never rewrites an existing review",
+                ],
+                "alternatives": [
+                    "available_rooms: provide explicit preferred room order; inspect booking_horizon and suggested_action",
+                    "A shared horizon restriction means retry closer to the date; do not repeatedly query the same window",
+                    "search_alternatives: only explicitly permitted time/location flexibility; duration/date and other filters are preserved",
+                    "wait_operation: inspect up to six independent probes and report failures separately from unavailable rooms",
+                    "Run search_rooms with the chosen configuration before preparing a review; alternatives never authorize a booking or changed timing",
+                ],
                 "cancellation": [
                     "list_bookings",
                     "wait_operation",
@@ -615,6 +630,8 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
                     "wait_operation",
                 ],
                 "recovery": {
+                    "session": "Use session_status to verify cached authentication without entering credentials. CLI login and MCP clients share the local host on macOS/Linux.",
+                    "partial_listing": "Inspect source_complete/complete and coverage_reason. MCP result pagination does not imply the whole FBS listing was available.",
                     "awaiting_mfa": "Call authentication_status, relay the current prompt/number, and wait for the user to approve Microsoft sign-in. Never request passwords in chat.",
                     "outcome_unknown": "Use reconcile_operation, then wait_operation to inspect current FBS evidence. Never infer success or safe retry from a missing row; unresolved matching actions block new submissions.",
                     "expired_operation": "Read jobs expire. Inspect action_history and operation_result for durable write outcomes, then reconcile uncertain writes in FBS before preparing another review.",

@@ -130,3 +130,53 @@ class SharedHostTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await control(changed, "status"))["running"])
         self.assertTrue((await control(changed, "stop"))["stopping"])
         await asyncio.wait_for(self.host, 5)
+
+
+@unittest.skipIf(os.name == "nt", "Unix host")
+class HostLauncherTests(unittest.IsolatedAsyncioTestCase):
+    async def test_simultaneous_stdio_clients_launch_only_one_host(self):
+        import sys
+        from mcp import Client, StdioServerParameters
+
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text(
+                "SAGASU_BROWSER_PROFILE=browser\nSAGASU_PREFERENCES_PATH=personal.sqlite3\nSAGASU_JOURNAL_PATH=actions.sqlite3\n"
+            )
+            environment = {
+                k: v
+                for k, v in os.environ.items()
+                if not k.startswith(("SAGASU_", "SMU_"))
+            }
+            with patch.dict(os.environ, environment, clear=True):
+                settings = Settings.load(env_file)
+            params = StdioServerParameters(
+                command=sys.executable,
+                args=["-m", "sagasu", "mcp", "--env-file", str(env_file)],
+                env=environment,
+            )
+            ready = asyncio.Event()
+            pids = []
+
+            async def connect_one():
+                async with Client(params) as client:
+                    result = await client.call_tool("server_status", {})
+                    self.assertFalse(result.is_error)
+                    pids.append(result.structured_content["host_pid"])
+                    if len(pids) == 2:
+                        ready.set()
+                    await ready.wait()
+                    resource = await client.read_resource("sagasu://workflow")
+                    workflow = json.loads(resource.contents[0].text)
+                    self.assertIn("repeat_booking", workflow)
+                    self.assertIn("alternatives", workflow)
+
+            try:
+                await asyncio.wait_for(asyncio.gather(connect_one(), connect_one()), 30)
+                self.assertEqual(len(set(pids)), 1)
+                self.assertNotEqual(pids[0], os.getpid())
+                status = await control(settings, "status")
+                self.assertEqual(status["pid"], pids[0])
+                self.assertFalse(status["busy"])
+            finally:
+                await control(settings, "stop")
