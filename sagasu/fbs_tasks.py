@@ -66,7 +66,14 @@ async def add_task_capabilities(frame, result):
 
 
 async def locate_reviewed_task(client, expected):
-    result = await read_task_list(client)
+    result = await read_task_list(client, reference=expected["reference_number"])
+    if not any(
+        task["reference_number"] == expected["reference_number"]
+        for task in result["tasks"]
+    ):
+        raise TaskUnavailable(
+            "The reviewed task was not found in the checked FBS pages. Refresh Task List and inspect its coverage before reviewing again."
+        )
     frame = client.page.frame(name="frameContent")
     matches = [
         (task, row)

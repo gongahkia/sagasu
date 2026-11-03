@@ -17,6 +17,18 @@ if Client is not None:
 
 
 class WorkflowServiceTests(ServiceCase):
+    async def test_client_pagination_does_not_claim_partial_fbs_listing_is_complete(
+        self,
+    ):
+        job = await self.finish(self.service.start("bookings"))
+        job.result.update(
+            total=50, complete=False, coverage_reason="unsupported_or_missing_next_page"
+        )
+        result = self.service.result(job.id)["result"]
+        self.assertEqual(result["pagination"]["source_total"], 50)
+        self.assertFalse(result["pagination"]["source_complete"])
+        self.assertFalse(result["complete"])
+
     async def test_wait_returns_for_mfa_and_prompt_clears_on_completion(self):
         self.backend.mfa = True
         self.backend.gate = asyncio.Event()

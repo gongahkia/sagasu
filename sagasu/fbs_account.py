@@ -56,6 +56,14 @@ async def capture_booking_evidence(client, reference):
             and (await cells.nth(1).inner_text()).strip() == reference
         ):
             matches.append(row)
+    if not matches:
+        await read_bookings(client, reference=reference)
+        frame = client.page.frame(name="frameContent")
+        matches = [
+            row
+            for record, row in await booking_rows(frame)
+            if record["reference_number"] == reference
+        ]
     if len(matches) != 1:
         raise LayoutChanged(
             "The verified booking could not be uniquely located for its receipt"
@@ -168,7 +176,7 @@ def parse_tasks(snapshot):
 
 
 @observed_step("tasks.read")
-async def read_task_list(client):
+async def read_task_list(client, *, reference=None):
     await client.ensure_authenticated()
     await client.progress("checking FBS Task List")
     frame = await open_account_tab(client, "TaskListTab", "#GridViewTask_content")
@@ -179,10 +187,17 @@ async def read_task_list(client):
         await client._wait_for_idle(frame)
         if (await field.input_value()).strip():
             raise LayoutChanged("FBS Task List search filter could not be cleared")
-    result = parse_tasks(await frame.evaluate(TASK_SNAPSHOT))
     from .fbs_tasks import add_task_capabilities
+    from .fbs_paging import collect_pages
 
-    await add_task_capabilities(frame, result)
+    async def read_page():
+        result = parse_tasks(await frame.evaluate(TASK_SNAPSHOT))
+        await add_task_capabilities(frame, result)
+        return result
+
+    result = await collect_pages(
+        client, frame, "GridViewTask", "tasks", read_page, reference=reference
+    )
     event(
         "tasks.results",
         total=result["total"],
@@ -225,9 +240,20 @@ async def booking_rows(frame):
 
 
 @observed_step("bookings.read")
-async def read_bookings(client):
+async def read_bookings(client, *, reference=None):
     await client.ensure_authenticated()
     frame = await open_account_tab(client, "MyBookingsTab", "#GridViewBooking_content")
+    from .fbs_paging import collect_pages
+
+    async def read_page():
+        return await read_booking_page(frame)
+
+    return await collect_pages(
+        client, frame, "GridViewBooking", "bookings", read_page, reference=reference
+    )
+
+
+async def read_booking_page(frame):
     rows = await booking_rows(frame)
     summary = await frame.locator("#GridViewBooking").inner_text()
     total = re.search(r"(\d+)\s+ITEM\(S\)\s+TOTAL", summary, re.I)
@@ -286,7 +312,7 @@ async def confirm_cancellation_dialog(frame, reference, reason):
 
 @observed_step("cancellation.execute")
 async def cancel_booking(client, expected, reason):
-    await read_bookings(client)
+    await read_bookings(client, reference=expected["reference_number"])
     frame = client.page.frame(name="frameContent")
     matches = [
         (record, row)

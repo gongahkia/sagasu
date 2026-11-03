@@ -99,7 +99,7 @@ class BrowserApprovalTests(unittest.IsolatedAsyncioTestCase):
         )
         self.client = NS(page=proxy, progress=AsyncMock(), _wait_for_idle=AsyncMock())
 
-        async def read(client):
+        async def read(client, *, reference=None):
             result = parse_tasks(await self.frame.evaluate(TASK_SNAPSHOT))
             await add_task_capabilities(self.frame, result)
             return result

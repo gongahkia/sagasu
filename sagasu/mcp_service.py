@@ -444,6 +444,8 @@ class AgentService:
                         "offset": offset,
                         "limit": limit,
                         "returned_total": len(rows),
+                        "source_total": result.get("total", len(rows)),
+                        "source_complete": result.get("complete", True),
                         "next_offset": (
                             offset + limit if offset + limit < len(rows) else None
                         ),
