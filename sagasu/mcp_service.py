@@ -471,7 +471,7 @@ class AgentService:
 
     def available_rooms(self, operation_id, offset=0, limit=20):
         """Filter before pagination; preserve the full discovery snapshot for reviews."""
-        from .fbs_client import RoomAvailability, TimeSlot
+        from .fbs_client import RoomAvailability, TimeSlot, SearchResult
 
         if offset < 0 or not 1 <= limit <= 50:
             raise AgentError("Use offset >= 0 and limit between 1 and 50.")
@@ -501,6 +501,7 @@ class AgentService:
             ],
             "searched_total": len(rooms),
             "available_total": len(available),
+            "booking_horizon": SearchResult(config, rooms, "").booking_horizon,
             "next_offset": offset + limit if offset + limit < len(available) else None,
             "next_tool": "booking_review" if available else "search_rooms",
         }

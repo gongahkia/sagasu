@@ -203,8 +203,33 @@ class SearchResult:
         ]
         return sorted(rooms, key=lambda room: (-room.free_minutes, room.name.lower()))
 
+    @property
+    def booking_horizon(self) -> dict | None:
+        affected = [room.name for room in self.rooms if any(
+            slot.status == "outside_booking_horizon"
+            and time_to_minutes(slot.start) < time_to_minutes(self.config.end_time)
+            and time_to_minutes(slot.end) > time_to_minutes(self.config.start_time)
+            for slot in room.timeslots
+        )]
+        if not affected:
+            return None
+        all_blocked = len(affected) == len(self.rooms)
+        return {
+            "reason": "outside_booking_horizon",
+            "checked_rooms": len(self.rooms),
+            "affected_rooms": affected,
+            "all_checked_rooms_affected": all_blocked,
+            "message": (
+                f"FBS marks the requested time as outside the booking horizon for all {len(self.rooms)} checked rooms. "
+                "For a future date, it is too far ahead to book these rooms yet; retry closer to the date."
+                if all_blocked else
+                "Some checked rooms are outside their booking horizon. Other rooms were checked at the same date and time; use the available choices."
+            ),
+            "scope": "Checked rooms only; booking horizons may differ for other facilities.",
+        }
+
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {**asdict(self), "booking_horizon": self.booking_horizon}
 
 
 @dataclass(frozen=True)
@@ -273,6 +298,12 @@ def minutes_to_time(value: int) -> str:
 
 
 def parse_event_title(title: str) -> TimeSlot | None:
+    horizon = re.search(
+        r"\((\d{2}:\d{2})-(\d{2}:\d{2})\)\s*\(not within booking horizon\)",
+        title, re.IGNORECASE,
+    )
+    if horizon:
+        return TimeSlot(horizon.group(1), horizon.group(2), "outside_booking_horizon")
     booked = re.search(r"Booking Time:\s*(\d{2}:\d{2})-(\d{2}:\d{2})", title)
     if booked:
         return TimeSlot(booked.group(1), booked.group(2), "booked", title)
@@ -710,9 +741,30 @@ class FBSClient:
                         await self._stop_reset_login()
                     resumed_passkeys.add(resume)
                     await self.progress("opening Microsoft's alternate sign-in methods")
-                    await self.page.goto(
-                        resume, wait_until="domcontentloaded", timeout=30000
-                    )
+                    try:
+                        await self.page.goto(
+                            resume, wait_until="domcontentloaded", timeout=30000
+                        )
+                    except PlaywrightError as error:
+                        # Microsoft can supersede this navigation while still
+                        # successfully displaying its credential picker.
+                        if "net::ERR_ABORTED" not in str(error):
+                            raise
+                        await self.page.wait_for_load_state(
+                            "domcontentloaded", timeout=10000
+                        )
+                        # The superseding document may still be hydrating.
+                        for _ in range(20):
+                            await self.page.wait_for_timeout(500)
+                            if not self._trusted_login_url(self.page.url):
+                                raise
+                            next_state, _ = await self._classify_auth_state()
+                            if next_state in {"password_choice", "method_picker"}:
+                                break
+                            if next_state not in {"sign_in", "webauthn"}:
+                                raise
+                        else:
+                            raise
                 elif (
                     not self.headless
                     and cancel
@@ -1060,6 +1112,24 @@ class FBSClient:
         if not room or not room.is_free(
             request.search.start_time, request.search.end_time
         ):
+            if result.booking_horizon:
+                await self.progress("Checking other rooms at the same time for booking-horizon restrictions")
+                try:
+                    alternatives = await self.search(request.search)
+                except FBSError:
+                    raise BookingUnavailable(
+                        "The requested room is outside its booking horizon. "
+                        "Other rooms could not be checked, so a shared booking-horizon restriction is unverified. "
+                        "Retry the search. No booking was submitted."
+                    ) from None
+                diagnosis = alternatives.booking_horizon
+                message = (diagnosis["message"] if diagnosis else
+                           "The requested room is outside its booking horizon.")
+                raise BookingUnavailable(
+                    message + f" Checked {len(alternatives.rooms)} rooms at the same date/time; "
+                    f"{len(alternatives.bookable_rooms)} alternatives are available. "
+                    "Run a fresh search to review alternatives before booking. No booking was submitted."
+                )
             raise BookingUnavailable(
                 f"{request.room} is no longer free from "
                 f"{request.search.start_time} to {request.search.end_time}"

@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 from urllib.parse import quote
+from playwright.async_api import Error as PlaywrightError
 
 from sagasu.fbs_client import (
     AuthenticationRequired,
@@ -352,6 +353,34 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         await client._complete_interactive_authentication()
         client.page.goto.assert_not_awaited()
         client.page.keyboard.press.assert_awaited_once_with("Escape")
+
+    async def test_aborted_passkey_navigation_accepts_verified_credential_picker(self):
+        client = self.flow([
+            ("webauthn", "passkey"),
+            ("sign_in", "loading"),
+            ("password_choice", "password"),
+            ("password_choice", "password"),
+        ])
+        client.page.evaluate.return_value = "https://login.microsoftonline.com/tenant/resume"
+        client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_ABORTED")
+        client.page.wait_for_load_state = AsyncMock()
+        await client._complete_interactive_authentication()
+        client.fields["Use my password"].click.assert_awaited_once()
+
+    async def test_aborted_passkey_navigation_rejects_unexpected_screen(self):
+        client = self.flow([("webauthn", "passkey"), ("email", "email")])
+        client.page.evaluate.return_value = "https://login.microsoftonline.com/tenant/resume"
+        client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_ABORTED")
+        client.page.wait_for_load_state = AsyncMock()
+        with self.assertRaises(PlaywrightError):
+            await client._complete_interactive_authentication()
+
+    async def test_passkey_navigation_preserves_other_browser_errors(self):
+        client = self.flow([("webauthn", "passkey")])
+        client.page.evaluate.return_value = "https://login.microsoftonline.com/tenant/resume"
+        client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_CONNECTION_RESET")
+        with self.assertRaises(PlaywrightError):
+            await client._complete_interactive_authentication()
 
     async def test_headless_bridge_prefers_resume_over_account_reset_url(self):
         resume = "https://login.microsoftonline.com/tenant/resume?ctx=private"
