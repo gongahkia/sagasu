@@ -213,6 +213,11 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
             "transport": "stdio",
             "single_user": True,
             "host_pid": os.getpid(),
+            "backends": (
+                service.backend.capabilities()
+                if hasattr(service.backend, "capabilities")
+                else {"mode": "custom"}
+            ),
             "authentication_configuration": {
                 "headless": os.getenv("SAGASU_HEADLESS", "false").lower()
                 in {"1", "true", "yes"},
@@ -325,6 +330,15 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
     async def list_tasks() -> dict[str, Any]:
         """Start reading FBS Task List and per-task approval/details capabilities. Does not change tasks. Poll the operation ID."""
         return safe(service.start, "tasks")
+
+    @server.tool(annotations=read)
+    async def probe_read_backends() -> dict[str, Any]:
+        """Start an explicit read-only backend compatibility probe using the saved session. Inspects browser search traffic and compares complete HTTP bookings/tasks against browser results. Never submits credentials, starts MFA or writes to FBS. Returns counts and redacted request shapes, not account rows or raw URLs. Login separately if expired. HTTP capability is session-scoped; room search and writes remain browser-based. Poll with wait_operation."""
+        return safe(
+            service.start,
+            "probe",
+            search_config_from_preferences(safe(service.get_preferences)["saved"]),
+        )
 
     @server.tool(annotations=read)
     async def session_status() -> dict[str, Any]:

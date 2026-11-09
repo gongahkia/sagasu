@@ -37,6 +37,8 @@ BROWSERS = (
 TEMPLATE = """# Sagasu is a private local MCP server. Configure optional SMU autofill below.
 SAGASU_BROWSER_CHANNEL=chromium
 SAGASU_MCP_CONFIRMATION=agent
+# auto verifies session-backed HTTP account reads; browser disables HTTP probing.
+SAGASU_READ_BACKEND=auto
 # Optional private Microsoft sign-in autofill:
 # SMU_LOGIN_EMAIL=your.name@smu.edu.sg
 # SMU_LOGIN_PASSWORD='your-private-password'
@@ -115,6 +117,10 @@ class Settings:
         )
 
     def validate(self):
+        if self.values.get("SAGASU_READ_BACKEND", "auto") not in {
+            "auto", "browser", "api"
+        }:
+            raise ConfigError("SAGASU_READ_BACKEND must be auto, browser or api.")
         if self.journal == self.preferences:
             raise ConfigError(
                 "Action history and personal preferences must use different files."
@@ -148,6 +154,7 @@ class Settings:
             "headless": self.values.get("SAGASU_HEADLESS", "false").lower()
             in {"1", "true", "yes"},
             "browser": self.browser,
+            "read_backend": self.values.get("SAGASU_READ_BACKEND", "auto"),
             "mcp_confirmation": self.values.get("SAGASU_MCP_CONFIRMATION", "agent"),
             "browser_profile": str(self.profile),
             "personal_preferences": str(self.preferences),

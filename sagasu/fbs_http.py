@@ -63,8 +63,7 @@ class _Node:
         if self.tag in {"script", "style"}:
             return ""
         return " ".join(
-            part.text() if isinstance(part, _Node) else part
-            for part in self.children
+            part.text() if isinstance(part, _Node) else part for part in self.children
         )
 
     def visible(self):
@@ -74,7 +73,9 @@ class _Node:
             if (
                 "hidden" in node.attrs
                 or node.attrs.get("aria-hidden") == "true"
-                or re.search(r"(?:^|;)(?:display:none|visibility:hidden)(?:[;!]|$)", style)
+                or re.search(
+                    r"(?:^|;)(?:display:none|visibility:hidden)(?:[;!]|$)", style
+                )
             ):
                 return False
             node = node.parent
@@ -90,8 +91,20 @@ class _Node:
 
 class _Document(HTMLParser):
     VOID = {
-        "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
-        "meta", "param", "source", "track", "wbr",
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
     }
 
     def __init__(self, html):
@@ -138,8 +151,10 @@ def _text(node):
 
 def _actions(row, suffix):
     return [
-        node for node in row.nodes()
-        if node.tag == "a" and node.attrs.get("id", "").endswith(suffix)
+        node
+        for node in row.nodes()
+        if node.tag == "a"
+        and node.attrs.get("id", "").endswith(suffix)
         and node.visible()
     ]
 
@@ -160,10 +175,14 @@ def parse_account_document(kind, html):
     if not any(n is content for n in grid.nodes()) or not grid.visible():
         raise HTTPReadUnavailable("unreadable_grid")
     rows = [
-        node for node in content.nodes()
+        node
+        for node in content.nodes()
         if node.tag == "tr" and "row" in node.attrs.get("class", "").split()
     ]
-    values = [[_text(n) for n in row.children if isinstance(n, _Node) and n.tag == "td"] for row in rows]
+    values = [
+        [_text(n) for n in row.children if isinstance(n, _Node) and n.tag == "td"]
+        for row in rows
+    ]
     summary = _text(grid)
     totals = re.findall(r"(\d+)\s+ITEM\(S\)\s+TOTAL", summary, re.I)
     if len(set(totals)) != 1:
@@ -172,24 +191,37 @@ def parse_account_document(kind, html):
     if kind == "tasks":
         headers = [_text(n) for n in grid.nodes() if n.tag == "th"]
         try:
-            result = parse_tasks({"headers": headers, "rows": values, "summary": summary})
+            result = parse_tasks(
+                {"headers": headers, "rows": values, "summary": summary}
+            )
         except LayoutChanged:
             raise HTTPReadUnavailable("unreadable_grid") from None
         from .fbs_tasks import pending_status
 
         approvers = [
-            n for n in document.root.nodes()
-            if n.tag == "a" and re.fullmatch(r"Approve Selected", _text(n), re.I)
-            and n.visible() and n.enabled()
+            n
+            for n in document.root.nodes()
+            if n.tag == "a"
+            and ("href" in n.attrs or n.attrs.get("role") == "link")
+            and re.fullmatch(r"Approve Selected", _text(n), re.I)
+            and n.visible()
+            and n.enabled()
         ]
         data_rows = [row for row, cells in zip(rows, values) if cells != ["No items"]]
         for item, row in zip(result["tasks"], data_rows):
             checkboxes = [
-                n for n in row.nodes() if n.tag == "input"
+                n
+                for n in row.nodes()
+                if n.tag == "input"
                 and n.attrs.get("type", "").lower() == "checkbox"
-                and n.visible() and n.enabled()
+                and n.visible()
+                and n.enabled()
             ]
-            item["can_approve"] = len(approvers) == 1 and pending_status(item["status"]) and len(checkboxes) == 1
+            item["can_approve"] = (
+                len(approvers) == 1
+                and pending_status(item["status"])
+                and len(checkboxes) == 1
+            )
             item["can_view"] = len(_actions(row, "_BtnView")) == 1
     else:
         bookings = []
@@ -198,13 +230,22 @@ def parse_account_document(kind, html):
                 continue
             if len(cells) < 9 or any(not cells[i] for i in (1, 2, 4, 8)):
                 raise HTTPReadUnavailable("unreadable_grid")
-            bookings.append({
-                "reference_number": cells[1], "date_time": cells[2], "room": cells[4],
-                "fbs_status": cells[8], "can_cancel": len(_actions(row, "_BtnCancel")) == 1,
-            })
+            bookings.append(
+                {
+                    "reference_number": cells[1],
+                    "date_time": cells[2],
+                    "room": cells[4],
+                    "fbs_status": cells[8],
+                    "can_cancel": len(_actions(row, "_BtnCancel")) == 1,
+                }
+            )
         if total == 0 and not re.search(r"\bNo items\b", summary, re.I):
             raise HTTPReadUnavailable("unverified_empty_list")
-        result = {"bookings": bookings, "total": total, "complete": len(bookings) == total}
+        result = {
+            "bookings": bookings,
+            "total": total,
+            "complete": len(bookings) == total,
+        }
     refs = [r["reference_number"] for r in result[kind]]
     if len(set(refs)) != len(refs) or not result["complete"]:
         raise HTTPReadUnavailable("incomplete_listing")
@@ -216,15 +257,23 @@ async def read_account_http(client, kind, url, *, timeout_ms=10000):
     if not fbs_document_url(url):
         raise HTTPReadUnavailable("untrusted_endpoint")
     response = await client.context.request.get(
-        url, timeout=timeout_ms, max_redirects=0, max_retries=0,
+        url,
+        timeout=timeout_ms,
+        max_redirects=0,
+        max_retries=0,
         fail_on_status_code=False,
     )
     try:
         if response.status in {301, 302, 303, 307, 308, 401, 403}:
-            raise AuthenticationRequired("Renew the saved FBS session before HTTP reads.")
+            raise AuthenticationRequired(
+                "Renew the saved FBS session before HTTP reads."
+            )
         if response.status != 200 or response.url != url:
             raise HTTPReadUnavailable("http_response_rejected")
-        if response.headers.get("content-type", "").split(";", 1)[0].lower().strip() != "text/html":
+        if (
+            response.headers.get("content-type", "").split(";", 1)[0].lower().strip()
+            != "text/html"
+        ):
             raise HTTPReadUnavailable("unsupported_content_type")
         size = response.headers.get("content-length", "")
         if size.isdigit() and int(size) > MAX_DOCUMENT_BYTES:

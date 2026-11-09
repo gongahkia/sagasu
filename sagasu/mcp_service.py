@@ -41,6 +41,7 @@ from .fbs_account import (
 from .observability import event, observed_operation
 from .errors import public_failure
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
+from .read_backends import HybridReads
 
 WRITE_KINDS = {"book", "cancel", "approve_task"}
 
@@ -50,10 +51,18 @@ class AgentError(ValueError):
 
 
 class Backend:
-    """Serialize agent operations over the private FBS browser."""
+    """Domain operations with hybrid reads and a single browser write path."""
+
+    def __init__(self):
+        self.reads = HybridReads()
+
+    def capabilities(self):
+        return self.reads.capabilities()
 
     @observed_operation("agent.backend")
     async def run(self, kind, payload, progress, notify):
+        if kind in WRITE_KINDS or kind == "login":
+            self.reads.invalidate()
         if kind == "alternatives" and not payload["configs"]:
             from .alternatives import report
 
@@ -72,12 +81,16 @@ class Backend:
         async with FBSClient(
             progress=progress,
             auth_notify=notify,
-            interactive=kind not in {"session", "smoke", "reconcile"},
+            interactive=kind not in {"session", "smoke", "reconcile", "probe"},
         ) as client:
             if kind == "reconcile":
                 from .reconciliation import reconcile
 
                 return await reconcile(client, payload)
+            if kind == "probe":
+                from .backend_probe import probe_client
+
+                return await probe_client(client, self.reads, payload)
             if kind == "alternatives":
                 from .alternatives import find_alternatives
 
@@ -101,7 +114,7 @@ class Backend:
                     "complete": bookings["complete"],
                 }
             if kind == "search":
-                return (await client.search(payload)).to_dict()
+                return await self.reads.search(client, payload)
             if kind == "login":
                 await client.ensure_authenticated()
                 return {
@@ -109,9 +122,9 @@ class Backend:
                     "message": "FBS controls verified; session saved.",
                 }
             if kind == "bookings":
-                return await read_bookings(client)
+                return await self.reads.account(client, "bookings")
             if kind == "tasks":
-                return await read_task_list(client)
+                return await self.reads.account(client, "tasks")
             if kind == "cancel":
                 expected, reason = payload
                 result = await cancel_booking(client, expected, reason)
@@ -648,6 +661,7 @@ class AgentService:
             "available_total": len(available),
             "booking_horizon": horizon,
             "scraped_at": result.get("scraped_at"),
+            "read_backend": copy.deepcopy(result.get("read_backend")),
             "ranking": "Explicit room preference, then room name",
             "suggested_action": (
                 "choose_room"

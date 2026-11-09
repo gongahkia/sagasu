@@ -18,7 +18,12 @@ from .fbs_traffic import ReadTraffic
 from .observability import event
 
 READ_MODES = {"auto", "browser", "api"}
-READ_FAILURES = (HTTPReadUnavailable, AuthenticationRequired, PlaywrightError, TimeoutError)
+READ_FAILURES = (
+    HTTPReadUnavailable,
+    AuthenticationRequired,
+    PlaywrightError,
+    TimeoutError,
+)
 
 
 @dataclass
@@ -29,14 +34,20 @@ class _VerifiedDocument:
 
 def equivalent_listing(kind, browser, http):
     """Exact domain parity, including action permissions, status and coverage."""
-    if not browser.get("complete") or not http.get("complete") or browser["total"] != http["total"]:
+    if (
+        not browser.get("complete")
+        or not http.get("complete")
+        or browser["total"] != http["total"]
+    ):
         return False
+
     def rows(value):
         items = value[kind]
         refs = [r["reference_number"] for r in items]
         if len(set(refs)) != len(refs) or len(items) != value["total"]:
             return None
         return sorted(items, key=lambda r: r["reference_number"])
+
     expected, actual = rows(browser), rows(http)
     return expected is not None and actual is not None and expected == actual
 
@@ -51,6 +62,10 @@ class HybridReads:
         self._context = None
         self._verified = {}
 
+    def invalidate(self):
+        self._context = None
+        self._verified.clear()
+
     def capabilities(self):
         now = time.monotonic()
         return {
@@ -59,7 +74,11 @@ class HybridReads:
             "api": {
                 "protocol": "session_backed_http_html",
                 "candidates": ["bookings", "tasks"],
-                "verified": sorted(k for k, v in self._verified.items() if now - v.verified_at < self.verification_ttl),
+                "verified": sorted(
+                    k
+                    for k, v in self._verified.items()
+                    if now - v.verified_at < self.verification_ttl
+                ),
                 "verification": "Complete browser parity required in this browser context; expires after 300 seconds.",
                 "availability_search": "unsupported_until_endpoint_verified",
                 "requires_browser_session": True,
@@ -75,18 +94,25 @@ class HybridReads:
 
     @staticmethod
     def _result(result, backend, reason=None, verification=None):
-        return {**result, "read_backend": {
-            "name": backend,
-            "protocol": "http_html" if backend == "api" else "browser_dom",
-            "fallback_reason": reason,
-            "api_verification": verification,
-        }}
+        return {
+            **result,
+            "read_backend": {
+                "name": backend,
+                "protocol": "http_html" if backend == "api" else "browser_dom",
+                "fallback_reason": reason,
+                "api_verification": verification,
+            },
+        }
 
     async def search(self, client, config):
         if self.mode == "api":
             raise HTTPReadUnavailable("unsupported_operation")
         result = (await client.search(config)).to_dict()
-        return self._result(result, "browser", "no_verified_search_endpoint" if self.mode == "auto" else None)
+        return self._result(
+            result,
+            "browser",
+            "no_verified_search_endpoint" if self.mode == "auto" else None,
+        )
 
     async def account(self, client, kind):
         if kind not in {"bookings", "tasks"}:
@@ -96,7 +122,10 @@ class HybridReads:
         if self.mode == "browser":
             return self._result(await read_browser(client), "browser")
         endpoint = self._verified.get(kind)
-        if endpoint and time.monotonic() - endpoint.verified_at >= self.verification_ttl:
+        if (
+            endpoint
+            and time.monotonic() - endpoint.verified_at >= self.verification_ttl
+        ):
             self._verified.pop(kind, None)
             endpoint = None
         if endpoint:
@@ -111,7 +140,9 @@ class HybridReads:
                 reason = getattr(error, "code", None) or "http_read_failed"
                 event("read.fallback", operation=kind, reason=reason)
                 # Only these reads can fall back. Never dispatch/replay writes.
-                return self._result(await read_browser(client), "browser", reason, "invalidated")
+                return self._result(
+                    await read_browser(client), "browser", reason, "invalidated"
+                )
         if self.mode == "api":
             raise HTTPReadUnavailable("browser_verification_required")
         return await self.verify_account(client, kind)

@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "api_read_unavailable": (
+        "This operation has no verified FBS HTTP read in the current session.",
+        "Use SAGASU_READ_BACKEND=auto or browser. Run the read-only backend probe after login to investigate HTTP support; room searches still require the browser.",
+        None,
+    ),
     "missing_email": (
         "Headless sign-in needs SMU_LOGIN_EMAIL.",
         "Set SMU_LOGIN_EMAIL privately in the host environment, then retry login.",
