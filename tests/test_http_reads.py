@@ -289,6 +289,41 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TrafficTests(unittest.TestCase):
+    def test_assets_and_report_limit_do_not_hide_document_candidates(self):
+        page = Mock()
+        frame = SimpleNamespace(name="frameContent", url=URL)
+        with ReadTraffic(page, limit=1) as traffic:
+            for resource in ["image", "stylesheet", "script"]:
+                traffic._response(
+                    SimpleNamespace(
+                        request=SimpleNamespace(url=URL, resource_type=resource)
+                    )
+                )
+            xhr = SimpleNamespace(
+                url=URL,
+                method="POST",
+                resource_type="xhr",
+                post_data="__VIEWSTATE=PRIVATE",
+            )
+            response = SimpleNamespace(
+                request=xhr, status=200, headers={"content-type": "text/plain"}
+            )
+            traffic._response(response)
+            request = SimpleNamespace(
+                url=URL, method="GET", resource_type="document", frame=frame
+            )
+            traffic._response(
+                SimpleNamespace(
+                    request=request, status=200, headers={"content-type": "text/html"}
+                )
+            )
+            self.assertEqual(traffic.document_url(frame), URL)
+            report = traffic.report()
+        self.assertTrue(report["truncated"])
+        self.assertEqual(report["responses_observed"], 2)
+        self.assertEqual(report["ignored_asset_responses"], 3)
+        self.assertEqual(report["aspnet_postbacks"], 1)
+
     def test_passive_report_never_contains_urls_bodies_or_secret_parameters(self):
         page = Mock()
         frame = SimpleNamespace(name="frameContent", url=URL + "?token=SECRET_QUERY")

@@ -18,6 +18,10 @@ class ReadTraffic:
         self.stage = "session"
         self.records = []
         self.dropped = 0
+        self.ignored_assets = 0
+        self.total_responses = 0
+        self.json_responses = 0
+        self.aspnet_postbacks = 0
         self._documents = []
 
     def __enter__(self):
@@ -33,9 +37,11 @@ class ReadTraffic:
         url = request.url
         if not fbs_document_url(url):
             return
-        if len(self.records) >= self.limit:
-            self.dropped += 1
+        resource = request.resource_type
+        if resource not in {"document", "xhr", "fetch"}:
+            self.ignored_assets += 1
             return
+        self.total_responses += 1
         parsed = urlsplit(url)
         content_type = (
             response.headers.get("content-type", "").split(";", 1)[0].lower().strip()
@@ -53,12 +59,25 @@ class ReadTraffic:
             }
             else "other"
         )
-        resource = request.resource_type
-        if resource not in {"document", "xhr", "fetch", "script", "stylesheet"}:
-            resource = "other"
         method = (
             request.method if request.method in {"GET", "POST", "HEAD"} else "other"
         )
+        postback = method == "POST" and "__VIEWSTATE=" in (request.post_data or "")
+        self.json_responses += media == "application/json"
+        self.aspnet_postbacks += postback
+        # Endpoint discovery must keep working even when the public metadata
+        # budget is exhausted. Only a small tail of document URLs stays in RAM.
+        if method == "GET" and resource == "document" and response.status == 200:
+            try:
+                frame = request.frame
+            except Exception:
+                frame = None  # Service-worker responses have no frame.
+            if frame is not None and frame.name == "frameContent":
+                self._documents.append((frame, url))
+                del self._documents[:-16]
+        if len(self.records) >= self.limit:
+            self.dropped += 1
+            return
         # Path segments can contain identity/session tokens. Hash the path and
         # retain only a recognized suffix, never its literal segments or query.
         suffix = re.search(r"\.(aspx|ashx|asmx|json|js|css|html)$", parsed.path, re.I)
@@ -72,18 +91,9 @@ class ReadTraffic:
                 "resource_type": resource,
                 "status": response.status,
                 "content_type": media,
-                "aspnet_postback": method == "POST"
-                and "__VIEWSTATE=" in (request.post_data or ""),
+                "aspnet_postback": postback,
             }
         )
-        if method == "GET" and resource == "document" and response.status == 200:
-            try:
-                frame = request.frame
-            except Exception:
-                # Service-worker requests do not have an associated frame.
-                return
-            if frame.name == "frameContent":
-                self._documents.append((frame, url))
 
     def document_url(self, frame):
         return next(
@@ -100,8 +110,8 @@ class ReadTraffic:
             "requests": list(self.records),
             "truncated": self.dropped > 0,
             "dropped_responses": self.dropped,
-            "json_responses": sum(
-                r["content_type"] == "application/json" for r in self.records
-            ),
-            "aspnet_postbacks": sum(r["aspnet_postback"] for r in self.records),
+            "responses_observed": self.total_responses,
+            "ignored_asset_responses": self.ignored_assets,
+            "json_responses": self.json_responses,
+            "aspnet_postbacks": self.aspnet_postbacks,
         }
