@@ -334,11 +334,12 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
     @server.tool(annotations=read)
     async def probe_read_backends() -> dict[str, Any]:
         """Start an explicit read-only backend compatibility probe using the saved session. Inspects browser search traffic and compares complete HTTP bookings/tasks against browser results. Never submits credentials, starts MFA or writes to FBS. Returns counts and redacted request shapes, not account rows or raw URLs. Login separately if expired. HTTP capability is session-scoped; room search and writes remain browser-based. Poll with wait_operation."""
-        return safe(
-            service.start,
-            "probe",
-            search_config_from_preferences(safe(service.get_preferences)["saved"]),
+        from .fbs_client import search_config_from_preferences
+
+        config = search_config_from_preferences(
+            service.profile.preferences() if service.profile else {}
         )
+        return safe(service.start, "probe", config)
 
     @server.tool(annotations=read)
     async def session_status() -> dict[str, Any]:

@@ -7,7 +7,11 @@ endpoints, response bodies or account rows. Sign in separately if necessary.
 import asyncio
 import os
 
-from .fbs_client import AuthenticationRequired, FBSClient, search_config_from_preferences
+from .fbs_client import (
+    AuthenticationRequired,
+    FBSClient,
+    search_config_from_preferences,
+)
 from .fbs_traffic import ReadTraffic
 from .personal import PersonalStore
 from .read_backends import HybridReads
@@ -45,6 +49,7 @@ def _report():
 
 async def probe_client(client, reads, config):
     report = _report()
+    reads.invalidate()
     stage = "session"
     with ReadTraffic(client.page) as traffic:
         try:
@@ -58,22 +63,26 @@ async def probe_client(client, reads, config):
                         # mode. This probe is the explicit discovery operation.
                         result = await client.search(config)
                         check = {
-                            "name": stage, "status": "pass", "backend": "browser",
+                            "name": stage,
+                            "status": "pass",
+                            "backend": "browser",
                             "rooms_read": len(result.rooms),
                             "bookable_rooms": len(result.bookable_rooms),
                             "api_verification": "unsupported_until_endpoint_verified",
                         }
                     else:
                         result = await reads.verify_account(client, stage)
+                        provenance = result["read_backend"]
                         check = {
-                            "name": stage, "status": "pass",
-                            "rows_read": len(result[stage]), "total": result["total"],
+                            "name": stage,
+                            "status": "pass",
+                            "rows_read": len(result[stage]),
+                            "total": result["total"],
                             "complete": result["complete"],
-                            **result["read_backend"],
+                            "backend": provenance["name"],
+                            "api_verification": provenance["api_verification"],
+                            "fallback_reason": provenance["fallback_reason"],
                         }
-                        # 'name' in provenance describes the backend, not stage.
-                        check["backend"] = check.pop("name")
-                        check["name"] = stage
                     report["checks"].append(check)
                 except AuthenticationRequired:
                     raise
@@ -104,7 +113,9 @@ async def run_probe(settings, *, timeout=180):
                 async with FBSClient(
                     interactive=False, keep_alive=False, profile_path=settings.profile
                 ) as client:
-                    config = search_config_from_preferences(PersonalStore(settings.preferences).preferences())
+                    config = search_config_from_preferences(
+                        PersonalStore(settings.preferences).preferences()
+                    )
                     return await probe_client(client, HybridReads("auto"), config)
     except Exception as error:
         report["checks"].append(_failure("probe", error))

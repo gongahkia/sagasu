@@ -90,7 +90,8 @@ class Backend:
             if kind == "probe":
                 from .backend_probe import probe_client
 
-                return await probe_client(client, self.reads, payload)
+                async with asyncio.timeout(180):
+                    return await probe_client(client, self.reads, payload)
             if kind == "alternatives":
                 from .alternatives import find_alternatives
 

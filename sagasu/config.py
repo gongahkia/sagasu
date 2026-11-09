@@ -118,7 +118,9 @@ class Settings:
 
     def validate(self):
         if self.values.get("SAGASU_READ_BACKEND", "auto") not in {
-            "auto", "browser", "api"
+            "auto",
+            "browser",
+            "api",
         }:
             raise ConfigError("SAGASU_READ_BACKEND must be auto, browser or api.")
         if self.journal == self.preferences:

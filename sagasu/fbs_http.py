@@ -258,6 +258,7 @@ async def read_account_http(client, kind, url, *, timeout_ms=10000):
         raise HTTPReadUnavailable("untrusted_endpoint")
     response = await client.context.request.get(
         url,
+        headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
         timeout=timeout_ms,
         max_redirects=0,
         max_retries=0,

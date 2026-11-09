@@ -153,6 +153,7 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["total"], 1)
         client.context.request.get.assert_awaited_once_with(
             URL,
+            headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
             timeout=10000,
             max_redirects=0,
             max_retries=0,

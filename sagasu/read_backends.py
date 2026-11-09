@@ -70,7 +70,15 @@ class HybridReads:
         now = time.monotonic()
         return {
             "mode": self.mode,
+            "routed_tools": ["search_rooms", "list_bookings", "list_tasks"],
             "browser": ["search", "bookings", "tasks"],
+            "browser_workflows": [
+                "alternatives",
+                "repeat",
+                "task_details",
+                "validate",
+                "smoke",
+            ],
             "api": {
                 "protocol": "session_backed_http_html",
                 "candidates": ["bookings", "tasks"],
