@@ -57,6 +57,26 @@ def observation(frame):
 
 
 class DocumentTests(unittest.TestCase):
+    def test_fbs_bootstrap_form_does_not_hide_server_rendered_records(self):
+        html = (
+            '<div id="__divPage__"><form id="form2" style="display:none;height:100%">'
+            + bookings_html().replace("<html><body>", "").replace("</body></html>", "")
+            + '<input name="__ViewStateKey__"><script>gridv.initgv("GridViewBooking", {});</script></form></div>'
+        )
+        result = parse_account_document("bookings", html)
+        self.assertEqual(result["total"], 1)
+        self.assertTrue(result["bookings"][0]["can_cancel"])
+        hidden = html.replace(
+            'id="row_BtnCancel"', 'id="row_BtnCancel" style="display:none"'
+        )
+        self.assertFalse(
+            parse_account_document("bookings", hidden)["bookings"][0]["can_cancel"]
+        )
+        with self.assertRaises(HTTPReadUnavailable):
+            parse_account_document(
+                "bookings", html.replace("gridv.initgv(", "unknown(")
+            )
+
     def test_bookings_preserve_status_and_permission(self):
         result = parse_account_document(
             "bookings", bookings_html(status="Pending Confirmation")

@@ -172,6 +172,26 @@ def parse_account_document(kind, html):
     document = _Document(html)
     grid_id = "GridViewBooking" if kind == "bookings" else "GridViewTask"
     grid, content = document.by_id(grid_id), document.by_id(grid_id + "_content")
+    # The observed FBS shell initially hides the entire server-rendered form;
+    # its startup code reveals it. This is a layout bootstrap, not a disabled
+    # account action. Keep all per-control/row visibility restrictions intact.
+    ancestor = grid.parent
+    while ancestor:
+        if (
+            ancestor.tag == "form"
+            and ancestor.attrs.get("id") in {"form1", "form2"}
+            and ancestor.parent
+            and ancestor.parent.attrs.get("id") == "__divPage__"
+            and "gridv.initgv(" in html
+            and "__ViewStateKey__" in html
+        ):
+            ancestor.attrs["style"] = re.sub(
+                r"(?:^|;)\s*display\s*:\s*none\s*(?=;|$)",
+                "",
+                ancestor.attrs.get("style", ""),
+                flags=re.I,
+            )
+        ancestor = ancestor.parent
     if not any(n is content for n in grid.nodes()) or not grid.visible():
         raise HTTPReadUnavailable("unreadable_grid")
     rows = [
