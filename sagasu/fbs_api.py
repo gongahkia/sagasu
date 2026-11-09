@@ -22,7 +22,7 @@ from .fbs_http import (
     fbs_document_url,
     parse_account_document,
 )
-from .fbs_webforms import FILTERS, SearchForm, parse_calendar_document
+from .fbs_webforms import FILTERS, READ_TARGETS, SearchForm, parse_calendar_document
 
 ACCOUNT_PATHS = {
     "bookings": "/modules/homenavigation/mybookingstab.aspx",
@@ -83,6 +83,13 @@ class FBSReadAPI:
     async def document(self, url, fields=None):
         if not fbs_document_url(url):
             raise HTTPReadUnavailable("untrusted_endpoint")
+        if fields is not None and (
+            urlsplit(url).path != "/modules/BigSpace/BookingCalendar/Calendar.aspx"
+            or fields.get("__EVENTTARGET") not in READ_TARGETS
+            or "__CALLBACKID" in fields
+            or "__CALLBACKPARAM" in fields
+        ):
+            raise HTTPReadUnavailable("unsupported_postback")
         headers = {"Cache-Control": "no-cache", "Pragma": "no-cache"}
         if fields is None:
             response = await self.request.get(
@@ -154,9 +161,12 @@ class FBSReadAPI:
 
         target_date = datetime.strptime(config.date, "%d-%b-%Y").date()
         for _ in range(33):
-            current = datetime.strptime(
-                form.fields().get("DateBookingFrom_c1$textDate", ""), "%d-%b-%Y"
-            ).date()
+            try:
+                current = datetime.strptime(
+                    form.fields().get("DateBookingFrom_c1$textDate", ""), "%d-%b-%Y"
+                ).date()
+            except ValueError:
+                raise HTTPReadUnavailable("unreadable_search_date") from None
             if current == target_date:
                 break
             direction = "Next" if current < target_date else "Prev"
@@ -183,6 +193,12 @@ class FBSReadAPI:
         if form.fields().get("DropCapacity_c1", "") != capacity:
             form = await post("DropCapacity_c1", {"DropCapacity_c1": capacity})
         fields = form.fields()
+        if fields.get("DropCapacity_c1", "") != capacity or any(
+            fields.get(control + "_textValue", "")
+            != form.multi_values(control, getattr(config, attribute))
+            for control, attribute in FILTERS
+        ):
+            raise HTTPReadUnavailable("filter_not_retained")
         if (
             fields.get("DateBookingFrom_c1$textDate"),
             fields.get("TimeFrom_c1$ctl04"),

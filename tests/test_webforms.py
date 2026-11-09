@@ -16,6 +16,7 @@ def calendar_html(*, resources=None, events=None, overrides=None):
         "dynamicEventRendering": "Disabled",
         "days": 1,
         "startDate": "2099-11-10T00:00:00",
+        "timeline": [{"start": "2099-11-10T00:00:00", "end": "2099-11-11T00:00:00"}],
         "resources": (
             resources if resources is not None else [{"id": "R1", "name": "Room A"}]
         ),
@@ -45,6 +46,16 @@ def event(
 
 
 class CalendarModelTests(unittest.TestCase):
+    def test_a_timeline_gap_cannot_be_reported_as_free(self):
+        timeline = [
+            {"start": "2099-11-10T10:00:00", "end": "2099-11-10T10:30:00"},
+            {"start": "2099-11-10T11:00:00", "end": "2099-11-10T12:00:00"},
+        ]
+        with self.assertRaises(HTTPReadUnavailable):
+            parse_calendar_document(
+                calendar_html(overrides={"timeline": timeline}), CONFIG, ["Room A"]
+            )
+
     def test_complete_model_produces_exact_free_complement_without_details(self):
         result = parse_calendar_document(
             calendar_html(events=[event()]), CONFIG, ["Room A"]
@@ -132,6 +143,15 @@ class CalendarModelTests(unittest.TestCase):
 
 
 class FormTests(unittest.TestCase):
+    def test_page_identity_may_be_blank_after_the_initial_post(self):
+        form = self.form().form
+        for node in form.nodes():
+            if node.attrs.get("name") == "__PageUniqueId__":
+                node.attrs["value"] = ""
+        parser = self.form()
+        parser.form = form
+        self.assertEqual(parser.payload("TimeFrom_c1$ctl04")["__PageUniqueId__"], "")
+
     def form(self, content=""):
         return SearchForm(
             '<form><input name="__PageUniqueId__" value="PAGE-FIXTURE"><input name="__ViewStateKey__" value="STATE-FIXTURE">'

@@ -10,6 +10,8 @@ from datetime import datetime
 
 from .fbs_calendar import dated_event_slot
 from .fbs_client import (
+    FBS_TIMEZONE,
+    LayoutChanged,
     RoomAvailability,
     SearchResult,
     add_free_windows,
@@ -82,11 +84,19 @@ class SearchForm:
         if target not in READ_TARGETS:
             raise HTTPReadUnavailable("unsupported_postback")
         result = self.fields()
-        if not all(key in result for key in ("__PageUniqueId__", "__ViewStateKey__")):
+        # FBS returns a blank PageUniqueId after the first full postback; the
+        # updated ViewStateKey still identifies its current server-side state.
+        if "__PageUniqueId__" not in result or not result.get("__ViewStateKey__"):
             raise HTTPReadUnavailable("missing_page_state")
         # Full form responses carry the fresh state and model. AJAX flags would
         # instead require applying partial HTML/JavaScript delta messages.
-        for key in ("ctl00", "__ASYNCPOST", "__MicrosoftAjax"):
+        for key in (
+            "ctl00",
+            "__ASYNCPOST",
+            "__MicrosoftAjax",
+            "__CALLBACKID",
+            "__CALLBACKPARAM",
+        ):
             result.pop(key, None)
         result.update(changes or {})
         result.update(__EVENTTARGET=target, __EVENTARGUMENT="")
@@ -182,6 +192,18 @@ def _assignment(source, key):
         raise HTTPReadUnavailable("unreadable_calendar_model") from None
 
 
+def _local_time(value):
+    try:
+        result = datetime.fromisoformat(value)
+        return (
+            result.astimezone(FBS_TIMEZONE).replace(tzinfo=None)
+            if result.tzinfo
+            else result
+        )
+    except (ValueError, TypeError):
+        raise HTTPReadUnavailable("unreadable_calendar_time") from None
+
+
 def parse_calendar_document(html, config, expected_rooms):
     document = _Document(html)
     scripts = [
@@ -208,12 +230,37 @@ def parse_calendar_document(html, config, expected_rooms):
         raise HTTPReadUnavailable("incomplete_calendar_model")
     try:
         if (
-            datetime.fromisoformat(_assignment(source, "startDate")).date()
+            _local_time(_assignment(source, "startDate")).date()
             != datetime.strptime(config.date, "%d-%b-%Y").date()
         ):
             raise ValueError()
     except (ValueError, TypeError):
         raise HTTPReadUnavailable("calendar_date_mismatch") from None
+    timeline = _assignment(source, "timeline")
+    if not isinstance(timeline, list) or not timeline or len(timeline) > 3000:
+        raise HTTPReadUnavailable("incomplete_calendar_timeline")
+    intervals = []
+    for cell in timeline:
+        if not isinstance(cell, dict):
+            raise HTTPReadUnavailable("incomplete_calendar_timeline")
+        start, end = _local_time(cell.get("start")), _local_time(cell.get("end"))
+        if end <= start:
+            raise HTTPReadUnavailable("incomplete_calendar_timeline")
+        intervals.append((start, end))
+    covered = datetime.strptime(config.date + " " + config.start_time, "%d-%b-%Y %H:%M")
+    requested_end = datetime.strptime(
+        config.date + " " + config.end_time, "%d-%b-%Y %H:%M"
+    )
+    for start, end in sorted(intervals):
+        if end <= covered:
+            continue
+        if start > covered:
+            break
+        covered = end
+        if covered >= requested_end:
+            break
+    if covered < requested_end:
+        raise HTTPReadUnavailable("incomplete_calendar_timeline")
     resources, events = _assignment(source, "resources"), _assignment(
         source, "events.list"
     )
@@ -256,7 +303,11 @@ def parse_calendar_document(html, config, expected_rooms):
     blocked = {name: [] for name in expected_rooms}
     identities = set()
     for item in events:
-        if not isinstance(item, dict) or item.get("resource") not in leaves:
+        if (
+            not isinstance(item, dict)
+            or type(item.get("resource")) not in {str, int}
+            or item["resource"] not in leaves
+        ):
             raise HTTPReadUnavailable("unreadable_calendar_event")
         # DayPilot uses event.text for the title when no explicit toolTip is
         # supplied (notably FBS's closed-hours/horizon events).
@@ -272,11 +323,14 @@ def parse_calendar_document(html, config, expected_rooms):
         if identity in identities:
             raise HTTPReadUnavailable("duplicate_calendar_event")
         identities.add(identity)
-        dated = dated_event_slot(
-            {"start_date": item.get("start"), "end_date": item.get("end")},
-            slot.status,
-            config,
-        )
+        try:
+            dated = dated_event_slot(
+                {"start_date": item.get("start"), "end_date": item.get("end")},
+                slot.status,
+                config,
+            )
+        except LayoutChanged:
+            raise HTTPReadUnavailable("unreadable_calendar_event") from None
         if dated:
             blocked[leaves[item["resource"]]].append(dated)
     rooms = [

@@ -123,7 +123,14 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                     day = datetime.strptime(state["date"], "%d-%b-%Y").strftime(
                         "%Y-%m-%d"
                     )
-                    html += calendar_html(overrides={"startDate": day + "T00:00:00"})
+                    html += calendar_html(
+                        overrides={
+                            "startDate": day + "T00:00:00",
+                            "timeline": [
+                                {"start": day + "T00:00:00", "end": day + "T23:59:00"}
+                            ],
+                        }
+                    )
                 return html
 
             def do_POST(self):
@@ -222,6 +229,22 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.state["posts"], [])
         with self.assertRaises(HTTPReadUnavailable):
             await self.api.account("book")
+
+    async def test_transport_rejects_writes_even_if_a_caller_bypasses_form_builder(
+        self,
+    ):
+        for target in ["Confirm$Confirm_bt", "Cancel$Cancel_bt", "ApproveSelected"]:
+            with self.assertRaises(HTTPReadUnavailable):
+                await self.api.document(
+                    self.origin + "/modules/BigSpace/BookingCalendar/Calendar.aspx",
+                    {"__EVENTTARGET": target},
+                )
+        with self.assertRaises(HTTPReadUnavailable):
+            await self.api.document(
+                self.origin + "/modules/homenavigation/tasklist.aspx",
+                {"__EVENTTARGET": "TimeFrom_c1$ctl04"},
+            )
+        self.assertEqual(self.state["posts"], [])
 
     async def test_redirect_is_rejected_without_following_or_exposing_destination(self):
         with self.assertRaises(AuthenticationRequired):
