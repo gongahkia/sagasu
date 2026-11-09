@@ -131,6 +131,19 @@ class SharedHostTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await control(changed, "stop"))["stopping"])
         await asyncio.wait_for(self.host, 5)
 
+    async def test_stop_releases_profile_while_an_idle_mcp_client_remains_connected(
+        self,
+    ):
+        from sagasu.runtime import InstanceLock
+
+        async with client_session(self.settings) as client:
+            await self.call(client, "server_status")
+            result = await control(self.settings, "stop")
+            self.assertTrue(result["stopping"])
+            await asyncio.wait_for(asyncio.shield(self.host), 3)
+            with InstanceLock(self.settings.profile):
+                pass
+
 
 @unittest.skipIf(os.name == "nt", "Unix host")
 class HostLauncherTests(unittest.IsolatedAsyncioTestCase):

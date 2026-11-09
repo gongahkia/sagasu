@@ -269,12 +269,18 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
     )
     stopped = asyncio.Event()
     clients = set()
+    connections = set()
     last_used = asyncio.get_running_loop().time()
 
     async def accept(reader, writer):
         nonlocal last_used
+        if stopped.is_set():
+            writer.close()
+            await writer.wait_closed()
+            return
         task = asyncio.current_task()
         clients.add(task)
+        connections.add(writer)
         try:
             line = await asyncio.wait_for(reader.readline(), 5)
             if not line:
@@ -314,6 +320,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                 )
         finally:
             clients.discard(task)
+            connections.discard(writer)
             last_used = asyncio.get_running_loop().time()
             writer.close()
             await writer.wait_closed()
@@ -341,16 +348,24 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
         path.chmod(0o600)
         watcher = asyncio.create_task(idle())
         try:
-            async with server:
-                await stopped.wait()
+            # The server context manager waits for all accepted transports on
+            # exit, so perform shutdown explicitly in the required order below.
+            await stopped.wait()
         finally:
             server.close()
-            await server.wait_closed()
             watcher.cancel()
-            await asyncio.gather(watcher, return_exceptions=True)
-            for task in list(clients):
+            # Closing the sockets also wakes SDK receive loops whose cleanup
+            # shields cancellation while waiting for an incoming message.
+            for writer in list(connections):
+                writer.close()
+            handlers = list(clients)
+            for task in handlers:
                 task.cancel()
-            await asyncio.gather(*clients, return_exceptions=True)
+            # Python waits for accepted transports as well as the listener.
+            # Close the idle MCP connections before waiting for the server;
+            # otherwise a connected client can hold the profile lock forever.
+            await asyncio.gather(watcher, *handlers, return_exceptions=True)
+            await server.wait_closed()
             await service.close()
             await close_shared_browser()
             path.unlink(missing_ok=True)
