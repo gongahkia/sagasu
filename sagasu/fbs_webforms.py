@@ -225,6 +225,7 @@ def parse_calendar_document(html, config, expected_rooms):
     if (
         _assignment(source, "dynamicLoading") is not False
         or _assignment(source, "dynamicEventRendering") != "Disabled"
+        or type(_assignment(source, "days")) is not int
         or _assignment(source, "days") != 1
     ):
         raise HTTPReadUnavailable("incomplete_calendar_model")

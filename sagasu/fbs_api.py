@@ -7,6 +7,7 @@ JavaScript execution is available here. Chromium is not launched by this client.
 
 import asyncio
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode, urljoin, urlsplit
@@ -33,7 +34,9 @@ ACCOUNT_PATHS = {
 class FBSReadAPI:
     def __init__(self, *, request=None, profile_path=None, progress=None):
         self.request = request
-        self.profile_path = Path(profile_path or DEFAULT_PROFILE)
+        self.profile_path = Path(
+            profile_path or os.getenv("SAGASU_BROWSER_PROFILE", str(DEFAULT_PROFILE))
+        )
         self.progress = progress or _noop_progress
         self._driver = None
         self._owns_request = request is None
@@ -135,9 +138,13 @@ class FBSReadAPI:
         if kind not in ACCOUNT_PATHS:
             raise HTTPReadUnavailable("unsupported_operation")
         await self.progress("reading FBS account directly over HTTP")
-        return parse_account_document(
-            kind, await self.document(urljoin(FBS_URL, ACCOUNT_PATHS[kind]))
-        )
+        html = await self.document(urljoin(FBS_URL, ACCOUNT_PATHS[kind]))
+        if (
+            kind == "tasks"
+            and _Document(html).by_id("txtSearch_c1").attrs.get("value", "").strip()
+        ):
+            raise HTTPReadUnavailable("filtered_account_listing")
+        return parse_account_document(kind, html)
 
     async def search(self, config):
         async with asyncio.timeout(120):

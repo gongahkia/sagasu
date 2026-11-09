@@ -40,8 +40,8 @@ def _report():
         "api_verified": [],
         "recommendation": "browser",
         "limitations": [
-            "HTTP account reads require a complete browser match in each browser context; no standalone REST API has been established.",
-            "Availability and all writes still use the browser. JSON traffic alone does not prove an endpoint is usable or read-only.",
+            "Direct reads reproduce FBS's observed ASP.NET forms and HTML; they are not an official REST API.",
+            "Login/MFA, writes, and reconciliation use the browser. Direct reads never submit booking/cancellation/approval actions.",
             "No literal URLs, headers, bodies, cookies, parameter values or account rows are included in this report.",
         ],
     }
@@ -59,16 +59,15 @@ async def probe_client(client, reads, config):
                 traffic.stage = stage
                 try:
                     if stage == "search":
-                        # Inspect the actual browser search, even in strict API
-                        # mode. This probe is the explicit discovery operation.
-                        result = await client.search(config)
+                        result = await reads.verify_search(client, config)
+                        provenance = result["read_backend"]
                         check = {
                             "name": stage,
                             "status": "pass",
                             "backend": "browser",
-                            "rooms_read": len(result.rooms),
-                            "bookable_rooms": len(result.bookable_rooms),
-                            "api_verification": "unsupported_until_endpoint_verified",
+                            "rooms_read": len(result["rooms"]),
+                            "api_verification": provenance["api_verification"],
+                            "fallback_reason": provenance["fallback_reason"],
                         }
                     else:
                         result = await reads.verify_account(client, stage)
@@ -95,7 +94,7 @@ async def probe_client(client, reads, config):
             report["api_verified"] = reads.capabilities()["api"]["verified"]
     report["ok"] = all(check["status"] == "pass" for check in report["checks"])
     if report["api_verified"]:
-        report["recommendation"] = "hybrid_for_verified_account_reads"
+        report["recommendation"] = "direct_reads_with_browser_fallback"
     return report
 
 

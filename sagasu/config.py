@@ -37,7 +37,7 @@ BROWSERS = (
 TEMPLATE = """# Sagasu is a private local MCP server. Configure optional SMU autofill below.
 SAGASU_BROWSER_CHANNEL=chromium
 SAGASU_MCP_CONFIRMATION=agent
-# auto verifies session-backed HTTP account reads; browser disables HTTP probing.
+# auto uses direct FBS reads with browser fallback; browser forces browser reads.
 SAGASU_READ_BACKEND=auto
 # Optional private Microsoft sign-in autofill:
 # SMU_LOGIN_EMAIL=your.name@smu.edu.sg

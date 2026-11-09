@@ -333,7 +333,7 @@ def create_server(service, *, lifespan=None, allow_agent_submission=False):
 
     @server.tool(annotations=read)
     async def probe_read_backends() -> dict[str, Any]:
-        """Start an explicit read-only backend compatibility probe using the saved session. Inspects browser search traffic and compares complete HTTP bookings/tasks against browser results. Never submits credentials, starts MFA or writes to FBS. Returns counts and redacted request shapes, not account rows or raw URLs. Login separately if expired. HTTP capability is session-scoped; room search and writes remain browser-based. Poll with wait_operation."""
+        """Start an explicit read-only compatibility probe using the saved session. Compares direct HTTP search/bookings/tasks with complete browser results. Never submits credentials, starts MFA or writes to FBS. Returns counts and redacted request shapes. Login separately if expired. Direct reads use the saved session without launching Chromium; writes and reconciliation retain the browser. Poll with wait_operation."""
         from .fbs_client import search_config_from_preferences
 
         config = search_config_from_preferences(

@@ -226,25 +226,32 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.result = parse_account_document("bookings", bookings_html())
         self.client = SimpleNamespace(
-            context=object(), page=Mock(), search=AsyncMock(), book=AsyncMock()
+            context=SimpleNamespace(request=Mock()),
+            page=Mock(),
+            search=AsyncMock(),
+            book=AsyncMock(),
         )
         self.browser = AsyncMock(return_value=self.result)
         self.http = AsyncMock(return_value=self.result)
+        self.api = Mock(account=self.http)
+        self.api.__aenter__ = AsyncMock(return_value=self.api)
+        self.api.__aexit__ = AsyncMock(return_value=False)
         self.router = HybridReads("auto")
         self.patches = [
             patch("sagasu.read_backends.read_bookings", self.browser),
-            patch("sagasu.read_backends.read_account_http", self.http),
-            patch("sagasu.read_backends.ReadTraffic", return_value=observation(None)),
+            patch("sagasu.read_backends.FBSReadAPI", return_value=self.api),
         ]
         for p in self.patches:
             p.start()
             self.addCleanup(p.stop)
 
     async def test_first_read_verifies_then_next_read_uses_http(self):
-        first = await self.router.account(self.client, "bookings")
+        first = await self.router.verify_account(self.client, "bookings")
         self.assertEqual(first["read_backend"]["name"], "browser")
         self.assertEqual(first["read_backend"]["api_verification"], "verified")
-        second = await self.router.account(self.client, "bookings")
+        second = await self.router.direct(
+            "bookings", request=self.client.context.request
+        )
         self.assertEqual(second["read_backend"]["name"], "api")
         self.browser.assert_awaited_once()
         self.assertEqual(self.http.await_count, 2)
@@ -253,28 +260,31 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.http.return_value = parse_account_document(
             "bookings", bookings_html(status="Cancelled")
         )
-        result = await self.router.account(self.client, "bookings")
+        result = await self.router.verify_account(self.client, "bookings")
         self.assertEqual(
             result["read_backend"]["fallback_reason"], "browser_http_mismatch"
         )
         self.assertEqual(self.router.capabilities()["api"]["verified"], [])
+        with self.assertRaises(HTTPReadUnavailable):
+            await self.router.direct("bookings", request=self.client.context.request)
+        self.http.assert_awaited_once()
 
     async def test_http_failure_falls_back_once_and_invalidates(self):
-        await self.router.account(self.client, "bookings")
+        await self.router.verify_account(self.client, "bookings")
         self.http.side_effect = HTTPReadUnavailable("incomplete_listing")
-        result = await self.router.account(self.client, "bookings")
-        self.assertEqual(result["read_backend"]["api_verification"], "invalidated")
+        result = await self.router.verify_account(self.client, "bookings")
+        self.assertEqual(result["read_backend"]["api_verification"], "unverified")
         self.assertEqual(self.browser.await_count, 2)
         self.assertEqual(self.http.await_count, 2)
 
     async def test_browser_errors_and_cancellation_are_not_swallowed(self):
         self.browser.side_effect = RuntimeError("implementation bug")
         with self.assertRaises(RuntimeError):
-            await self.router.account(self.client, "bookings")
+            await self.router.verify_account(self.client, "bookings")
         self.http.assert_not_awaited()
         self.browser.side_effect = asyncio.CancelledError()
         with self.assertRaises(asyncio.CancelledError):
-            await self.router.account(self.client, "bookings")
+            await self.router.verify_account(self.client, "bookings")
 
     async def test_strict_api_has_no_implicit_browser_or_search(self):
         strict = HybridReads("api")
@@ -291,12 +301,12 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.http.assert_not_awaited()
 
     async def test_context_replacement_and_verification_expiry_need_new_parity(self):
-        await self.router.account(self.client, "bookings")
-        self.client.context = object()
-        await self.router.account(self.client, "bookings")
+        await self.router.verify_account(self.client, "bookings")
+        self.client.context = SimpleNamespace(request=Mock())
+        await self.router.verify_account(self.client, "bookings")
         self.assertEqual(self.browser.await_count, 2)
         self.router.verification_ttl = 0
-        await self.router.account(self.client, "bookings")
+        await self.router.verify_account(self.client, "bookings")
         self.assertEqual(self.browser.await_count, 3)
 
     async def test_write_kinds_never_dispatch_or_fallback(self):

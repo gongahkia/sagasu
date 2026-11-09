@@ -55,7 +55,13 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                 elif path.endswith("mybookingstab.aspx"):
                     self.send(200, bookings_html())
                 elif path.endswith("tasklist.aspx"):
-                    self.send(200, tasks_html())
+                    self.send(
+                        200,
+                        tasks_html()
+                        + '<input id="txtSearch_c1" value="'
+                        + state.get("task_filter", "")
+                        + '">',
+                    )
                 elif path.endswith("Calendar.aspx"):
                     self.send(200, self.form())
                 elif path == "/redirect":
@@ -229,6 +235,12 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.state["posts"], [])
         with self.assertRaises(HTTPReadUnavailable):
             await self.api.account("book")
+
+    async def test_inherited_task_filter_never_hides_pending_tasks_silently(self):
+        self.state["task_filter"] = "filtered fixture"
+        with self.assertRaises(HTTPReadUnavailable) as caught:
+            await self.api.account("tasks")
+        self.assertEqual(caught.exception.code, "filtered_account_listing")
 
     async def test_transport_rejects_writes_even_if_a_caller_bypasses_form_builder(
         self,

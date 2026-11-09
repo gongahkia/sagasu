@@ -2,8 +2,8 @@
 
 REASONS = {
     "api_read_unavailable": (
-        "This operation has no verified FBS HTTP read in the current session.",
-        "Use SAGASU_READ_BACKEND=auto or browser. Run the read-only backend probe after login to investigate HTTP support; room searches still require the browser.",
+        "Sagasu could not verify the direct FBS read response.",
+        "Run the read-only backend probe after login to check compatibility. Use SAGASU_READ_BACKEND=auto for browser fallback or browser to force browser reads.",
         None,
     ),
     "missing_email": (

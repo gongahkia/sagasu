@@ -1,21 +1,18 @@
-"""Read routing behind the existing domain tools. Writes never enter this router.
+"""Direct read routing and explicit browser parity checks; no write dispatch.
 
-HTTP eligibility is learned from a browser read, verified against the full
-browser listing and held only in memory for the same browser context. A fresh
-host/session must verify again. Unsupported reads remain browser operations.
+Normal direct reads validate FBS's response schema and coverage. The explicit
+probe compares the same HTTP implementation with browser results. A detected
+mismatch disables that direct operation until a new check or invalidation.
 """
 
 import os
 import time
-from dataclasses import dataclass, field
-
 from playwright.async_api import Error as PlaywrightError
 
 from .fbs_account import read_bookings, read_task_list
+from .fbs_api import FBSReadAPI
 from .fbs_client import AuthenticationRequired
-from .fbs_http import HTTPReadUnavailable, read_account_http
-from .fbs_traffic import ReadTraffic
-from .observability import event
+from .fbs_http import HTTPReadUnavailable
 
 READ_MODES = {"auto", "browser", "api"}
 READ_FAILURES = (
@@ -24,16 +21,11 @@ READ_FAILURES = (
     PlaywrightError,
     TimeoutError,
 )
-
-
-@dataclass
-class _VerifiedDocument:
-    url: str = field(repr=False)
-    verified_at: float
+READ_KINDS = {"search", "bookings", "tasks"}
 
 
 def equivalent_listing(kind, browser, http):
-    """Exact domain parity, including action permissions, status and coverage."""
+    """Exact domain parity, including permissions, references and coverage."""
     if (
         not browser.get("complete")
         or not http.get("complete")
@@ -61,17 +53,24 @@ class HybridReads:
             raise ValueError("SAGASU_READ_BACKEND must be auto, browser or api.")
         self._context = None
         self._verified = {}
+        self._blocked = {}
 
     def invalidate(self):
         self._context = None
         self._verified.clear()
+        self._blocked.clear()
+
+    def _bind(self, client):
+        if self._context is not client.context:
+            self._context = client.context
+            self._verified.clear()
 
     def capabilities(self):
         now = time.monotonic()
         return {
             "mode": self.mode,
             "routed_tools": ["search_rooms", "list_bookings", "list_tasks"],
-            "browser": ["search", "bookings", "tasks"],
+            "browser": sorted(READ_KINDS),
             "browser_workflows": [
                 "alternatives",
                 "repeat",
@@ -80,25 +79,23 @@ class HybridReads:
                 "smoke",
             ],
             "api": {
-                "protocol": "session_backed_http_html",
-                "candidates": ["bookings", "tasks"],
+                "protocol": "aspnet_webforms_and_html",
+                "supported": sorted(READ_KINDS),
                 "verified": sorted(
                     k
-                    for k, v in self._verified.items()
-                    if now - v.verified_at < self.verification_ttl
+                    for k, verified_at in self._verified.items()
+                    if now - verified_at < self.verification_ttl
                 ),
-                "verification": "Complete browser parity required in this browser context; expires after 300 seconds.",
-                "availability_search": "unsupported_until_endpoint_verified",
-                "requires_browser_session": True,
+                "disabled": dict(self._blocked),
+                "verification": "Every direct response validates schema and coverage. verified lists exact browser comparisons in the last 300 seconds.",
+                "availability_search": "supported_webforms",
+                "requires_saved_session": True,
+                "launches_chromium": False,
+                "authentication": "Browser login/MFA saves the private FBS session.",
             },
             "writes": {"backend": "browser", "automatic_fallback": False},
             "reconciliation": "browser",
         }
-
-    def _bind(self, client):
-        if self._context is not client.context:
-            self._context = client.context
-            self._verified.clear()
 
     @staticmethod
     def _result(result, backend, reason=None, verification=None):
@@ -112,75 +109,86 @@ class HybridReads:
             },
         }
 
-    async def search(self, client, config):
-        if self.mode == "api":
+    async def direct(self, kind, payload=None, progress=None, *, request=None):
+        if kind not in READ_KINDS or self.mode == "browser":
             raise HTTPReadUnavailable("unsupported_operation")
-        result = (await client.search(config)).to_dict()
-        return self._result(
-            result,
-            "browser",
-            "no_verified_search_endpoint" if self.mode == "auto" else None,
+        if kind in self._blocked:
+            raise HTTPReadUnavailable(self._blocked[kind])
+        async with FBSReadAPI(
+            request=request,
+            profile_path=os.getenv("SAGASU_BROWSER_PROFILE"),
+            progress=progress,
+        ) as api:
+            result = (
+                (await api.search(payload)).to_dict()
+                if kind == "search"
+                else await api.account(kind)
+            )
+        result = self._result(result, "api", verification="schema_validated")
+        result["read_backend"]["protocol"] = (
+            "aspnet_webforms" if kind == "search" else "http_html"
         )
+        return result
+
+    async def search(self, client, config):
+        """Browser read selected explicitly or after one known direct failure."""
+        if self.mode == "api":
+            raise HTTPReadUnavailable("browser_fallback_disabled")
+        return self._result((await client.search(config)).to_dict(), "browser")
 
     async def account(self, client, kind):
-        if kind not in {"bookings", "tasks"}:
-            raise HTTPReadUnavailable("unsupported_operation")
-        self._bind(client)
-        read_browser = read_bookings if kind == "bookings" else read_task_list
-        if self.mode == "browser":
-            return self._result(await read_browser(client), "browser")
-        endpoint = self._verified.get(kind)
-        if (
-            endpoint
-            and time.monotonic() - endpoint.verified_at >= self.verification_ttl
-        ):
+        if kind not in {"bookings", "tasks"} or self.mode == "api":
+            raise HTTPReadUnavailable("browser_fallback_disabled")
+        read = read_bookings if kind == "bookings" else read_task_list
+        return self._result(await read(client), "browser")
+
+    def _checked(self, kind, browser, reason=None):
+        if reason:
             self._verified.pop(kind, None)
-            endpoint = None
-        if endpoint:
-            try:
-                result = await read_account_http(client, kind, endpoint.url)
-                event("read.backend", operation=kind, backend="api")
-                return self._result(result, "api", verification="verified")
-            except READ_FAILURES as error:
-                self._verified.pop(kind, None)
-                if self.mode == "api":
-                    raise
-                reason = getattr(error, "code", None) or "http_read_failed"
-                event("read.fallback", operation=kind, reason=reason)
-                # Only these reads can fall back. Never dispatch/replay writes.
-                return self._result(
-                    await read_browser(client), "browser", reason, "invalidated"
-                )
-        if self.mode == "api":
-            raise HTTPReadUnavailable("browser_verification_required")
-        return await self.verify_account(client, kind)
+            self._blocked[kind] = reason
+        else:
+            self._blocked.pop(kind, None)
+            self._verified[kind] = time.monotonic()
+        return self._result(
+            browser, "browser", reason, "unverified" if reason else "verified"
+        )
+
+    async def verify_search(self, client, config):
+        self._bind(client)
+        browser = (await client.search(config)).to_dict()
+        try:
+            async with FBSReadAPI(request=client.context.request) as api:
+                http = (await api.search(config)).to_dict()
+
+            def comparable(result):
+                return {
+                    "config": result["config"],
+                    "rooms": sorted(result["rooms"], key=lambda r: r["name"]),
+                    "booking_horizon": result.get("booking_horizon"),
+                }
+
+            if comparable(browser) == comparable(http):
+                return self._checked("search", browser)
+            reason = "browser_http_mismatch"
+        except READ_FAILURES as error:
+            reason = getattr(error, "code", None) or "http_read_failed"
+        return self._checked("search", browser, reason)
 
     async def verify_account(self, client, kind):
-        """Read in the browser, discover a GET, compare its HTTP representation.
-
-        Always return the browser observation for the verification read. Nothing
-        persistent is enabled by a probe and no endpoint names are guessed.
-        """
+        """Compare the actual direct account adapter with complete browser rows."""
         if kind not in {"bookings", "tasks"}:
             raise HTTPReadUnavailable("unsupported_operation")
         self._bind(client)
-        self._verified.pop(kind, None)
-        read_browser = read_bookings if kind == "bookings" else read_task_list
-        with ReadTraffic(client.page) as traffic:
-            result = await read_browser(client)
-            frame = client.page.frame(name="frameContent")
-            url = traffic.document_url(frame)
-        reason = "no_observed_get_document"
-        if not result.get("complete"):
-            reason = "incomplete_browser_listing"
-        elif url:
-            try:
-                http = await read_account_http(client, kind, url)
-                if equivalent_listing(kind, result, http):
-                    self._verified[kind] = _VerifiedDocument(url, time.monotonic())
-                    event("read.verified", operation=kind, protocol="http_html")
-                    return self._result(result, "browser", verification="verified")
-                reason = "browser_http_mismatch"
-            except READ_FAILURES as error:
-                reason = getattr(error, "code", None) or "http_read_failed"
-        return self._result(result, "browser", reason, "unverified")
+        read = read_bookings if kind == "bookings" else read_task_list
+        browser = await read(client)
+        if not browser.get("complete"):
+            return self._checked(kind, browser, "incomplete_browser_listing")
+        try:
+            async with FBSReadAPI(request=client.context.request) as api:
+                http = await api.account(kind)
+            if equivalent_listing(kind, browser, http):
+                return self._checked(kind, browser)
+            reason = "browser_http_mismatch"
+        except READ_FAILURES as error:
+            reason = getattr(error, "code", None) or "http_read_failed"
+        return self._checked(kind, browser, reason)

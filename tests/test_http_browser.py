@@ -39,9 +39,12 @@ class BrowserHTTPTests(unittest.IsolatedAsyncioTestCase):
                     html = '<iframe name="frameBottom" src="/nav"></iframe><iframe name="frameContent" src="/blank"></iframe>'
                 elif self.path == "/nav":
                     html = '<div id="MyBookingsTab" onclick="top.frames.frameContent.location=\'/bookings\'">My Bookings</div><div id="TaskListTab" onclick="top.frames.frameContent.location=\'/tasks\'">Tasks</div>'
-                elif self.path == "/bookings":
+                elif self.path in {
+                    "/bookings",
+                    "/modules/homenavigation/mybookingstab.aspx",
+                }:
                     html = bookings_html(status=state["status"])
-                elif self.path == "/tasks":
+                elif self.path in {"/tasks", "/modules/homenavigation/tasklist.aspx"}:
                     html = tasks_html() + '<input id="txtSearch_c1" value="">'
                 else:
                     html = "<html><body>fixture</body></html>"
@@ -56,13 +59,16 @@ class BrowserHTTPTests(unittest.IsolatedAsyncioTestCase):
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addAsyncCleanup(self.stop_server)
         self.origin = f"http://127.0.0.1:{server.server_port}"
-        for module in ["sagasu.fbs_http", "sagasu.fbs_traffic"]:
+        for module in ["sagasu.fbs_http", "sagasu.fbs_traffic", "sagasu.fbs_api"]:
             p = patch(
                 module + ".fbs_document_url",
                 side_effect=lambda url: url.startswith(self.origin + "/"),
             )
             p.start()
             self.addCleanup(p.stop)
+        p = patch("sagasu.fbs_api.FBS_URL", self.origin + "/home")
+        p.start()
+        self.addCleanup(p.stop)
         driver = await async_playwright().start()
         self.addAsyncCleanup(driver.stop)
         browser = await driver.chromium.launch(headless=True)
@@ -87,15 +93,19 @@ class BrowserHTTPTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_browser_and_http_share_auth_and_preserve_fresh_status(self):
         router = HybridReads("auto")
-        first = await router.account(self.client, "bookings")
+        first = await router.verify_account(self.client, "bookings")
         self.assertEqual(first["read_backend"]["api_verification"], "verified")
         self.assertEqual(first["bookings"][0]["fbs_status"], "Confirmed")
         self.state["status"] = "Cancelled"
-        second = await router.account(self.client, "bookings")
+        second = await router.direct("bookings", request=self.client.context.request)
         self.assertEqual(second["read_backend"]["name"], "api")
         self.assertEqual(second["bookings"][0]["fbs_status"], "Cancelled")
         self.assertEqual(self.client.ensure_authenticated.await_count, 1)
-        requests = [r for r in self.state["requests"] if r[0] == "/bookings"]
+        requests = [
+            r
+            for r in self.state["requests"]
+            if r[0] in {"/bookings", "/modules/homenavigation/mybookingstab.aspx"}
+        ]
         self.assertEqual(len(requests), 3)  # browser, parity GET, next read GET
         self.assertTrue(
             all("session=PRIVATE_FIXTURE" in cookie for _, cookie in requests)
@@ -104,9 +114,9 @@ class BrowserHTTPTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_task_http_permissions_match_rendered_browser(self):
         router = HybridReads("auto")
-        first = await router.account(self.client, "tasks")
+        first = await router.verify_account(self.client, "tasks")
         self.assertEqual(first["read_backend"]["api_verification"], "verified")
-        second = await router.account(self.client, "tasks")
+        second = await router.direct("tasks", request=self.client.context.request)
         self.assertEqual(second["read_backend"]["name"], "api")
         self.assertTrue(second["tasks"][0]["can_approve"])
         self.assertTrue(second["tasks"][0]["can_view"])

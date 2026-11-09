@@ -33,6 +33,16 @@ class ProbeTests(unittest.IsolatedAsyncioTestCase):
         self.client.__aenter__ = AsyncMock(return_value=self.client)
         self.client.__aexit__ = AsyncMock(return_value=False)
         self.reads = HybridReads("auto")
+        self.reads.verify_search = AsyncMock(
+            return_value={
+                "rooms": [{"name": "fixture", "timeslots": []}],
+                "read_backend": {
+                    "name": "browser",
+                    "api_verification": "unverified",
+                    "fallback_reason": "fixture_unavailable",
+                },
+            }
+        )
         self.reads.verify_account = AsyncMock(
             side_effect=lambda c, k: {
                 k: [
@@ -84,7 +94,7 @@ class ProbeTests(unittest.IsolatedAsyncioTestCase):
         self.client._complete_interactive_authentication.assert_not_called()
 
     async def test_schema_failure_is_reported_and_other_reads_continue(self):
-        self.client.search.side_effect = RuntimeError("PRIVATE_RESPONSE_BODY")
+        self.reads.verify_search.side_effect = RuntimeError("PRIVATE_RESPONSE_BODY")
         report = await probe_client(self.client, self.reads, {})
         self.assertFalse(report["ok"])
         self.assertEqual(self.reads.verify_account.await_count, 2)
@@ -166,6 +176,106 @@ class ProbeConfigTests(unittest.TestCase):
 
 
 class BackendRoutingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_mcp_http_search_keeps_polling_pagination_and_room_reviews(self):
+        from mcp.client import Client
+        from sagasu.mcp_server import create_server
+        from sagasu.mcp_service import AgentService
+        from tests.test_mcp import CONFIG, ROOM
+
+        backend = Backend()
+        backend.reads.mode = "auto"
+        backend.reads.direct = AsyncMock(
+            return_value={
+                "config": CONFIG,
+                "rooms": [ROOM],
+                "scraped_at": "fixture",
+                "read_backend": {"name": "api", "protocol": "aspnet_webforms"},
+            }
+        )
+        service = AgentService(backend=backend)
+        with patch("sagasu.mcp_service.FBSClient") as browser:
+            async with Client(create_server(service)) as client:
+                started = await client.call_tool("search_rooms", {"config": CONFIG})
+                self.assertFalse(started.is_error)
+                operation = started.structured_content["operation_id"]
+                result = await client.call_tool(
+                    "wait_operation", {"operation_id": operation}
+                )
+                self.assertEqual(result.structured_content["status"], "succeeded")
+                self.assertEqual(
+                    result.structured_content["result"]["pagination"]["source_total"], 1
+                )
+                rooms = await client.call_tool(
+                    "available_rooms", {"operation_id": operation}
+                )
+                self.assertEqual(
+                    rooms.structured_content["read_backend"]["name"], "api"
+                )
+                self.assertEqual(rooms.structured_content["available_total"], 1)
+                self.assertEqual(
+                    rooms.structured_content["next_tool"], "booking_review"
+                )
+        browser.assert_not_called()
+
+    async def test_direct_read_returns_without_starting_chromium(self):
+        backend = Backend()
+        backend.reads.mode = "auto"
+        backend.reads.direct = AsyncMock(
+            return_value={"rooms": [], "read_backend": {"name": "api"}}
+        )
+        with patch("sagasu.mcp_service.FBSClient") as browser:
+            result = await backend.run("search", "config", None, None)
+        self.assertEqual(result["read_backend"]["name"], "api")
+        browser.assert_not_called()
+
+    async def test_strict_api_failure_never_opens_browser(self):
+        from sagasu.fbs_http import HTTPReadUnavailable
+
+        backend = Backend()
+        backend.reads.mode = "api"
+        backend.reads.direct = AsyncMock(
+            side_effect=HTTPReadUnavailable("layout_fixture")
+        )
+        with (
+            patch("sagasu.mcp_service.FBSClient") as browser,
+            self.assertRaises(HTTPReadUnavailable),
+        ):
+            await backend.run("bookings", None, None, None)
+        browser.assert_not_called()
+
+    async def test_auto_fallback_retains_failure_reason_and_runs_only_once(self):
+        backend = Backend()
+        backend.reads.mode = "auto"
+        backend.reads.direct = AsyncMock(
+            side_effect=AuthenticationRequired("PRIVATE_COOKIE")
+        )
+        backend.reads.account = AsyncMock(
+            return_value={"bookings": [], "read_backend": {"name": "browser"}}
+        )
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        with patch("sagasu.mcp_service.FBSClient", return_value=client):
+            result = await backend.run("bookings", None, None, None)
+        self.assertEqual(result["read_backend"]["fallback_reason"], "session_expired")
+        backend.reads.direct.assert_awaited_once()
+        backend.reads.account.assert_awaited_once()
+        self.assertNotIn("PRIVATE_COOKIE", json.dumps(result))
+
+    async def test_cancelled_or_broken_direct_code_does_not_trigger_browser_fallback(
+        self,
+    ):
+        backend = Backend()
+        backend.reads.mode = "auto"
+        for error in [RuntimeError("bug"), asyncio.CancelledError()]:
+            backend.reads.direct = AsyncMock(side_effect=error)
+            with (
+                patch("sagasu.mcp_service.FBSClient") as browser,
+                self.assertRaises(type(error)),
+            ):
+                await backend.run("search", "config", None, None)
+            browser.assert_not_called()
+
     async def test_probe_tool_is_read_only_and_uses_existing_job_workflow(self):
         from mcp.client import Client
         from sagasu.mcp_server import create_server
@@ -191,6 +301,7 @@ class BackendRoutingTests(unittest.IsolatedAsyncioTestCase):
         backend = Backend()
         backend.reads.account = AsyncMock()
         backend.reads.search = AsyncMock()
+        backend.reads.direct = AsyncMock()
         with patch(
             "sagasu.mcp_service.execute_booking",
             AsyncMock(side_effect=BookingOutcomeUnknown("unknown")),
@@ -200,6 +311,7 @@ class BackendRoutingTests(unittest.IsolatedAsyncioTestCase):
         execute.assert_awaited_once()
         backend.reads.account.assert_not_awaited()
         backend.reads.search.assert_not_awaited()
+        backend.reads.direct.assert_not_awaited()
 
     async def test_cancellation_unknown_does_not_replay_or_invoke_http(self):
         from sagasu.fbs_account import CancellationOutcomeUnknown
@@ -229,6 +341,11 @@ class BackendRoutingTests(unittest.IsolatedAsyncioTestCase):
     async def test_domain_account_reads_use_router_and_probe_stays_noninteractive(self):
         backend = Backend()
         backend.reads.account = AsyncMock(return_value={"bookings": [], "total": 0})
+        from sagasu.fbs_http import HTTPReadUnavailable
+
+        backend.reads.direct = AsyncMock(
+            side_effect=HTTPReadUnavailable("fixture_unavailable")
+        )
         client = Mock()
         client.__aenter__ = AsyncMock(return_value=client)
         client.__aexit__ = AsyncMock(return_value=False)

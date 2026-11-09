@@ -41,7 +41,7 @@ from .fbs_account import (
 from .observability import event, observed_operation
 from .errors import public_failure
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
-from .read_backends import HybridReads
+from .read_backends import HybridReads, READ_FAILURES
 
 WRITE_KINDS = {"book", "cancel", "approve_task"}
 
@@ -61,6 +61,7 @@ class Backend:
 
     @observed_operation("agent.backend")
     async def run(self, kind, payload, progress, notify):
+        direct_failure = None
         if kind in WRITE_KINDS or kind == "login":
             self.reads.invalidate()
         if kind == "alternatives" and not payload["configs"]:
@@ -78,6 +79,22 @@ class Backend:
             return await execute_booking(
                 payload, submit=kind == "book", progress=progress, auth_notify=notify
             )
+        if kind in {"search", "bookings", "tasks"} and self.reads.mode != "browser":
+            try:
+                return await self.reads.direct(kind, payload, progress)
+            except READ_FAILURES as error:
+                if self.reads.mode == "api":
+                    raise
+                direct_failure = (
+                    getattr(error, "code", None)
+                    or getattr(error, "reason", None)
+                    or "http_read_failed"
+                )
+                event(
+                    "read.fallback",
+                    operation=kind,
+                    reason=getattr(error, "code", None) or "http_read_failed",
+                )
         async with FBSClient(
             progress=progress,
             auth_notify=notify,
@@ -114,18 +131,23 @@ class Backend:
                     "total": bookings["total"],
                     "complete": bookings["complete"],
                 }
-            if kind == "search":
-                return await self.reads.search(client, payload)
+            if kind in {"search", "bookings", "tasks"}:
+                result = (
+                    await self.reads.search(client, payload)
+                    if kind == "search"
+                    else await self.reads.account(client, kind)
+                )
+                if direct_failure:
+                    result.setdefault("read_backend", {})[
+                        "fallback_reason"
+                    ] = direct_failure
+                return result
             if kind == "login":
                 await client.ensure_authenticated()
                 return {
                     "authenticated": True,
                     "message": "FBS controls verified; session saved.",
                 }
-            if kind == "bookings":
-                return await self.reads.account(client, "bookings")
-            if kind == "tasks":
-                return await self.reads.account(client, "tasks")
             if kind == "cancel":
                 expected, reason = payload
                 result = await cancel_booking(client, expected, reason)
@@ -149,7 +171,7 @@ class Job:
     kind: str
     created_at: float
     status: str = "queued"
-    stage: str = "Waiting for browser"
+    stage: str = "Waiting for FBS"
     updated_at: float = 0
     result: dict | None = None
     error: dict | None = None
