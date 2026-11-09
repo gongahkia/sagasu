@@ -289,6 +289,19 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TrafficTests(unittest.TestCase):
+    def test_document_discovery_accepts_frame_named_after_response(self):
+        frame = SimpleNamespace(name="", url=URL)
+        request = SimpleNamespace(
+            url=URL, method="GET", resource_type="document", frame=frame
+        )
+        response = SimpleNamespace(
+            request=request, status=200, headers={"content-type": "text/html"}
+        )
+        with ReadTraffic(Mock()) as traffic:
+            traffic._response(response)
+            frame.name = "frameContent"
+            self.assertEqual(traffic.document_url(frame), URL)
+
     def test_assets_and_report_limit_do_not_hide_document_candidates(self):
         page = Mock()
         frame = SimpleNamespace(name="frameContent", url=URL)

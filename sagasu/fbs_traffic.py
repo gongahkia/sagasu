@@ -72,7 +72,9 @@ class ReadTraffic:
                 frame = request.frame
             except Exception:
                 frame = None  # Service-worker responses have no frame.
-            if frame is not None and frame.name == "frameContent":
+            # FBS assigns window.name after the document response. Store the
+            # frame identity now and match the final content frame when read.
+            if frame is not None:
                 self._documents.append((frame, url))
                 del self._documents[:-16]
         if len(self.records) >= self.limit:
