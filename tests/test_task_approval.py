@@ -87,7 +87,18 @@ class BrowserApprovalTests(unittest.IsolatedAsyncioTestCase):
         self.browser = await self.playwright.chromium.launch(headless=True)
         self.addAsyncCleanup(self.browser.close)
         self.page = await self.browser.new_page()
-        await self.page.set_content('<iframe name="frameContent"></iframe>')
+        await self.page.route(
+            "https://fbs.intranet.smu.edu.sg/**",
+            lambda route: route.fulfill(
+                body=(
+                    FIXTURE
+                    if route.request.url.endswith("/task-content")
+                    else '<iframe name="frameContent" src="/task-content"></iframe>'
+                ),
+                content_type="text/html",
+            ),
+        )
+        await self.page.goto("https://fbs.intranet.smu.edu.sg/task-fixture")
         self.frame = self.page.frame(name="frameContent")
         await self.frame.set_content(FIXTURE)
         proxy = NS(
@@ -223,6 +234,8 @@ class BrowserApprovalTests(unittest.IsolatedAsyncioTestCase):
         result = await capture_task_details(self.client, TASK)
         self.assertEqual(result["status"], "details")
         self.assertTrue(result["receipt_png"].startswith(b"\x89PNG"))
+        self.assertTrue(result["booking_details"]["reference_verified"])
+        self.assertFalse(result["booking_details"]["workflow_comments_included"])
         self.assertEqual(await self.frame.evaluate("window.approvalCount"), 0)
 
     async def test_readonly_details_reject_wrong_reference(self):

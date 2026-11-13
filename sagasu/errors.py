@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "booking_details_unavailable": (
+        "FBS did not expose verified booking details for this reference.",
+        "Refresh list_bookings or list_tasks and inspect listing coverage. Use an exact returned reference_number and a permitted VIEW action before retrying booking_details.",
+        "list_bookings",
+    ),
     "configuration_required": (
         "Sagasu cannot run FBS operations until its local configuration is corrected.",
         "Read configuration_status for the failing checks and exact local fixes. Correct them on the host, then reconnect Sagasu before retrying. Never send credentials in chat.",

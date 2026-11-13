@@ -241,6 +241,7 @@ def parse_booking_details(snapshot, record, *, include_additional=False):
         "scraped_at": datetime.now(FBS_TIMEZONE).isoformat(timespec="seconds"),
         "read_backend": {"name": "browser", "protocol": "ui_view"},
         "workflow_comments_included": False,
+        "workflow_status": snapshot.get("workflow_status"),
     }
     if include_additional:
         additional = {}
@@ -285,7 +286,8 @@ DETAIL_SNAPSHOT = r"""({reference, fields}) => {
         participants = {headers:headerSets[0] || [],rows:tables.flatMap(t=>[...t.rows].filter(r=>!r.querySelector('th')).map(r=>[...r.cells].map(e=>e.innerText.trim()))),
             summary:document.getElementById(prefix+'GridCoBookers')?.innerText || ''};
     }
-    return {fields:values, participants, prefix, visible_booking_forms:roots.length};
+    return {fields:values, participants, prefix, visible_booking_forms:roots.length,
+        workflow_status:roots.length === 1 ? document.getElementById('objectBase_labelWorkflowName_c1')?.innerText.trim() || null : null};
 }"""
 
 
@@ -568,16 +570,7 @@ async def read_booking_details(
         await client.progress("reading the requested booking's verified detail view")
         await view.click()
         if kind == "tasks":
-            record = {
-                "reference_number": record["reference_number"],
-                "room": record["room"],
-                "date_time": record["date_time"],
-                "fbs_status": None,
-                "can_cancel": None,
-                "task_status": record["status"],
-                "requested_by": record["requested_by"],
-                "request_type": record["request_type"],
-            }
+            record = task_booking_record(record)
         details = await read_open_booking_details(
             client, record, include_additional=include_additional
         )
@@ -586,3 +579,16 @@ async def read_booking_details(
     raise BookingDetailsUnavailable(
         "The reference was not found in the checked booking/task pages. Refresh the listing and inspect coverage."
     )
+
+
+def task_booking_record(record):
+    return {
+        "reference_number": record["reference_number"],
+        "room": record["room"],
+        "date_time": record["date_time"],
+        "fbs_status": None,
+        "can_cancel": None,
+        "task_status": record["status"],
+        "requested_by": record["requested_by"],
+        "request_type": record["request_type"],
+    }

@@ -12,7 +12,7 @@ from .fbs_client import FBSError, FBSClient, LayoutChanged
 from .fbs_account import (
     TASK_SNAPSHOT,
     capture_booking_evidence,
-    capture_open_booking_details,
+    wait_for_receipt_ready,
     parse_tasks,
     read_task_list,
 )
@@ -89,19 +89,41 @@ async def locate_reviewed_task(client, expected):
 
 @observed_step("tasks.details")
 async def capture_task_details(client, expected):
+    from .booking_details import (
+        read_open_booking_details,
+        task_booking_record,
+        wait_for_details,
+    )
+
     _, current, row = await locate_reviewed_task(client, expected)
     if not current.get("can_view"):
         raise TaskUnavailable("FBS does not expose a unique VIEW action for this task.")
     await client.progress("opening the exact task's booking details")
     await row.locator(VIEW).click()
-    png = await capture_open_booking_details(client, current["reference_number"])
-    return {
+    details = await read_open_booking_details(client, task_booking_record(current))
+    details["source"] = "task_list"
+    result = {
         "status": "details",
         "task": current,
+        "booking_details": details,
         "reference_number": current["reference_number"],
         "receipt_kind": "booking_details",
-        "receipt_png": png,
     }
+    try:
+        frame, _ = await wait_for_details(client, current["reference_number"])
+        await wait_for_receipt_ready(client, frame)
+        if await frame.locator(
+            "#objectBase_ActivityHistoryDialogBox_p1:visible"
+        ).count():
+            raise LayoutChanged(
+                "Workflow history must close before capturing a booking receipt"
+            )
+        result["receipt_png"] = await frame.locator("body").screenshot(
+            type="png", animations="disabled"
+        )
+    except (PlaywrightError, LayoutChanged, TimeoutError):
+        result["receipt_error"] = "Booking metadata verified; screenshot unavailable."
+    return result
 
 
 def approval_acknowledged(message, reference):

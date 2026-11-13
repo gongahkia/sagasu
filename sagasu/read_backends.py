@@ -72,6 +72,7 @@ class HybridReads:
             "routed_tools": ["search_rooms", "list_bookings", "list_tasks"],
             "browser": sorted(READ_KINDS),
             "browser_workflows": [
+                "booking_details",
                 "alternatives",
                 "repeat",
                 "task_details",

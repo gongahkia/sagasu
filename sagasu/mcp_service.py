@@ -101,6 +101,15 @@ class Backend:
             auth_notify=notify,
             interactive=kind not in {"session", "smoke", "reconcile", "probe"},
         ) as client:
+            if kind == "booking_details":
+                from .booking_details import read_booking_details
+
+                return await read_booking_details(
+                    client,
+                    payload["reference_number"],
+                    source=payload["source"],
+                    include_additional=payload["include_additional"],
+                )
             if kind == "reconcile":
                 from .reconciliation import reconcile
 
@@ -618,6 +627,9 @@ class AgentService:
                         ),
                     }
             output["result"] = result
+            if job.kind == "bookings":
+                result["details_tool"] = "booking_details"
+                result["details_lookup_field"] = "reference_number"
         return output
 
     async def wait(self, operation_id, timeout=20, offset=0, limit=20):
@@ -988,6 +1000,29 @@ class AgentService:
         if not task.get("can_view"):
             raise AgentError("FBS does not expose a unique VIEW action for this task.")
         return self.start("task_details", task)
+
+    def booking_details(self, reference_number, source="auto", include_additional=True):
+        if (
+            not isinstance(reference_number, str)
+            or not reference_number.strip()
+            or len(reference_number) > 100
+            or any(ord(char) < 32 for char in reference_number)
+        ):
+            raise AgentError(
+                "Use the exact reference_number from list_bookings or list_tasks (1–100 characters)."
+            )
+        if not isinstance(source, str) or source not in {"auto", "bookings", "tasks"}:
+            raise AgentError("Booking detail source must be auto, bookings or tasks.")
+        if type(include_additional) is not bool:
+            raise AgentError("include_additional must be a boolean.")
+        return self.start(
+            "booking_details",
+            {
+                "reference_number": reference_number.strip(),
+                "source": source,
+                "include_additional": include_additional,
+            },
+        )
 
     def _review(self, kind, payload, summary):
         self.prune()

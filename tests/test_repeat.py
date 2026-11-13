@@ -232,6 +232,11 @@ class RepeatDetailsBrowserTests(unittest.IsolatedAsyncioTestCase):
         browser = await driver.chromium.launch(headless=True)
         self.addAsyncCleanup(browser.close)
         self.page = await browser.new_page()
+        await self.page.route(
+            "https://fbs.intranet.smu.edu.sg/**",
+            lambda route: route.fulfill(body="<body></body>", content_type="text/html"),
+        )
+        await self.page.goto("https://fbs.intranet.smu.edu.sg/repeat-fixture")
 
     async def details(self, *, actual_reference="BK-TEST", emails="friend@smu.edu.sg"):
         from sagasu.repeat import read_booking_details
@@ -243,6 +248,7 @@ class RepeatDetailsBrowserTests(unittest.IsolatedAsyncioTestCase):
                 wait_for_timeout=self.page.wait_for_timeout,
             ),
             _wait_for_idle=AsyncMock(),
+            progress=AsyncMock(),
         )
         await self.page.set_content(
             """<table id="GridViewBooking_content"><tr class="row"><td></td><td>BK-TEST</td><td>16-Nov-2026 (Mon) 11:00 - 14:00</td><td>LKS</td><td>Room A</td><td></td><td></td><td></td><td>Confirmed</td><td><a id="row_BtnView" href="#">VIEW</a></td></tr></table>"""
@@ -251,10 +257,19 @@ class RepeatDetailsBrowserTests(unittest.IsolatedAsyncioTestCase):
             """(el, values)=>el.onclick=()=>{document.body.innerHTML=
             '<div id="bookingFormControl1_ObjectNumber"><span>'+values.ref+'</span></div>'+
             '<input id="bookingFormControl1_TextboxPurpose_c1" value="Project work">'+
-            '<table id="bookingFormControl1_GridCoBookers_gv"><tr><td>'+values.emails+'</td></tr></table>';return false;}""",
+            '<div id="bookingFormControl1_GridCoBookers"><table id="bookingFormControl1_GridCoBookers_gv"><tr><th>NAME</th></tr><tr><td>'+values.emails+'</td></tr></table><span>1 ITEM(S) TOTAL</span></div>';return false;}""",
             {"ref": actual_reference, "emails": emails},
         )
-        with patch("sagasu.fbs_account.read_bookings", AsyncMock()):
+        with patch(
+            "sagasu.fbs_account.read_bookings",
+            AsyncMock(
+                return_value={
+                    "bookings": [{"reference_number": "BK-TEST"}],
+                    "complete": True,
+                    "total": 1,
+                }
+            ),
+        ):
             return await read_booking_details(client, "BK-TEST")
 
     async def test_reads_verified_reference_purpose_and_unique_cobooker(self):
