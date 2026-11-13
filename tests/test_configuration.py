@@ -102,6 +102,31 @@ class ConfigurationTests(unittest.TestCase):
         settings = Settings.load("invalid\0path", diagnostic=True)
         self.assertFalse(configuration_status(settings)["operational"])
 
+    def test_inaccessible_environment_file_is_diagnosable_without_echoing_errors(self):
+        original_stat = Path.stat
+        target = self.env.resolve()
+
+        def inaccessible(path, *args, **kwargs):
+            if path == target:
+                raise PermissionError("PRIVATE_FILESYSTEM_ERROR")
+            return original_stat(path, *args, **kwargs)
+
+        with patch.object(Path, "stat", inaccessible):
+            settings = Settings.load(self.env, diagnostic=True)
+            report = configuration_status(settings)
+            self.assertFalse(report["operational"])
+            self.assertFalse(settings.public()["env_file_exists"])
+            self.assertNotIn("PRIVATE_FILESYSTEM_ERROR", json.dumps(report))
+
+    def test_invalid_env_path_does_not_load_another_files_credentials(self):
+        self.env.write_text(
+            self.base + "SMU_LOGIN_PASSWORD=PRIVATE_FALLBACK_PASSWORD\n"
+        )
+        with patch("sagasu.config.DEFAULT_ENV", self.env):
+            settings = Settings.load("invalid\0path", diagnostic=True)
+        self.assertNotIn("SMU_LOGIN_PASSWORD", settings.values)
+        self.assertFalse(configuration_status(settings)["operational"])
+
     def test_wrong_storage_type_is_reported_without_resetting_data(self):
         profile = self.root / "browser"
         profile.write_text("PRIVATE_DATA")

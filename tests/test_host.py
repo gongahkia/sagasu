@@ -188,7 +188,7 @@ class HostLauncherTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn("alternatives", workflow)
 
             try:
-                await asyncio.wait_for(asyncio.gather(connect_one(), connect_one()), 30)
+                await asyncio.wait_for(asyncio.gather(connect_one(), connect_one()), 60)
                 self.assertEqual(len(set(pids)), 1, statuses)
                 self.assertNotEqual(pids[0], os.getpid())
                 status = await control(settings, "status")

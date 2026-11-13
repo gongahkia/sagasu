@@ -42,15 +42,15 @@ def local_checks(settings):
     checks.append(
         Check(
             "config.file",
-            "pass" if settings.env_file.is_file() else "warn",
+            "pass" if settings.env_file_exists else "warn",
             (
                 "Environment file found."
-                if settings.env_file.is_file()
+                if settings.env_file_exists
                 else "No environment file; exported variables are used."
             ),
             (
                 ""
-                if settings.env_file.is_file()
+                if settings.env_file_exists
                 else "Create a template with sagasu config init, or configure exported variables."
             ),
         )

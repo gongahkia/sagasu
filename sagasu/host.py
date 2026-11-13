@@ -111,7 +111,8 @@ async def transport(reader, writer):
 async def connect(settings, *, action="mcp", start=True):
     path = socket_path(settings)
     process = None
-    for attempt in range(100):
+    deadline = asyncio.get_running_loop().time() + 30
+    while asyncio.get_running_loop().time() < deadline:
         try:
             reader, writer = await asyncio.open_unix_connection(
                 str(path), limit=8 * 1024 * 1024
@@ -124,7 +125,10 @@ async def connect(settings, *, action="mcp", start=True):
             )
             await writer.drain()
             try:
-                line = await asyncio.wait_for(reader.readline(), 5)
+                line = await asyncio.wait_for(
+                    reader.readline(),
+                    min(10, max(0.1, deadline - asyncio.get_running_loop().time())),
+                )
             except TimeoutError:
                 writer.close()
                 await writer.wait_closed()
@@ -175,7 +179,7 @@ async def connect(settings, *, action="mcp", start=True):
                             stderr=subprocess.DEVNULL,
                             start_new_session=True,
                         )
-                        for _ in range(100):
+                        while asyncio.get_running_loop().time() < deadline:
                             if process.poll() is not None:
                                 raise HostError(
                                     "The shared host could not start. An older direct process may own the profile; inspect its lock owner with sagasu doctor.",

@@ -77,6 +77,13 @@ class Settings:
     journal_path: Path | None = field(default=None, repr=False)
 
     @property
+    def env_file_exists(self):
+        try:
+            return self.env_file.is_file()
+        except OSError:
+            return False
+
+    @property
     def journal(self):
         if self.journal_path is not None:
             return self.journal_path
@@ -117,7 +124,11 @@ class Settings:
         )
         file_values = {}
         try:
-            if path.exists() and not path.is_file():
+            if any(item.name == "config.file" for item in issues):
+                # A fallback path is for diagnostics only, never another source
+                # of credentials or operational settings.
+                pass
+            elif path.exists() and not path.is_file():
                 issue(
                     "config.file",
                     "The environment-file path must name a file.",
@@ -274,7 +285,7 @@ class Settings:
     def public(self):
         return {
             "env_file": str(self.env_file),
-            "env_file_exists": self.env_file.is_file(),
+            "env_file_exists": self.env_file_exists,
             "password_autofill": bool(self.values.get("SMU_LOGIN_PASSWORD")),
             "headless": self.values.get("SAGASU_HEADLESS", "false").lower()
             in {"1", "true", "yes"},
