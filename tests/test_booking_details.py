@@ -3,7 +3,12 @@
 import json
 import unittest
 
-from sagasu.booking_details import apply_history, parse_booking_details, parse_history
+from sagasu.booking_details import (
+    apply_booked_for,
+    apply_history,
+    parse_booking_details,
+    parse_history,
+)
 from sagasu.fbs_client import LayoutChanged
 
 
@@ -47,6 +52,19 @@ def snapshot():
 
 
 class BookingMetadataTests(unittest.TestCase):
+    def test_booked_for_person_is_distinct_from_creator_and_participants(self):
+        result = parse_booking_details(snapshot(), RECORD, include_additional=True)
+        apply_booked_for(result, "Booking Beneficiary")
+        self.assertEqual(
+            result["additional_details"]["booked_for"]["name"], "Booking Beneficiary"
+        )
+        self.assertEqual(
+            result["additional_details"]["booked_for_source"], "my_bookings_summary"
+        )
+        self.assertEqual(result["booked_by"]["name"], "Original Booker")
+        self.assertEqual(result["co_bookers"][0]["name"], "Co Booker")
+        self.assertEqual(result["field_status"]["booked_for"], "available")
+
     def test_read_only_display_fields_preserve_values_and_parse_creator_audit(self):
         result = parse_booking_details(snapshot(), RECORD, include_additional=True)
         self.assertEqual(result["purpose"], "Project: α research meeting")

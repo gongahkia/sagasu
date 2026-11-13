@@ -14,6 +14,7 @@ from sagasu.booking_details import (
     HISTORY_GRID,
     HISTORY_SNAPSHOT,
     read_open_booking_details,
+    read_booking_details,
     snapshot_booking_details,
 )
 from sagasu.fbs_client import LayoutChanged
@@ -188,6 +189,39 @@ class BookingDetailBrowserTests(unittest.IsolatedAsyncioTestCase):
         await self.page.goto("https://other.invalid/booking-detail-fixture")
         with self.assertRaises(LayoutChanged):
             await read_open_booking_details(self.client, RECORD)
+        with patch(
+            "sagasu.fbs_account.read_bookings",
+            AsyncMock(return_value={"bookings": [RECORD]}),
+        ):
+            with self.assertRaises(LayoutChanged):
+                await read_booking_details(
+                    self.client, RECORD["reference_number"], source="bookings"
+                )
+        self.assertEqual(await self.page.evaluate("window.approvals"), 0)
+
+    async def test_view_lookup_reads_booked_for_from_verified_header_without_guessing(
+        self,
+    ):
+        await self.page.set_content(
+            """<div id="GridViewBooking"><table><tr><th></th><th>Ref. Number</th><th>Date &amp; Time of Use</th><th>Building</th><th>Facility</th><th>Booked For</th><th>Use Type</th><th>Charges / Credits</th><th>Status</th><th></th></tr><tbody id="GridViewBooking_content"><tr class="row"><td></td><td>BK-TEST-1</td><td>16-Nov-2026 (Mon) 10:00 - 12:00 (2hrs)</td><td>LKS</td><td>LKS Project Room 5-1</td><td>Named Beneficiary</td><td>Study</td><td>12.00</td><td>Confirmed</td><td><a id="target_BtnView" href="#">VIEW</a></td></tr></tbody></table></div><script>window.approvals=0;</script>"""
+        )
+        await self.page.locator("#target_BtnView").evaluate(
+            "(link,html)=>link.onclick=()=>{document.body.innerHTML=html;return false}",
+            detail_html(history=False),
+        )
+        with patch(
+            "sagasu.fbs_account.read_bookings",
+            AsyncMock(
+                return_value={"bookings": [RECORD], "complete": True, "total": 1}
+            ),
+        ):
+            result = await read_booking_details(
+                self.client, RECORD["reference_number"], source="bookings"
+            )
+        self.assertEqual(
+            result["additional_details"]["booked_for"]["name"], "Named Beneficiary"
+        )
+        self.assertEqual(result["booked_by"]["name"], "Original Booker")
         self.assertEqual(await self.page.evaluate("window.approvals"), 0)
 
     async def test_task_receipt_is_withheld_if_history_comments_remain_visible(self):

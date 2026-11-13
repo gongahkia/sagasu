@@ -252,9 +252,12 @@ def parse_booking_details(snapshot, record, *, include_additional=False):
         modified, modified_at = audit_actor(additional.pop("modified_by"))
         result["additional_details"] = {
             **additional,
+            "booked_for": None,
+            "booked_for_source": None,
             "modified_by": modified,
             "modified_at": modified_at,
         }
+        result["field_status"]["booked_for"] = "not_exposed"
     return result
 
 
@@ -540,6 +543,7 @@ async def read_booking_details(
     client, reference, *, source="auto", include_additional=True
 ):
     from .fbs_account import booking_rows, read_bookings, read_task_list
+    from .fbs_http import fbs_document_url
     from .fbs_tasks import task_rows
 
     for kind in [source] if source != "auto" else ["bookings", "tasks"]:
@@ -551,6 +555,10 @@ async def read_booking_details(
         if not any(item["reference_number"] == reference for item in listing[kind]):
             continue
         frame = client.page.frame(name="frameContent")
+        if not frame or not fbs_document_url(frame.url):
+            raise LayoutChanged(
+                "Booking lookup left the trusted FBS origin before VIEW"
+            )
         rows = await (booking_rows(frame) if kind == "bookings" else task_rows(frame))
         matches = [
             (record, row)
@@ -562,6 +570,11 @@ async def read_booking_details(
                 "The booking reference was not unique in the verified listing"
             )
         record, row = matches[0]
+        booked_for = (
+            await row.evaluate(BOOKED_FOR_SNAPSHOT)
+            if kind == "bookings" and include_additional
+            else None
+        )
         view = row.locator('a[id$="_BtnView"]:visible')
         if await view.count() != 1 or not await view.is_enabled():
             raise BookingDetailsUnavailable(
@@ -574,6 +587,8 @@ async def read_booking_details(
         details = await read_open_booking_details(
             client, record, include_additional=include_additional
         )
+        if include_additional:
+            apply_booked_for(details, booked_for)
         details["source"] = "my_bookings" if kind == "bookings" else "task_list"
         return details
     raise BookingDetailsUnavailable(
@@ -592,3 +607,26 @@ def task_booking_record(record):
         "requested_by": record["requested_by"],
         "request_type": record["request_type"],
     }
+
+
+BOOKED_FOR_SNAPSHOT = r"""row => {
+    const grid = document.getElementById('GridViewBooking');
+    if (!grid) return null;
+    const headers = [...grid.querySelectorAll('th')].map(e=>e.innerText.trim().replace(/\s+/g,' ').toLowerCase());
+    const indices = headers.flatMap((name,i)=>name === 'booked for' ? [i] : []);
+    if (indices.length !== 1 || row.cells.length !== headers.length) return null;
+    return row.cells[indices[0]].innerText.trim();
+}"""
+
+
+def apply_booked_for(details, value):
+    if value is None:
+        return details
+    if not isinstance(value, str) or len(value) > MAX_FIELD_LENGTH:
+        details["field_status"]["booked_for"] = "unreadable"
+        return details
+    person, _ = audit_actor(value.strip())
+    details["additional_details"]["booked_for"] = person
+    details["additional_details"]["booked_for_source"] = "my_bookings_summary"
+    details["field_status"]["booked_for"] = "available" if person else "empty"
+    return details
