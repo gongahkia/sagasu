@@ -86,6 +86,16 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaises(ConfigError):
             Settings.load(self.env)
 
+    def test_invalid_fallback_and_corrected_config_have_different_host_identities(self):
+        from sagasu.host import fingerprint
+
+        self.env.write_text(self.base + "SAGASU_AUTH_TIMEOUT_MS=invalid\n")
+        invalid = Settings.load(self.env, diagnostic=True)
+        self.env.write_text(self.base + "SAGASU_AUTH_TIMEOUT_MS=600000\n")
+        corrected = Settings.load(self.env, diagnostic=True)
+        self.assertEqual(invalid.public(), corrected.public())
+        self.assertNotEqual(fingerprint(invalid), fingerprint(corrected))
+
     def test_env_directory_and_invalid_path_leave_diagnostics_available(self):
         settings = Settings.load(self.root, diagnostic=True)
         self.assertFalse(configuration_status(settings)["operational"])

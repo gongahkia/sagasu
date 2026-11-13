@@ -348,7 +348,10 @@ def main(argv=None):
             return 0 if report["ok"] else 1
         if args.command not in {"mcp", "host", "host-run"}:
             settings.validate()
-        settings.activate()
+        # Do not export normalized fallback values into a child host. It must
+        # inspect the original invalid configuration and remain diagnostic.
+        if not any(issue.blocks_startup for issue in settings.issues()):
+            settings.activate()
         if args.command == "backend-probe":
             from .backend_probe import run_probe
 

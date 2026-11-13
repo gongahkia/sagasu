@@ -6,7 +6,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from sagasu.config import Settings, ConfigError
 from sagasu.host import serve_host, client_session, socket_path, control, run_operation
@@ -140,6 +140,7 @@ class SharedHostTests(unittest.IsolatedAsyncioTestCase):
             await self.call(client, "server_status")
             result = await control(self.settings, "stop")
             self.assertTrue(result["stopping"])
+            self.assertTrue(result["shutdown_complete"])
             await asyncio.wait_for(asyncio.shield(self.host), 3)
             with InstanceLock(self.settings.profile):
                 pass
@@ -170,11 +171,13 @@ class HostLauncherTests(unittest.IsolatedAsyncioTestCase):
             )
             ready = asyncio.Event()
             pids = []
+            statuses = []
 
             async def connect_one():
                 async with Client(params) as client:
                     result = await client.call_tool("server_status", {})
                     self.assertFalse(result.is_error)
+                    statuses.append(result.structured_content)
                     pids.append(result.structured_content["host_pid"])
                     if len(pids) == 2:
                         ready.set()
@@ -186,10 +189,34 @@ class HostLauncherTests(unittest.IsolatedAsyncioTestCase):
 
             try:
                 await asyncio.wait_for(asyncio.gather(connect_one(), connect_one()), 30)
-                self.assertEqual(len(set(pids)), 1)
+                self.assertEqual(len(set(pids)), 1, statuses)
                 self.assertNotEqual(pids[0], os.getpid())
                 status = await control(settings, "status")
                 self.assertEqual(status["pid"], pids[0])
                 self.assertFalse(status["busy"])
             finally:
                 await control(settings, "stop")
+
+
+@unittest.skipIf(os.name == "nt", "Unix host")
+class HostHandshakeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_closed_shutdown_handshake_is_retried_without_parsing_empty_json(
+        self,
+    ):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            env = Path(directory) / ".env"
+            env.write_text("SAGASU_BROWSER_PROFILE=browser\n")
+            settings = Settings.load(env)
+            reader = Mock(readline=AsyncMock(return_value=b""))
+            writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+            with patch(
+                "sagasu.host.asyncio.open_unix_connection",
+                AsyncMock(side_effect=[(reader, writer), FileNotFoundError()]),
+            ) as connect:
+                result = await control(settings, "status")
+            self.assertEqual(result, {"running": False})
+            self.assertEqual(connect.await_count, 2)
+            writer.close.assert_called_once()

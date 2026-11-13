@@ -23,6 +23,12 @@ from .config import ConfigError
 from .runtime import AlreadyRunning, InstanceLock
 
 
+class HostError(ConfigError):
+    def __init__(self, message, reason):
+        super().__init__(message)
+        self.reason = reason
+
+
 def socket_path(settings):
     if os.name == "nt":
         raise ConfigError(
@@ -43,6 +49,9 @@ def fingerprint(settings):
     sources = sorted((Path(__file__).parent).glob("*.py"))
     digest = hashlib.sha256()
     effective = settings.public()
+    effective["configuration_issues"] = [
+        (issue.name, issue.blocks_startup) for issue in settings.issues()
+    ]
     for key, default in {
         "SMU_LOGIN_EMAIL": "",
         "SMU_LOGIN_PASSWORD": "",
@@ -114,20 +123,38 @@ async def connect(settings, *, action="mcp", start=True):
                 ).encode()
             )
             await writer.drain()
-            reply = json.loads(await asyncio.wait_for(reader.readline(), 5))
+            try:
+                line = await asyncio.wait_for(reader.readline(), 5)
+            except TimeoutError:
+                writer.close()
+                await writer.wait_closed()
+                raise HostError(
+                    "The shared host did not respond to its startup handshake.",
+                    "host_handshake_timeout",
+                ) from None
+            if not line:
+                # A shutting-down host can close a newly accepted connection
+                # before reading its handshake. Wait for its listener to close.
+                writer.close()
+                await writer.wait_closed()
+                await asyncio.sleep(0.05)
+                continue
+            reply = json.loads(line)
             if not reply.get("ok"):
                 writer.close()
                 await writer.wait_closed()
-                raise ConfigError(
-                    "The shared host uses different code or configuration. Run sagasu host stop, then reconnect after active operations finish."
+                raise HostError(
+                    "The shared host uses different code or configuration. Run sagasu host stop, then reconnect after active operations finish.",
+                    "host_configuration_changed",
                 )
             return reader, writer, reply
         except (FileNotFoundError, ConnectionRefusedError):
             if not start:
                 return None
             if process is not None and process.poll() is not None:
-                raise ConfigError(
-                    "The shared host could not start. Check for an older direct Sagasu process holding the profile and run sagasu doctor."
+                raise HostError(
+                    "The shared host could not start. Check for an older direct Sagasu process holding the profile and run sagasu doctor.",
+                    "host_start_failed",
                 )
             try:
                 with InstanceLock(path.with_suffix(".startup")):
@@ -150,8 +177,9 @@ async def connect(settings, *, action="mcp", start=True):
                         )
                         for _ in range(100):
                             if process.poll() is not None:
-                                raise ConfigError(
-                                    "The shared host could not start. An older direct process may own the profile; inspect its lock owner with sagasu doctor."
+                                raise HostError(
+                                    "The shared host could not start. An older direct process may own the profile; inspect its lock owner with sagasu doctor.",
+                                    "host_start_failed",
                                 )
                             try:
                                 _, probe = await asyncio.open_unix_connection(str(path))
@@ -159,16 +187,18 @@ async def connect(settings, *, action="mcp", start=True):
                             except (FileNotFoundError, ConnectionRefusedError):
                                 await asyncio.sleep(0.1)
                         else:
-                            raise ConfigError(
-                                "The shared host did not become ready before the startup deadline."
+                            raise HostError(
+                                "The shared host did not become ready before the startup deadline.",
+                                "host_start_timeout",
                             )
                     probe.close()
                     await probe.wait_closed()
             except AlreadyRunning:
                 pass
             await asyncio.sleep(0.1)
-    raise ConfigError(
-        "The shared host did not become ready before the startup deadline. No operation was submitted."
+    raise HostError(
+        "The shared host did not become ready before the startup deadline. No operation was submitted.",
+        "host_start_timeout",
     )
 
 
@@ -177,19 +207,28 @@ async def bridge_stdio(settings):
 
     try:
         reader, writer, _ = await connect(settings)
-    except (ConfigError, AlreadyRunning, OSError):
+    except (ConfigError, AlreadyRunning, OSError) as error:
         # Only handle attachment failures before any MCP packets are forwarded.
         # A disconnected initialized session must never start another server.
         from .diagnostics import Check
         from .mcp_server import serve
 
+        messages = {
+            "host_configuration_changed": "The shared host uses different code or configuration.",
+            "host_handshake_timeout": "The shared host did not respond to its connection handshake before the deadline.",
+            "host_start_failed": "The shared host exited before it became ready; an older process may own its profile.",
+            "host_start_timeout": "The shared host did not become ready before the startup deadline.",
+        }
         await serve(
             settings,
             startup_checks=[
                 Check(
                     "runtime.host",
                     "fail",
-                    "The shared host could not start or uses different code/configuration.",
+                    messages.get(
+                        getattr(error, "reason", None),
+                        "The shared host could not start or attach safely.",
+                    ),
                     "Run sagasu host status. When no operations are active, run sagasu host stop and reconnect. If an older direct client owns the profile, close it first. Run sagasu doctor to inspect local configuration.",
                     True,
                 )
@@ -265,12 +304,33 @@ async def run_operation(settings, tool, arguments=None, *, notify=None, progress
 
 
 async def control(settings, action):
+    path = socket_path(settings)
+    try:
+        listener_id = path.stat().st_ino
+    except FileNotFoundError:
+        listener_id = None
     connection = await connect(settings, action=action, start=False)
     if connection is None:
         return {"running": False}
     _, writer, reply = connection
     writer.close()
     await writer.wait_closed()
+    if action == "stop" and reply.get("stopping"):
+        # A successful stop is followed by reconnect in the setup workflow.
+        # Wait for cleanup, rather than racing the closing listener/profile.
+        deadline = asyncio.get_running_loop().time() + 5
+        while asyncio.get_running_loop().time() < deadline:
+            try:
+                current = path.stat().st_ino
+            except FileNotFoundError:
+                reply["shutdown_complete"] = True
+                break
+            if listener_id is not None and current != listener_id:
+                reply["shutdown_complete"] = True
+                break
+            await asyncio.sleep(0.02)
+        else:
+            reply["shutdown_complete"] = False
     return reply
 
 
@@ -371,6 +431,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
         server = await asyncio.start_unix_server(
             accept, str(path), limit=8 * 1024 * 1024
         )
+        listener_id = path.stat().st_ino
         path.chmod(0o600)
         watcher = asyncio.create_task(idle())
         try:
@@ -394,4 +455,8 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
             await server.wait_closed()
             await service.close()
             await close_shared_browser()
-            path.unlink(missing_ok=True)
+            try:
+                if path.stat().st_ino == listener_id:
+                    path.unlink()
+            except FileNotFoundError:
+                pass

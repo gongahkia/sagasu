@@ -113,7 +113,8 @@ def local_checks(settings):
             ("SMU_LOGIN_EMAIL", "email"),
             ("SMU_LOGIN_PASSWORD", "password"),
         ):
-            if not settings.values.get(variable, "").strip():
+            value = settings.values.get(variable, "")
+            if not (value.strip() if label == "email" else value):
                 checks.append(
                     Check(
                         f"authentication.{label}",
