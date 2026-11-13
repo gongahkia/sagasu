@@ -694,7 +694,13 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             )
             settings = Settings.load(env)
 
-            def server_factory(service, *, lifespan, allow_agent_submission=False):
+            def server_factory(
+                service,
+                *,
+                lifespan,
+                allow_agent_submission=False,
+                configuration_provider=None,
+            ):
                 self.assertTrue(allow_agent_submission)
 
                 async def run():
@@ -715,7 +721,7 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             with InstanceLock(settings.profile):
                 pass
 
-    async def test_locked_profile_fails_before_starting_server(self):
+    async def test_locked_profile_starts_only_a_diagnostic_server(self):
         from sagasu.config import Settings
         from sagasu.runtime import AlreadyRunning, InstanceLock
 
@@ -729,11 +735,19 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
             server = Mock(run_stdio_async=AsyncMock())
             with (
                 InstanceLock(settings.profile),
-                patch("sagasu.mcp_server.create_server", return_value=server),
+                patch("sagasu.mcp_server.create_server", return_value=server) as create,
             ):
+                await serve(settings)
+                report = create.call_args.kwargs["configuration_provider"]()
+                self.assertFalse(report["operational"])
+                self.assertEqual(report["mode"], "diagnostic")
+                self.assertTrue(
+                    create.call_args.args[0].backend.configuration_unavailable
+                )
                 with self.assertRaises(AlreadyRunning):
-                    await serve(settings)
-            server.run_stdio_async.assert_not_awaited()
+                    with InstanceLock(settings.profile):
+                        pass
+            server.run_stdio_async.assert_awaited_once()
 
 
 class BackendTests(unittest.IsolatedAsyncioTestCase):

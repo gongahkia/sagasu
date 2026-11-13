@@ -175,7 +175,27 @@ async def connect(settings, *, action="mcp", start=True):
 async def bridge_stdio(settings):
     from mcp.server.stdio import stdio_server
 
-    reader, writer, _ = await connect(settings)
+    try:
+        reader, writer, _ = await connect(settings)
+    except (ConfigError, AlreadyRunning, OSError):
+        # Only handle attachment failures before any MCP packets are forwarded.
+        # A disconnected initialized session must never start another server.
+        from .diagnostics import Check
+        from .mcp_server import serve
+
+        await serve(
+            settings,
+            startup_checks=[
+                Check(
+                    "runtime.host",
+                    "fail",
+                    "The shared host could not start or uses different code/configuration.",
+                    "Run sagasu host status. When no operations are active, run sagasu host stop and reconnect. If an older direct client owns the profile, close it first. Run sagasu doctor to inspect local configuration.",
+                    True,
+                )
+            ],
+        )
+        return
     async with transport(reader, writer) as (remote_read, remote_write):
         async with stdio_server() as (local_read, local_write):
             async with local_read, local_write:
@@ -256,17 +276,12 @@ async def control(settings, action):
 
 async def serve_host(settings, *, service=None, idle_seconds=60):
     from .mcp_server import create_server
-    from .mcp_service import AgentService
-    from .personal import PersonalStore
-    from .action_journal import ActionJournal
+    from .mcp_runtime import MCPRuntime
     from .fbs_client import close_shared_browser
 
     path = socket_path(settings)
     identity = fingerprint(settings)
-    service = service or AgentService(
-        profile=PersonalStore(settings.preferences),
-        journal=ActionJournal(settings.journal),
-    )
+    runtime = MCPRuntime(settings, service=service)
     stopped = asyncio.Event()
     clients = set()
     connections = set()
@@ -307,6 +322,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                 return
             server = create_server(
                 service,
+                configuration_provider=runtime.status,
                 allow_agent_submission=settings.values.get(
                     "SAGASU_MCP_CONFIRMATION", "agent"
                 )
@@ -335,12 +351,22 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
             ):
                 stopped.set()
 
-    with (
-        InstanceLock(settings.profile),
-        InstanceLock(settings.journal.parent / ("." + settings.journal.name + ".lock")),
-    ):
-        if service.journal:
-            service.journal.recover(service.clock())
+    with runtime:
+        service = runtime.service
+        if path.exists():
+            # Diagnostic startup does not own the profile lock. Never replace
+            # another live host's listener when starting a limited host.
+            try:
+                _, existing = await asyncio.open_unix_connection(str(path))
+            except (FileNotFoundError, ConnectionRefusedError):
+                pass
+            else:
+                existing.close()
+                await existing.wait_closed()
+                await service.close()
+                raise ConfigError(
+                    "A shared host already owns this socket; reconnect to it or inspect sagasu host status."
+                )
         path.unlink(missing_ok=True)
         server = await asyncio.start_unix_server(
             accept, str(path), limit=8 * 1024 * 1024

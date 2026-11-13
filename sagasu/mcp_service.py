@@ -40,6 +40,7 @@ from .fbs_account import (
 )
 from .observability import event, observed_operation
 from .errors import public_failure
+from .config import ConfigurationRequired
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
 from .read_backends import HybridReads, READ_FAILURES
 
@@ -242,6 +243,10 @@ class AgentService:
 
     def personal_profile(self):
         if self.profile is None:
+            if getattr(self.backend, "configuration_unavailable", False):
+                raise ConfigurationRequired(
+                    "Read configuration_status for local setup fixes, then reconnect Sagasu."
+                )
             raise AgentError("Personal preferences are not configured for this server.")
         return self.profile
 
@@ -395,6 +400,10 @@ class AgentService:
 
     def action_history(self, offset=0, limit=20):
         if self.journal is None:
+            if getattr(self.backend, "configuration_unavailable", False):
+                raise ConfigurationRequired(
+                    "Action history is unavailable in diagnostic mode. Preserve existing data; read configuration_status and reconnect after correcting setup."
+                )
             raise AgentError("Durable action history is not configured.")
         return self.journal.history(offset, limit)
 
@@ -523,7 +532,13 @@ class AgentService:
                 job.kind in WRITE_KINDS
                 and backend_started
                 and not isinstance(
-                    error, (AuthenticationRequired, BookingUnavailable, TaskUnavailable)
+                    error,
+                    (
+                        AuthenticationRequired,
+                        BookingUnavailable,
+                        TaskUnavailable,
+                        ConfigurationRequired,
+                    ),
                 )
             )
             job.status = "outcome_unknown" if unknown else "failed"

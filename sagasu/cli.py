@@ -286,7 +286,7 @@ def main(argv=None):
         settings = Settings.load(
             getattr(args, "env_file", None),
             getattr(args, "browser", None),
-            diagnostic=args.command in {"doctor", "mcp", "host-run"},
+            diagnostic=args.command in {"doctor", "mcp", "host", "host-run"},
         )
         configure_logging(
             reporter,
@@ -346,7 +346,8 @@ def main(argv=None):
             if as_json:
                 print(json.dumps(report, indent=2))
             return 0 if report["ok"] else 1
-        settings.validate()
+        if args.command not in {"mcp", "host", "host-run"}:
+            settings.validate()
         settings.activate()
         if args.command == "backend-probe":
             from .backend_probe import run_probe
@@ -393,9 +394,15 @@ def main(argv=None):
             from .host import control, serve_host
 
             if args.command == "host-run":
+                from .diagnostics import configuration_status
+
                 configure_logging(
                     reporter,
-                    log_file=settings.profile.parent / "host.log",
+                    log_file=(
+                        settings.profile.parent / "host.log"
+                        if configuration_status(settings)["operational"]
+                        else None
+                    ),
                     secrets=(settings.values.get("SMU_LOGIN_PASSWORD", ""),),
                 )
                 asyncio.run(serve_host(settings))

@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "configuration_required": (
+        "Sagasu cannot run FBS operations until its local configuration is corrected.",
+        "Read configuration_status for the failing checks and exact local fixes. Correct them on the host, then reconnect Sagasu before retrying. Never send credentials in chat.",
+        "configuration_status",
+    ),
     "authentication_context_invalid": (
         "Microsoft rejected an incomplete or expired sign-in request context.",
         "Start a fresh Sagasu login from FBS. Do not reuse or edit the Microsoft resume URL. If this repeats, inspect the local sign-in page.",
