@@ -12,6 +12,7 @@ from sagasu.fbs_client import (
     FBSClient,
     LOGIN_EMAIL_SELECTOR,
     LOGIN_PASSWORD_SELECTOR,
+    FBS_URL,
 )
 
 
@@ -119,6 +120,22 @@ class AuthBrowserFormTest(unittest.IsolatedAsyncioTestCase):
                 "https://login.microsoftonline.com/tenant/resume" + suffix,
             )
             self.assertIsNone(await self.client._passkey_resume_url())
+
+    async def test_invalid_context_page_is_not_classified_as_pending_sign_in(self):
+        await self.client.page.set_content(
+            "<h1>Sign in</h1><p>Sorry, but we’re having trouble signing you in.</p><div>AADSTS90100: ctx parameter is empty or not valid.</div>"
+        )
+        self.assertEqual(
+            (await self.client._classify_auth_state())[0], "invalid_context"
+        )
+
+    async def test_other_microsoft_error_pages_are_terminal_provider_errors(self):
+        await self.client.page.set_content(
+            "<h1>Sign in</h1><p>Sorry, but we’re having trouble signing you in.</p><div>AADSTS50011: fixture diagnostic</div>"
+        )
+        self.assertEqual(
+            (await self.client._classify_auth_state())[0], "provider_error"
+        )
 
 
 class AuthTest(unittest.IsolatedAsyncioTestCase):
@@ -384,6 +401,66 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         client.page.evaluate.return_value = bare
         await client._complete_interactive_authentication()
         client.page.goto.assert_not_awaited()
+
+    async def test_invalid_context_restarts_from_fbs_once_before_credentials(self):
+        client = self.flow(
+            [
+                ("invalid_context", "lost context"),
+                ("email", "email"),
+                ("password", "password"),
+            ]
+        )
+        await client._complete_interactive_authentication()
+        client.page.goto.assert_awaited_once_with(
+            FBS_URL, wait_until="domcontentloaded", timeout=60000
+        )
+        client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
+        client.auth_notify.assert_not_awaited()
+
+    async def test_second_invalid_context_stops_without_a_retry_loop(self):
+        client = self.flow([("invalid_context", "lost"), ("invalid_context", "lost")])
+        with self.assertRaises(AuthenticationRequired) as caught:
+            await client._complete_interactive_authentication()
+        self.assertEqual(caught.exception.reason, "authentication_context_invalid")
+        client.page.goto.assert_awaited_once()
+
+    async def test_invalid_context_after_password_does_not_replay_credentials(self):
+        client = self.flow([("password", "password"), ("invalid_context", "lost")])
+        with self.assertRaises(AuthenticationRequired) as caught:
+            await client._complete_interactive_authentication()
+        self.assertEqual(caught.exception.reason, "authentication_context_invalid")
+        client.page.goto.assert_not_awaited()
+        client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
+
+    async def test_invalid_context_after_mfa_does_not_issue_another_request(self):
+        client = self.flow(
+            [("authenticator", "Enter number 24"), ("invalid_context", "lost")]
+        )
+        with self.assertRaises(AuthenticationRequired):
+            await client._complete_interactive_authentication()
+        client.page.goto.assert_not_awaited()
+        client.auth_notify.assert_awaited_once_with("Enter number 24")
+
+    async def test_browser_closed_during_login_is_interrupted_not_expired(self):
+        client = FBSClient(interactive=True)
+        client.page = Mock(
+            goto=AsyncMock(),
+            wait_for_function=AsyncMock(side_effect=PlaywrightError("fixture")),
+        )
+        client.page.is_closed.return_value = True
+        client._complete_interactive_authentication = AsyncMock(
+            side_effect=PlaywrightError("PRIVATE_DIAGNOSTIC")
+        )
+        with self.assertRaises(AuthenticationRequired) as caught:
+            await client.ensure_authenticated()
+        self.assertEqual(caught.exception.reason, "authentication_interrupted")
+        self.assertNotIn("PRIVATE_DIAGNOSTIC", str(caught.exception))
+
+    async def test_authenticator_prompt_is_not_written_to_auth_artifacts(self):
+        client = FBSClient()
+        client.page = Mock(screenshot=AsyncMock())
+        await client._capture_auth_state("authenticator")
+        client.page.screenshot.assert_not_awaited()
 
     async def test_headless_bridge_does_not_reset_login_to_email(self):
         cancel = "https://login.microsoftonline.com/tenant/reprocess?ctx=private"

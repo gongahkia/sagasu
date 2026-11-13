@@ -109,6 +109,39 @@ class AuthRecoveryTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(secret, exposed)
         client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
 
+    async def test_invalid_context_reason_reaches_mcp_without_a_false_mfa_prompt(self):
+        client = auth_fixtures.AuthTest().flow(
+            [
+                ("invalid_context", "PRIVATE_CONTEXT"),
+                ("invalid_context", "PRIVATE_CONTEXT"),
+            ]
+        )
+        service = self.service(client)
+        operation = service.start("login")
+        await service.get(operation["operation_id"]).task
+        result = service.result(operation["operation_id"])
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"]["reason"], "authentication_context_invalid")
+        self.assertEqual(result["error"]["next_tool"], "login")
+        self.assertIsNone(
+            service.authentication_status(operation["operation_id"])["prompt"]
+        )
+        self.assertNotIn("PRIVATE_CONTEXT", json.dumps(result))
+
+    async def test_provider_error_is_not_reported_as_session_expiry(self):
+        client = auth_fixtures.AuthTest().flow(
+            [("provider_error", "PRIVATE_PROVIDER_ERROR")]
+        )
+        service = self.service(client)
+        operation = service.start("login")
+        await service.get(operation["operation_id"]).task
+        result = service.result(operation["operation_id"])
+        self.assertEqual(result["error"]["reason"], "authentication_failed")
+        self.assertIsNone(
+            service.authentication_status(operation["operation_id"])["prompt"]
+        )
+        self.assertNotIn("PRIVATE_PROVIDER_ERROR", json.dumps(result))
+
     async def test_cancellation_while_waiting_for_mfa_clears_prompt_and_stops_login(
         self,
     ):

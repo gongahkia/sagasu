@@ -1,6 +1,21 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "authentication_context_invalid": (
+        "Microsoft rejected an incomplete or expired sign-in request context.",
+        "Start a fresh Sagasu login from FBS. Do not reuse or edit the Microsoft resume URL. If this repeats, inspect the local sign-in page.",
+        "login",
+    ),
+    "authentication_failed": (
+        "Microsoft sign-in could not complete; session expiry alone does not explain this failure.",
+        "Start a fresh Sagasu login. If it fails again, inspect the local Microsoft error and run sagasu doctor to check reachability.",
+        "login",
+    ),
+    "authentication_interrupted": (
+        "The browser closed before Microsoft sign-in completed.",
+        "Run login again and keep its browser open until Sagasu verifies authentication.",
+        "login",
+    ),
     "api_read_unavailable": (
         "Sagasu could not verify the direct FBS read response.",
         "Run the read-only backend probe after login to check compatibility. Use SAGASU_READ_BACKEND=auto for browser fallback or browser to force browser reads.",

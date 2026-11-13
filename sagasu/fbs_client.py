@@ -614,8 +614,18 @@ class FBSClient:
             except Exception as auth_error:
                 if isinstance(auth_error, AuthenticationRequired):
                     raise
+                if self.page.is_closed() is True:
+                    raise AuthenticationRequired(
+                        "The sign-in browser closed before authentication completed.",
+                        reason="authentication_interrupted",
+                    ) from None
                 raise AuthenticationRequired(
-                    "Timed out waiting for Microsoft login and MFA"
+                    "Microsoft sign-in could not complete.",
+                    reason=(
+                        "authentication_timeout"
+                        if isinstance(auth_error, PlaywrightTimeoutError)
+                        else "authentication_failed"
+                    ),
                 ) from auth_error
 
         frame = await self._wait_for_frame("frameContent")
@@ -665,6 +675,7 @@ class FBSClient:
         cancelled_passkey = False
         resumed_passkeys = set()
         notifications = set()
+        context_restarts = 0
         timeout_ms = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", str(AUTH_TIMEOUT_MS)))
         while (asyncio.get_running_loop().time() - started) * 1000 < timeout_ms:
             if await self.page.locator("iframe#frameBottom").count():
@@ -694,6 +705,38 @@ class FBSClient:
                     else prompt
                 )
                 previous_state = state
+            if state == "invalid_context":
+                # This restarts the read/login transaction only, before any
+                # password submission or Authenticator request. Never replay a
+                # password, MFA challenge, or downstream booking action.
+                if (
+                    context_restarts == 0
+                    and not password_submitted
+                    and not method_selected
+                    and not any(item[0] == "authenticator" for item in notifications)
+                ):
+                    context_restarts += 1
+                    await self.progress(
+                        "Restarting FBS sign-in with a fresh Microsoft request"
+                    )
+                    event("auth.context_restarted", attempts=context_restarts)
+                    await self.page.goto(
+                        FBS_URL, wait_until="domcontentloaded", timeout=60000
+                    )
+                    email_submitted = False
+                    cancelled_passkey = False
+                    resumed_passkeys.clear()
+                    previous_state = None
+                    continue
+                raise AuthenticationRequired(
+                    "Microsoft rejected the sign-in request context. Start a fresh login.",
+                    reason="authentication_context_invalid",
+                )
+            if state == "provider_error":
+                raise AuthenticationRequired(
+                    "Microsoft returned a sign-in error page.",
+                    reason="authentication_failed",
+                )
             if (
                 state in {"authenticator", "failed", "manual"}
                 and (state, prompt) not in notifications
@@ -943,6 +986,8 @@ class FBSClient:
             body = (await self.page.locator("body").inner_text(timeout=2000)).casefold()
         except Exception:
             pass
+        if "ctx parameter is empty or not valid" in body:
+            return "invalid_context", "Microsoft lost the sign-in request context"
         if any(
             text in body
             for text in (
@@ -962,6 +1007,12 @@ class FBSClient:
                 "failed",
                 "Microsoft sign-in failed or was denied/blocked. Check your credentials or SMU sign-in policy before retrying.",
             )
+        if (
+            re.search(r"\baadsts\d{5,}\b", body)
+            or "sorry, but we’re having trouble signing you in" in body
+            or "sorry, but we're having trouble signing you in" in body
+        ):
+            return "provider_error", "Microsoft returned a sign-in error page"
         if await self.page.locator(
             'input[name="otc"]:visible, input[name="ProofConfirmation"]:visible'
         ).count() or any(
@@ -1034,7 +1085,7 @@ class FBSClient:
     async def _capture_auth_state(self, state: str) -> None:
         """Capture auth UI locally while masking all form-field values."""
 
-        if not self.page or state == "password":
+        if not self.page or state in {"password", "authenticator"}:
             return
         artifact_dir = Path(
             os.getenv("SAGASU_AUTH_ARTIFACT_DIR", str(AUTH_ARTIFACT_DIR))
