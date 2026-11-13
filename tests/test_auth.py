@@ -92,6 +92,34 @@ class AuthBrowserFormTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNone(await self.client._passkey_resume_url())
 
+    async def test_bare_resume_endpoint_cannot_shadow_a_complete_server_continuation(
+        self,
+    ):
+        await self.client.page.evaluate(
+            """() => {
+            window.$Config = {fEnableDirectFidoCancelToCredPicker:true,urlResume:'https://login.microsoftonline.com/tenant/resume?username=fixture'};
+            window.ServerData = {acmaInitialConfig:{serverFeatureFlags:{fEnableDirectFidoCancelToCredPicker:true}},acmaInitialResponse:{_links:{resume:{href:'https://login.microsoftonline.com/tenant/resume?ctx=OPAQUE%2Bfixture%2F%3D&npc=7'}}}};
+        }"""
+        )
+        self.assertEqual(
+            await self.client._passkey_resume_url(),
+            "https://login.microsoftonline.com/tenant/resume?ctx=OPAQUE%2Bfixture%2F%3D&npc=7",
+        )
+
+    async def test_missing_empty_or_duplicate_context_never_becomes_a_resume_get(self):
+        for suffix in [
+            "",
+            "?username=fixture&npc=7",
+            "?ctx=",
+            "?ctx=%20",
+            "?ctx=first&ctx=second",
+        ]:
+            await self.client.page.evaluate(
+                "url => { window.ServerData = null; window.$Config = {fEnableDirectFidoCancelToCredPicker:true,urlResume:url}; }",
+                "https://login.microsoftonline.com/tenant/resume" + suffix,
+            )
+            self.assertIsNone(await self.client._passkey_resume_url())
+
 
 class AuthTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -343,6 +371,20 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         client.page.keyboard.press.assert_not_awaited()
         client.fields["Use my password"].click.assert_awaited_once()
 
+    async def test_contextless_bridge_links_are_not_followed_in_a_visible_browser(self):
+        bare = "https://login.microsoftonline.com/tenant/resume?username=fixture&npc=7"
+        client = self.flow(
+            [("webauthn", "passkey")],
+            url="https://login.microsoft.com/tenant/bridge/fido?resumeUrl="
+            + quote(bare, safe="")
+            + "&cancelUrl="
+            + quote(bare, safe=""),
+            headless=False,
+        )
+        client.page.evaluate.return_value = bare
+        await client._complete_interactive_authentication()
+        client.page.goto.assert_not_awaited()
+
     async def test_headless_bridge_does_not_reset_login_to_email(self):
         cancel = "https://login.microsoftonline.com/tenant/reprocess?ctx=private"
         client = self.flow(
@@ -364,7 +406,7 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
             ]
         )
         client.page.evaluate.return_value = (
-            "https://login.microsoftonline.com/tenant/resume"
+            "https://login.microsoftonline.com/tenant/resume?ctx=fixture"
         )
         client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_ABORTED")
         client.page.wait_for_load_state = AsyncMock()
@@ -374,7 +416,7 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
     async def test_aborted_passkey_navigation_rejects_unexpected_screen(self):
         client = self.flow([("webauthn", "passkey"), ("email", "email")])
         client.page.evaluate.return_value = (
-            "https://login.microsoftonline.com/tenant/resume"
+            "https://login.microsoftonline.com/tenant/resume?ctx=fixture"
         )
         client.page.goto.side_effect = PlaywrightError("Page.goto: net::ERR_ABORTED")
         client.page.wait_for_load_state = AsyncMock()
@@ -384,7 +426,7 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
     async def test_passkey_navigation_preserves_other_browser_errors(self):
         client = self.flow([("webauthn", "passkey")])
         client.page.evaluate.return_value = (
-            "https://login.microsoftonline.com/tenant/resume"
+            "https://login.microsoftonline.com/tenant/resume?ctx=fixture"
         )
         client.page.goto.side_effect = PlaywrightError(
             "Page.goto: net::ERR_CONNECTION_RESET"

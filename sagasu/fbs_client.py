@@ -641,6 +641,19 @@ class FBSClient:
             and not parsed.password
         )
 
+    @classmethod
+    def _trusted_login_continuation_url(cls, url: str) -> bool:
+        """A Microsoft origin alone does not make a resume GET usable.
+
+        The FIDO bridge can publish its endpoint before its transaction context
+        is ready. Never navigate a bare/empty continuation or reconstruct ctx.
+        """
+        if not cls._trusted_login_url(url):
+            return False
+        parsed = urlparse(url)
+        contexts = parse_qs(parsed.query, keep_blank_values=True).get("ctx", [])
+        return not parsed.fragment and len(contexts) == 1 and bool(contexts[0].strip())
+
     @observed_step("auth.login")
     async def _complete_interactive_authentication(self) -> None:
         if not self.page:
@@ -773,7 +786,7 @@ class FBSClient:
                 bridge_parameters = parse_qs(urlparse(self.page.url).query)
                 resume = resume or bridge_parameters.get("resumeUrl", [""])[0]
                 cancel = bridge_parameters.get("cancelUrl", [""])[0]
-                if resume and self._trusted_login_url(resume):
+                if resume and self._trusted_login_continuation_url(resume):
                     if resume in resumed_passkeys or len(resumed_passkeys) >= 2:
                         await self._stop_reset_login()
                     resumed_passkeys.add(resume)
@@ -805,7 +818,7 @@ class FBSClient:
                 elif (
                     not self.headless
                     and cancel
-                    and self._trusted_login_url(cancel)
+                    and self._trusted_login_continuation_url(cancel)
                     and not cancelled_passkey
                 ):
                     cancelled_passkey = True
@@ -836,19 +849,30 @@ class FBSClient:
         """Read Microsoft's supplied method-picker continuation without calling its APIs."""
         resume = await self.page.evaluate(
             """() => {
-                const config = window.$Config || window.ServerData;
-                if (config?.fEnableDirectFidoCancelToCredPicker &&
-                    typeof config.urlResume === 'string') return config.urlResume;
-                if (config?.acmaInitialConfig?.serverFeatureFlags?.fEnableDirectFidoCancelToCredPicker) {
-                    const href = config.acmaInitialResponse?._links?.resume?.href;
-                    if (typeof href === 'string') return href;
+                const candidates = [];
+                for (const config of [window.$Config, window.ServerData]) {
+                    if (config?.fEnableDirectFidoCancelToCredPicker)
+                        candidates.push(config.urlResume);
+                    if (config?.acmaInitialConfig?.serverFeatureFlags?.fEnableDirectFidoCancelToCredPicker)
+                        candidates.push(config.acmaInitialResponse?._links?.resume?.href);
+                }
+                for (const href of candidates) {
+                    if (typeof href !== 'string') continue;
+                    try {
+                        const u = new URL(href);
+                        const ctx = u.searchParams.getAll('ctx');
+                        if (u.protocol === 'https:' && !u.username && !u.password &&
+                            (!u.port || u.port === '443') && !u.hash &&
+                            ['login.microsoftonline.com','login.microsoft.com','login.windows.net'].includes(u.hostname) &&
+                            ctx.length === 1 && ctx[0].trim()) return href;
+                    } catch {}
                 }
                 return null;
             }"""
         )
         return (
             resume
-            if isinstance(resume, str) and self._trusted_login_url(resume)
+            if isinstance(resume, str) and self._trusted_login_continuation_url(resume)
             else None
         )
 
