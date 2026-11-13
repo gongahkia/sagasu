@@ -284,7 +284,9 @@ def main(argv=None):
             )
             return 0
         settings = Settings.load(
-            getattr(args, "env_file", None), getattr(args, "browser", None)
+            getattr(args, "env_file", None),
+            getattr(args, "browser", None),
+            diagnostic=args.command in {"doctor", "mcp", "host-run"},
         )
         configure_logging(
             reporter,
@@ -313,7 +315,8 @@ def main(argv=None):
         if args.command == "doctor":
             from .doctor import diagnose
 
-            settings.activate()
+            if not any(issue.blocks_startup for issue in settings.issues()):
+                settings.activate()
             with reporter.progress("Checking Sagasu health") as progress:
                 report = asyncio.run(
                     diagnose(

@@ -1,23 +1,12 @@
 """Bounded, read-only health checks. No messages or bookings are sent."""
 
 import asyncio
-import importlib.metadata
 import os
-import platform
 import socket
 import ssl
-from dataclasses import asdict, dataclass
-from pathlib import Path
+from dataclasses import asdict
 
-from .config import ConfigError
-
-
-@dataclass
-class Check:
-    name: str
-    status: str
-    message: str
-    hint: str = ""
+from .diagnostics import Check, local_checks
 
 
 async def probe(host, path, timeout):
@@ -160,88 +149,24 @@ async def diagnose(settings, *, offline=False, session=False, timeout=10, emit=N
         if emit:
             emit(check)
 
-    add(
-        Check(
-            "python",
-            "pass",
-            f"Python {platform.python_version()} on {platform.system()}.",
-        )
-    )
-    for distribution in ("mcp", "playwright", "python-dotenv"):
-        try:
-            version = importlib.metadata.version(distribution)
-            add(Check(f"dependency.{distribution}", "pass", f"Installed ({version})."))
-        except importlib.metadata.PackageNotFoundError:
-            add(
-                Check(
-                    f"dependency.{distribution}",
-                    "fail",
-                    "Not installed.",
-                    "Install Sagasu in this Python environment: python -m pip install -e .",
-                )
-            )
-    add(
-        Check(
-            "config.file",
-            "pass" if settings.env_file.is_file() else "warn",
-            (
-                "Environment file found."
-                if settings.env_file.is_file()
-                else "No environment file; exported variables are used."
-            ),
-            (
-                ""
-                if settings.env_file.is_file()
-                else "Create a template with sagasu config init."
-            ),
-        )
-    )
-    try:
-        settings.validate()
+    for check in local_checks(settings):
+        add(check)
+    if any(check.status == "fail" and check.blocks_startup for check in checks):
         add(
             Check(
-                "config.settings",
-                "pass",
-                "Agent configuration is valid; credentials redacted.",
+                "browser",
+                "skip",
+                "Correct local configuration before launching a browser.",
             )
         )
-    except ConfigError as error:
-        add(Check("config.settings", "fail", str(error)))
-    for name, target in (
-        ("profile", settings.profile),
-        ("preferences", settings.preferences),
-        ("history", settings.journal),
-    ):
-        if target.exists() and (
-            (name == "profile" and not target.is_dir())
-            or (name != "profile" and not target.is_file())
-        ):
-            add(
-                Check(
-                    f"storage.{name}",
-                    "fail",
-                    "The configured path has the wrong file type.",
-                    "The profile must be a directory; personal preferences must be a file.",
-                )
-            )
-            continue
-        parent = target if target.is_dir() else target.parent
-        while not parent.exists() and parent != parent.parent:
-            parent = parent.parent
-        writable = os.access(parent, os.W_OK | os.X_OK)
-        if name != "profile" and target.is_file():
-            writable = writable and os.access(target, os.W_OK)
         add(
             Check(
-                f"storage.{name}",
-                "pass" if writable else "fail",
-                (
-                    "Parent directory is writable."
-                    if writable
-                    else "Parent directory is not writable."
-                ),
+                "network",
+                "skip",
+                "Correct local configuration before checking FBS or the saved session.",
             )
         )
+        return {"ok": False, "checks": [asdict(check) for check in checks]}
     add(await browser_check(settings, timeout))
     if offline:
         add(Check("network", "skip", "Offline mode: FBS and session requests skipped."))
