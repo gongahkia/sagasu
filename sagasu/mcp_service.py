@@ -214,7 +214,11 @@ class Job:
                 else (
                     "authentication_status"
                     if self.status == "awaiting_mfa"
-                    else "operation_result" if self.terminal else "wait_operation"
+                    else (
+                        (self.error or {}).get("next_tool") or "operation_result"
+                        if self.terminal
+                        else "wait_operation"
+                    )
                 )
             ),
         }
@@ -546,15 +550,18 @@ class AgentService:
             job.error = {
                 "code": type(error).__name__,
                 "message": job.stage
-                + ". Run sagasu doctor and inspect the redacted server logs.",
+                + ". Read configuration_status for local setup checks and inspect the redacted server logs.",
                 "retry_safe": job.kind not in WRITE_KINDS and not unknown,
+                "next_tool": (
+                    "reconcile_operation" if unknown else "configuration_status"
+                ),
                 "next_action": (
                     reconcile + "; do not repeat the action automatically."
                     if unknown
                     else (
                         "Run login, complete SMU sign-in/MFA, then retry the read."
                         if isinstance(error, AuthenticationRequired)
-                        else "Check server health and refresh the source search or listing."
+                        else "Read configuration_status, check server health, and refresh the source search or listing."
                     )
                 ),
             }

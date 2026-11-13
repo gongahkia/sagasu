@@ -28,13 +28,13 @@ REASONS = {
     ),
     "missing_email": (
         "Headless sign-in needs SMU_LOGIN_EMAIL.",
-        "Set SMU_LOGIN_EMAIL privately in the host environment, then retry login.",
-        "login",
+        "Set SMU_LOGIN_EMAIL privately in the host environment, then restart the idle shared host and reconnect Sagasu to load the change before retrying login.",
+        "configuration_status",
     ),
     "missing_password": (
         "Headless password sign-in needs SMU_LOGIN_PASSWORD.",
-        "Configure the password privately on the host or sign in once using a visible browser. Never send it in chat.",
-        "login",
+        "Configure SMU_LOGIN_PASSWORD privately on the host, then restart the idle shared host and reconnect Sagasu to load the change before retrying login. A visible browser can also be used for sign-in. Never send passwords in chat.",
+        "configuration_status",
     ),
     "session_expired": (
         "The saved FBS session needs renewal.",

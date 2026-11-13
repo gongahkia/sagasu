@@ -170,6 +170,12 @@ class WorkflowProtocolTests(ServiceCase):
                 if reason == "outside_booking_horizon":
                     self.assertEqual(status["error"]["details"]["checked_rooms"], 7)
                     self.assertIsNone(status["error"]["next_tool"])
+                elif reason == "missing_password":
+                    self.assertEqual(
+                        status["error"]["next_tool"], "configuration_status"
+                    )
+                    self.assertEqual(status["next_tool"], "configuration_status")
+                    self.assertIn("reconnect", status["error"]["next_action"])
                 else:
                     self.assertEqual(status["error"]["next_tool"], "login")
                 self.backend.error = None

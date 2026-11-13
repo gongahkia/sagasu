@@ -72,6 +72,8 @@ class DiagnosticMCPTests(unittest.IsolatedAsyncioTestCase):
                 status = await self.call(client, "server_status")
                 self.assertEqual(status["mode"], "diagnostic")
                 self.assertFalse(status["can_submit"])
+                self.assertEqual(status["submission_mode"], "disabled")
+                self.assertIsNone(status["submission_tool"])
                 setup = await self.call(client, "configuration_status")
                 self.assertFalse(setup["operational"])
                 self.assertEqual(status["configuration"], setup)
@@ -94,6 +96,7 @@ class DiagnosticMCPTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(
                         result["error"]["next_tool"], "configuration_status"
                     )
+                    self.assertEqual(result["next_tool"], "configuration_status")
                     self.assertNotIn("result", result)
                 personal = await client.call_tool("list_cobookers", {})
                 self.assertTrue(personal.is_error)
@@ -105,6 +108,7 @@ class DiagnosticMCPTests(unittest.IsolatedAsyncioTestCase):
                     (await client.read_resource("sagasu://workflow")).contents[0].text
                 )
                 self.assertIn("configuration_status", json.dumps(workflow["setup"]))
+                self.assertIsNone(workflow["submission_tool"])
                 exposed = json.dumps(
                     {
                         "status": status,
@@ -229,7 +233,7 @@ class DiagnosticStdioTests(unittest.IsolatedAsyncioTestCase):
         await self.stop_host()
         async with Client(self.parameters()) as client:
             status = (await client.call_tool("server_status", {})).structured_content
-            self.assertTrue(status["operational"])
+            self.assertTrue(status["operational"], status["configuration"])
             self.assertTrue(status["durable_action_history"])
             self.assertFalse(
                 (await client.call_tool("get_search_preferences", {})).is_error
@@ -241,6 +245,31 @@ class DiagnosticStdioTests(unittest.IsolatedAsyncioTestCase):
             response = await client.call_tool("server_status", {})
             self.assertFalse(response.is_error)
             self.assertEqual(response.structured_content["mode"], "diagnostic")
+        self.assertFalse((self.root / "browser").exists())
+
+    async def test_shared_host_does_not_activate_fallback_browser_or_timeout(self):
+        self.addAsyncCleanup(self.stop_host)
+        for assignment, check_name in [
+            ("SAGASU_AUTH_TIMEOUT_MS=PRIVATE_INVALID_VALUE", "config.auth_timeout"),
+            ("SAGASU_BROWSER_CHANNEL=PRIVATE_INVALID_VALUE", "config.browser"),
+        ]:
+            with self.subTest(assignment=check_name):
+                self.env.write_text(self.base + assignment + "\n")
+                async with Client(self.parameters()) as client:
+                    response = await client.call_tool("configuration_status", {})
+                    self.assertFalse(response.is_error)
+                    report = response.structured_content
+                    self.assertFalse(report["operational"])
+                    self.assertIn(
+                        check_name,
+                        {
+                            check["name"]
+                            for check in report["checks"]
+                            if check["status"] == "fail"
+                        },
+                    )
+                    self.assertNotIn("PRIVATE_INVALID_VALUE", json.dumps(report))
+                await self.stop_host()
         self.assertFalse((self.root / "browser").exists())
 
     async def test_owned_profile_returns_diagnostics_without_releasing_owner_lock(self):
