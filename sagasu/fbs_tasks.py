@@ -90,6 +90,7 @@ async def locate_reviewed_task(client, expected):
 @observed_step("tasks.details")
 async def capture_task_details(client, expected):
     from .booking_details import (
+        HISTORY_GRID,
         read_open_booking_details,
         task_booking_record,
         wait_for_details,
@@ -112,14 +113,17 @@ async def capture_task_details(client, expected):
     try:
         frame, _ = await wait_for_details(client, current["reference_number"])
         await wait_for_receipt_ready(client, frame)
-        if await frame.locator(
-            "#objectBase_ActivityHistoryDialogBox_p1:visible"
-        ).count():
+        if (
+            await frame.locator(
+                "#objectBase_ActivityHistoryDialogBox_p1:visible"
+            ).count()
+            or await frame.locator("#" + HISTORY_GRID + ":visible").count()
+        ):
             raise LayoutChanged(
                 "Workflow history must close before capturing a booking receipt"
             )
         result["receipt_png"] = await frame.locator("body").screenshot(
-            type="png", animations="disabled"
+            type="png", animations="disabled", mask=[frame.locator("#" + HISTORY_GRID)]
         )
     except (PlaywrightError, LayoutChanged, TimeoutError):
         result["receipt_error"] = "Booking metadata verified; screenshot unavailable."

@@ -41,7 +41,7 @@ ADDITIONAL_FIELDS = {
 
 
 class BookingDetailsUnavailable(FBSError):
-    reason = "booking_details_unavailable"
+    default_reason = "booking_details_unavailable"
 
 
 def booking_window(record):
