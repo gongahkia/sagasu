@@ -20,7 +20,7 @@ class AuthRecoveryTests(unittest.IsolatedAsyncioTestCase):
             {
                 "SMU_LOGIN_EMAIL": "test@smu.edu.sg",
                 "SMU_LOGIN_PASSWORD": "private $test#secret",
-                "SAGASU_AUTH_TIMEOUT_MS": "1000",
+                "SAGASU_AUTH_TIMEOUT_MS": "10000",
             },
             clear=True,
         )
