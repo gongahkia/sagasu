@@ -59,14 +59,18 @@ Show my bookings and cancel the one I no longer need.
 ```mermaid
 flowchart TD
     User[User] <--> Client[Any MCP client]
-    Client <-->|MCP over stdio| Server[Sagasu MCP server]
+    Client <-->|MCP over stdio| Bridge[Sagasu stdio bridge]
+    Bridge <-->|Private Unix socket| Server[Sagasu MCP server in shared host]
     Server <--> Operations[Operations, reviews and recovery]
     Operations <--> Preferences[(SQLite contacts and preferences)]
     Operations <--> History[(SQLite action history)]
-    Operations <--> Browser[Playwright and Chromium]
+    Operations <-->|Search and account reads| HTTP[Playwright HTTP client]
+    Operations <-->|Browser workflows and read fallback| Browser[Playwright and Chromium]
     Config[Private .env] -.-> Server
     Profile[Private browser profile] <--> Browser
-    Browser <--> FBS[SMU FBS]
+    Profile -->|Saved session cookies| HTTP
+    HTTP <--> FBS[SMU FBS]
+    Browser <--> FBS
     Browser <--> Microsoft[Microsoft sign-in]
     User -->|Approve MFA| Authenticator[Microsoft Authenticator]
     Authenticator --> Microsoft
