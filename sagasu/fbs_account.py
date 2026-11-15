@@ -2,11 +2,12 @@
 
 import asyncio
 import re
+from urllib.parse import urlsplit
 from .action_journal import checkpoint_verified
 
 from playwright.async_api import Error as PlaywrightError
 
-from .fbs_client import FBSError, FBSApplicationError, LayoutChanged, FBSClient
+from .fbs_client import FBSError, FBSApplicationError, LayoutChanged, FBSClient, FBS_URL
 from .observability import event, observed_operation, observed_step, step
 
 
@@ -182,11 +183,63 @@ def parse_tasks(snapshot):
     return {"tasks": tasks, "total": total, "complete": len(tasks) == total}
 
 
+async def _open_task_list(client):
+    try:
+        return (
+            await open_account_tab(client, "TaskListTab", "#GridViewTask_content"),
+            False,
+        )
+    except FBSApplicationError as original:
+        cookies = [
+            c
+            for c in await client.context.cookies(FBS_URL)
+            if c["name"] == "ASP.NET_SessionId"
+        ]
+        if (
+            len(cookies) != 1
+            or cookies[0]["domain"].lstrip(".") != urlsplit(FBS_URL).hostname
+            or cookies[0]["path"] != "/"
+        ):
+            raise
+        cookie = cookies[0]
+        scope = {key: cookie[key] for key in ("name", "domain", "path")}
+        interactive = client.interactive
+        recovered = False
+        try:
+            # a fresh application session recovered the observed task error;
+            # authentication cookies and queued action payloads stay intact.
+            await client.progress(
+                "renewing the FBS application session once for Task List"
+            )
+            client.interactive = False
+            await client.context.clear_cookies(**scope)
+            await client.ensure_authenticated()
+            frame = await open_account_tab(
+                client, "TaskListTab", "#GridViewTask_content"
+            )
+            await client._save_session()
+            recovered = True
+            event("tasks.application_session_recovered")
+            return frame, True
+        except Exception as error:
+            event(
+                "tasks.application_session_recovery_failed",
+                error_type=type(error).__name__,
+            )
+            raise original from None
+        finally:
+            client.interactive = interactive
+            if not recovered:
+                await client.context.clear_cookies(**scope)
+                await client.context.add_cookies([cookie])
+                await client._save_session()
+
+
 @observed_step("tasks.read")
 async def read_task_list(client, *, reference=None):
     await client.ensure_authenticated()
     await client.progress("checking FBS Task List")
-    frame = await open_account_tab(client, "TaskListTab", "#GridViewTask_content")
+    frame, recovered = await _open_task_list(client)
     # An inherited keyword filter must not hide pending items.
     field = frame.locator("input#txtSearch_c1")
     if (await field.input_value()).strip():
@@ -205,6 +258,8 @@ async def read_task_list(client, *, reference=None):
     result = await collect_pages(
         client, frame, "GridViewTask", "tasks", read_page, reference=reference
     )
+    if recovered:
+        result["application_session_recovered"] = True
     event(
         "tasks.results",
         total=result["total"],

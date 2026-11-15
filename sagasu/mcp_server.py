@@ -384,7 +384,7 @@ def create_server(
 
     @server.tool(annotations=read)
     async def list_tasks() -> dict[str, Any]:
-        """Start reading FBS Task List and per-task approval/details capabilities. Does not change tasks. Poll the operation ID."""
+        """Start reading FBS Task List and per-task approval/details capabilities. Can recover one stale application session without resubmitting a task action; reports application_session_recovered when used. Does not change tasks. Poll the operation ID."""
         return safe(service.start, "tasks")
 
     @server.tool(annotations=read)
