@@ -27,6 +27,7 @@ FILTERS = (
     ("DropMultiEquipmentList_c1", "equipment"),
 )
 READ_TARGETS = {
+    "DateBookingFrom_c1",
     "TimeFrom_c1$ctl04",
     "TimeTo_c1$ctl04",
     "DropCapacity_c1",
@@ -101,7 +102,10 @@ class SearchForm:
         ):
             result.pop(key, None)
         result.update(changes or {})
-        result.update(__EVENTTARGET=target, __EVENTARGUMENT="")
+        result.update(
+            __EVENTTARGET=target,
+            __EVENTARGUMENT="CHANGE" if target == "DateBookingFrom_c1" else "",
+        )
         return result
 
     def multi_values(self, control, labels):

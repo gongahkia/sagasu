@@ -1163,10 +1163,14 @@ class FBSClient:
         )
         await self.progress("configuring availability search")
         await self._set_date(frame, config.date)
-        await frame.locator("select#TimeFrom_c1_ctl04").select_option(config.start_time)
-        await self._wait_for_idle(frame)
-        await frame.locator("select#TimeTo_c1_ctl04").select_option(config.end_time)
-        await self._wait_for_idle(frame)
+        for control, value in (
+            ("TimeFrom_c1_ctl04", config.start_time),
+            ("TimeTo_c1_ctl04", config.end_time),
+        ):
+            field = frame.locator(f"select#{control}")
+            if await field.input_value() != value:
+                await field.select_option(value)
+                await self._wait_for_idle(frame)
         if room_name:
             await self.progress("searching only the requested facility")
             for control in (
@@ -1452,6 +1456,23 @@ class FBSClient:
     async def _set_date(self, frame: Frame, target_value: str) -> None:
         target = datetime.strptime(target_value, "%d-%b-%Y").date()
         field = frame.locator("input#DateBookingFrom_c1_textDate")
+        current = datetime.strptime(await field.input_value(), "%d-%b-%Y").date()
+        if current != target and (current.year, current.month) == (
+            target.year,
+            target.month,
+        ):
+            # use the visible native picker; readonly date fields are not edited.
+            await field.click()
+            day = frame.locator(
+                f'#__calendar_daysTable div.day[title="{target_value}"]'
+            )
+            if await day.count() != 1:
+                raise LayoutChanged("FBS date-picker day could not be verified")
+            await day.click()
+            await self._wait_for_idle(frame)
+            if await field.input_value() != target_value:
+                raise LayoutChanged("FBS date-picker selection was not retained")
+            return
         for _ in range(32):
             current_value = await field.input_value()
             current = datetime.strptime(current_value, "%d-%b-%Y").date()
@@ -1478,6 +1499,8 @@ class FBSClient:
         current_value = await frame.locator(
             f"#{control_id}_textValue"
         ).first.input_value()
+        if not values and not current_value.strip():
+            return
         await opener.click()
         panel = frame.locator(f"#{control_id}_panelContainer:visible").first
         await panel.wait_for(state="visible", timeout=10000)

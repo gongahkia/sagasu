@@ -175,6 +175,14 @@ class FormTests(unittest.TestCase):
             with self.subTest(target=target), self.assertRaises(HTTPReadUnavailable):
                 self.form().payload(target)
 
+    def test_date_picker_uses_only_its_observed_change_argument(self):
+        self.assertEqual(
+            self.form().payload("DateBookingFrom_c1")["__EVENTARGUMENT"], "CHANGE"
+        )
+        self.assertEqual(
+            self.form().payload("TimeFrom_c1$ctl04")["__EVENTARGUMENT"], ""
+        )
+
     def test_dropdown_values_follow_current_response_instead_of_global_indexes(self):
         choices = '<div id="Filter::ddl::"><label><input type="checkbox" id="0">Classroom</label><label><input type="checkbox" id="1">Group Study Room</label></div>'
         self.assertEqual(

@@ -158,6 +158,7 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                 target = fields["__EVENTTARGET"]
                 state["posts"].append(target)
                 self.assert_read_target = target in {
+                    "DateBookingFrom_c1",
                     "TimeFrom_c1$ctl04",
                     "TimeTo_c1$ctl04",
                     "BtnDpcNext$BtnDpcNext_bt",
@@ -169,6 +170,14 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                     self.send(405, "write forbidden")
                     return
                 state["version"] += 1
+                if target == "DateBookingFrom_c1":
+                    if fields.get("__EVENTARGUMENT") != "CHANGE":
+                        self.send(400, "missing date event argument")
+                        return
+                    if not state.get("ignore_date_picker"):
+                        state["date"] = fields["DateBookingFrom_c1$textDate"]
+                if state.get("reset_date") and target == "TimeFrom_c1$ctl04":
+                    state["date"] = "10-Nov-2099"
                 if not state.get("retain_keyword"):
                     state["keyword"] = fields.get("panel$SimpleSearch_c1", "")
                 if state.get("reintroduce_keyword") and target == "TimeFrom_c1$ctl04":
@@ -231,7 +240,7 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
         result = await self.api.search(config)
         self.assertEqual(len(result.bookable_rooms), 1)
         self.assertEqual(self.state["DropMultiFloorList_c1_textValue"], "7")
-        self.assertEqual(self.state["posts"].count("BtnDpcNext$BtnDpcNext_bt"), 2)
+        self.assertEqual(self.state["posts"].count("DateBookingFrom_c1"), 1)
         self.assertEqual(
             self.state["posts"][-1], "CheckAvailability$CheckAvailability_bt"
         )
@@ -263,6 +272,39 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(self.state["invalid_state"])
 
+    async def test_unchanged_times_do_not_post_back(self):
+        await self.api.search(SearchConfig("10-Nov-2099", "10:00", "12:00"))
+        self.assertNotIn("TimeFrom_c1$ctl04", self.state["posts"])
+        self.assertNotIn("TimeTo_c1$ctl04", self.state["posts"])
+
+    async def test_date_picker_jumps_with_one_fresh_postback(self):
+        await self.api.search(SearchConfig("18-Nov-2099", "10:00", "12:00"))
+        self.assertEqual(self.state["posts"].count("DateBookingFrom_c1"), 1)
+        self.assertFalse(any(t.startswith("BtnDpc") for t in self.state["posts"]))
+        self.assertEqual(self.state["date"], "18-Nov-2099")
+        self.assertFalse(self.state["invalid_state"])
+
+    async def test_ignored_date_picker_uses_verified_arrow_fallback(self):
+        self.state["ignore_date_picker"] = True
+        await self.api.search(SearchConfig("12-Nov-2099", "10:00", "12:00"))
+        self.assertEqual(self.state["posts"].count("BtnDpcNext$BtnDpcNext_bt"), 2)
+        self.assertEqual(self.state["date"], "12-Nov-2099")
+        self.assertFalse(self.state["invalid_state"])
+
+    async def test_later_postback_cannot_silently_reset_the_requested_date(self):
+        self.state["reset_date"] = True
+        with self.assertRaises(HTTPReadUnavailable) as raised:
+            await self.api.search(SearchConfig("18-Nov-2099", "11:00", "12:00"))
+        self.assertEqual(raised.exception.code, "search_window_mismatch")
+
+    async def test_changed_times_are_posted_and_verified(self):
+        result = await self.api.search(SearchConfig("10-Nov-2099", "11:00", "13:00"))
+        self.assertIn("TimeFrom_c1$ctl04", self.state["posts"])
+        self.assertIn("TimeTo_c1$ctl04", self.state["posts"])
+        self.assertEqual(
+            (result.config.start_time, result.config.end_time), ("11:00", "13:00")
+        )
+
     async def test_retained_keyword_cannot_report_a_narrowed_search_as_complete(self):
         self.state.update(keyword="Room A", retain_keyword=True)
         with self.assertRaises(HTTPReadUnavailable) as caught:
@@ -273,7 +315,7 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_postbacks_cannot_silently_restore_a_facility_keyword(self):
         self.state["reintroduce_keyword"] = True
         with self.assertRaises(HTTPReadUnavailable) as caught:
-            await self.api.search(SearchConfig("10-Nov-2099", "10:00", "12:00"))
+            await self.api.search(SearchConfig("10-Nov-2099", "11:00", "12:00"))
         self.assertEqual(caught.exception.code, "facility_keyword_not_cleared")
         self.assertNotIn("CheckAvailability$CheckAvailability_bt", self.state["posts"])
 

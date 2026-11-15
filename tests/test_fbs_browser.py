@@ -29,6 +29,43 @@ class FacilityTypeFilterTest(unittest.IsolatedAsyncioTestCase):
             '<label><input id="1" type="checkbox">Group Study Room</label></div>'
         )
 
+    async def test_native_date_picker_selects_exact_date_without_editing_readonly_field(
+        self,
+    ):
+        await self.page.set_content(
+            """
+            <input id="DateBookingFrom_c1_textDate" readonly value="10-Nov-2099"
+              onclick="document.querySelector('#__calendar_daysTable').hidden=false">
+            <div id="__calendar_daysTable" hidden>
+              <div class="day" title="18-Nov-2099" onclick="document.querySelector('input').value='18-Nov-2099';this.parentElement.hidden=true">18</div>
+            </div>
+        """
+        )
+        await self.client._set_date(self.page, "18-Nov-2099")
+        self.assertEqual(await self.page.locator("input").input_value(), "18-Nov-2099")
+        self.assertIsNotNone(await self.page.locator("input").get_attribute("readonly"))
+        self.assertFalse(await self.page.locator("#__calendar_daysTable").is_visible())
+
+    async def test_date_picker_that_does_not_retain_selection_is_rejected(self):
+        await self.page.set_content(
+            """
+            <input id="DateBookingFrom_c1_textDate" readonly value="10-Nov-2099">
+            <div id="__calendar_daysTable"><div class="day" title="18-Nov-2099">18</div></div>
+        """
+        )
+        with self.assertRaises(LayoutChanged):
+            await self.client._set_date(self.page, "18-Nov-2099")
+
+    async def test_other_month_keeps_arrow_navigation(self):
+        await self.page.set_content(
+            """
+            <input id="DateBookingFrom_c1_textDate" readonly value="30-Nov-2099">
+            <a id="BtnDpcNext" onclick="document.querySelector('input').value='01-Dec-2099'">Next</a>
+        """
+        )
+        await self.client._set_date(self.page, "01-Dec-2099")
+        self.assertEqual(await self.page.locator("input").input_value(), "01-Dec-2099")
+
     async def test_building_scoped_options_select_only_matching_facility_types(self):
         await self.client._set_multi_select(
             self.page,
@@ -266,3 +303,17 @@ class BrowserCleanupTest(unittest.IsolatedAsyncioTestCase):
             [call.args[0] for call in locator.locator.call_args_list],
         )
         self.assertEqual(locator.click.await_count, 4)
+
+    async def test_already_empty_filters_do_not_open_or_post_the_dropdown(self):
+        client = FBSClient()
+        frame = Mock()
+        locator = Mock()
+        locator.first = locator
+        locator.input_value = AsyncMock(return_value="")
+        locator.click = AsyncMock()
+        locator.wait_for = AsyncMock()
+        locator.locator.return_value = locator
+        frame.locator.return_value = locator
+        client._wait_for_idle = AsyncMock()
+        await client._set_multi_select(frame, "DropMultiFloorList_c1", ())
+        locator.click.assert_not_awaited()

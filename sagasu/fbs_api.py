@@ -180,6 +180,16 @@ class FBSReadAPI:
                 raise HTTPReadUnavailable("facility_keyword_not_cleared")
 
         target_date = datetime.strptime(config.date, "%d-%b-%Y").date()
+        date_field = "DateBookingFrom_c1$textDate"
+        try:
+            current = datetime.strptime(
+                form.fields().get(date_field, ""), "%d-%b-%Y"
+            ).date()
+        except ValueError:
+            raise HTTPReadUnavailable("unreadable_search_date") from None
+        if current != target_date:
+            # the native date picker posts this read event with fresh form state.
+            form = await post("DateBookingFrom_c1", {date_field: config.date})
         for _ in range(33):
             try:
                 current = datetime.strptime(
@@ -198,7 +208,8 @@ class FBSReadAPI:
             ("TimeTo_c1$ctl04", config.end_time),
         ):
             form.select_value(field.replace("$", "_"), value)
-            form = await post(field, {field: value})
+            if form.fields().get(field) != value:
+                form = await post(field, {field: value})
             if form.fields().get(field) != value:
                 raise HTTPReadUnavailable("time_not_retained")
         for control, attribute in FILTERS:
