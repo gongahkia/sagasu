@@ -138,6 +138,7 @@ class DiagnosticTests(unittest.IsolatedAsyncioTestCase):
             job = service.get(operation["operation_id"])
             await job.task
         self.assertEqual(job.status, "failed")
+        self.assertEqual(job.public()["next_tool"], "support_bundle")
         self.assertTrue(job.public()["failure_screenshot_available"])
         setup = {"operational": True, "checks": []}
         async with Client(
