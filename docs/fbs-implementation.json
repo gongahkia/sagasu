@@ -52,11 +52,19 @@
     "evidence": "Fewer tool calls, smaller payloads and backend timings alone do not establish end-to-end savings"
   },
   "excluded": "Calendar/export features and all other unselected proposals",
-  "status": "Main implemented for verified native fields; operation diagnostics implemented; conversation evaluation and benchmark comparisons in progress; scheduling/notification additions deferred by the user",
+  "status": "Main and four selected diagnostic/evaluation additions implemented. Initial 11-scenario synthetic Codex evaluation completed; broader per-feature retention evaluation remains open. Six scheduling/notification additions are deferred by the user.",
+  "quality_progress": {
+    "implemented_with_functional_tests": [45, 46, 47, 48],
+    "verification_checkpoint": "596 tests passed on Python 3.12 and 3.14; live read-only failure PNG/support-bundle control passed without changing bookings",
+    "agent_evaluation": "11 scenarios, three repetitions per arm: 33 matched pairs, 66 accepted trials and 78 CLI invocations. All accepted trials passed their correctness checks; eight scenarios lowered both median tokens and elapsed time, three had mixed efficiency results.",
+    "functional_evidence": "benchmarks/diagnostics-functional-2026-11-15.json",
+    "agent_evaluation_evidence": "benchmarks/agent-evaluation-2026-11-15.json",
+    "remaining_evaluation": "Synthetic timings exclude actual FBS latency and user-specific Codex configuration. Native catalogue/amendment/credits, saved preferences/shortlists/aliases, batches, classifications, multiple co-bookers and diagnosis-specific token savings still need matched end-to-end evaluation. Scenario feature tags are not automatic retention verdicts."
+  },
   "implementation_progress": {
     "implemented_with_functional_tests": [7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29],
     "remaining_main": [],
-    "verification_checkpoint": "575 tests passed on Python 3.12 and 3.14; live read-only controls are recorded in benchmarks/planning-functional-2026-11-15.json",
+    "verification_checkpoint": "596 tests passed on Python 3.12 and 3.14; native read-only controls are recorded in benchmarks/planning-functional-2026-11-15.json and benchmarks/diagnostics-functional-2026-11-15.json",
     "limits": [
       "Room catalogue reports only exposed FBS fields; missing equipment/accessibility remains unknown and supplied photos may be representative",
       "Credit balances and native form estimates are exposed; quota rules not present in the checked summary remain unknown",

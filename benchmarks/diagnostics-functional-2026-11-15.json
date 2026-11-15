@@ -2,7 +2,7 @@
   "scope": "Functional verification of automatic failure capture and redacted support diagnostics; this is not model token/speed retention evidence",
   "unit_and_protocol_checks": {
     "python_versions": ["3.12", "3.14"],
-    "full_suite_tests_per_interpreter": 595,
+    "full_suite_tests_per_interpreter": 596,
     "full_suite_passed": true,
     "subsequent_planner_routing_checks_per_interpreter": 76,
     "subsequent_planner_routing_checks_passed": true,
@@ -26,7 +26,9 @@
   },
   "verification_issues_resolved": [
     "A development run rejected a source fingerprint change during a shared-host test; both full suites passed after keeping app source fixed",
-    "An existing MFA privacy test falsely matched challenge digits inside a random operation ID; the deterministic test now excludes only the opaque ID while checking all remaining public fields"
+    "An existing MFA privacy test falsely matched challenge digits inside a random operation ID; the deterministic test now excludes only the opaque ID while checking all remaining public fields",
+    "The isolated CLI default approval policy blocked fake submissions before the fixture backend ran; submission trials use invocation-only approval for the synthetic submit_review tool, without changing real client configuration or app safeguards",
+    "The initial recovery grader conflated observed Pending Confirmation with original-action verification; the corrected recovery schema checks these separately and rejects falsely verified interrupted actions"
   ],
   "limitations": ["No real booking, amendment, cancellation or approval was submitted", "Unavailable/authentication/browserless failures may have no image", "Historical read operations and images cannot be recovered after expiry or restart", "Conversation scenarios use synthetic FBS records and do not replace live native-path verification"]
 }
