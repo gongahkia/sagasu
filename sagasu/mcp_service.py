@@ -1558,6 +1558,10 @@ class AgentService:
             summary = action_summary(review["kind"], review["payload"])
             target = identity(review["kind"], summary)
             reference = summary.get("reference_number")
+            if target is None:
+                raise AgentError(
+                    "A batch member has no verifiable native-action identity."
+                )
             if target in seen or reference and reference in references:
                 raise AgentError(
                     "This batch contains duplicate or competing actions for the same booking. Review them separately."

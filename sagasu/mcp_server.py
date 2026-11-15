@@ -840,7 +840,7 @@ def create_server(
             )
         )
         async def submit_review(review_id: str) -> dict[str, Any]:
-            """Submit an exact booking/cancellation/task approval review requested by the user. Agent submission is enabled by the host; no extra confirmation form. Prepare and inspect the review first; do not invent missing purpose/co-booker/room. Booking accepts FBS acknowledgement/declaration. Repeating the SAME review ID returns its existing job, never submits twice. Wait for the operation; reconcile outcome_unknown in FBS before any new review."""
+            """Submit an exact individual or batch review requested by the user. Agent submission is enabled; no extra confirmation form. Inspect the review first and do not invent required details. Booking accepts FBS acknowledgement/declaration. Retained review IDs return their existing jobs on repetition; individual write outcomes also recover from action_history after restart. Batch monitors expire on restart: inspect individual operation/history records before any new review. Poll and report actual per-action FBS statuses; never retry unknown outcomes automatically."""
             return safe(service.submit, review_id)
 
     @server.tool(annotations=local)
