@@ -32,13 +32,23 @@ class WorkflowServiceTests(ServiceCase):
     async def test_wait_returns_for_mfa_and_prompt_clears_on_completion(self):
         self.backend.mfa = True
         self.backend.gate = asyncio.Event()
-        operation = self.service.start("login")
+        with patch(
+            "sagasu.mcp_service.secrets.token_urlsafe",
+            return_value="operation88fixture",
+        ):
+            operation = self.service.start("login")
         result = await asyncio.wait_for(
             self.service.wait(operation["operation_id"], timeout=30), timeout=1
         )
         self.assertEqual(result["status"], "awaiting_mfa")
         self.assertEqual(result["next_tool"], "authentication_status")
-        self.assertNotIn("88", json.dumps(result))
+        # an opaque random ID can contain the challenge digits by coincidence.
+        self.assertNotIn(
+            "88",
+            json.dumps(
+                {key: value for key, value in result.items() if key != "operation_id"}
+            ),
+        )
         self.assertIn(
             "88",
             self.service.authentication_status(operation["operation_id"])["prompt"],
