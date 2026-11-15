@@ -50,5 +50,18 @@
     "evidence": "Fewer tool calls, smaller payloads and backend timings alone do not establish end-to-end savings"
   },
   "excluded": "Calendar/export features and all other unselected proposals",
-  "status": "Implementation starting; this file records agreed scope, not completed functionality"
+  "status": "Main implementation in progress; bonuses and comparative end-to-end Codex evaluation have not started",
+  "implementation_progress": {
+    "implemented_with_functional_tests": [7, 8, 9, 10, 11, 12, 14, 19, 20, 22, 23, 24, 25, 26, 27, 29],
+    "remaining_main": [16, 17, 18, 21],
+    "verification_checkpoint": "549 tests passed on Python 3.12 and 3.14; live read-only controls are recorded in benchmarks/planning-functional-2026-11-15.json",
+    "limits": [
+      "Room catalogue reports only exposed FBS fields; missing equipment/accessibility remains unknown and supplied photos may be representative",
+      "Credit balances and native form estimates are exposed; quota rules not present in the checked summary remain unknown",
+      "School/year person clues filter verified email domains and trailing year tokens; they do not independently verify enrolment information",
+      "Multi-co-booker native validation was tested with two exact directory selections in an unsent form, not a real submission",
+      "Native EDIT forms were verified for future editable bookings; date/time/purpose/classification amendments are not implemented yet and no native room-change control was observed",
+      "Every implemented feature remains subject to the agreed end-to-end evaluation and retention policy"
+    ]
+  }
 }
