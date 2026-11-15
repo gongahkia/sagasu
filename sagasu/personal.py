@@ -141,6 +141,9 @@ class PersonalStore:
                 connection.execute(
                     "CREATE TABLE IF NOT EXISTS room_preferences (scope TEXT PRIMARY KEY, payload TEXT NOT NULL)"
                 )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS contact_aliases (scope TEXT NOT NULL, contact_id TEXT NOT NULL, alias TEXT NOT NULL, alias_key TEXT NOT NULL, PRIMARY KEY(scope,contact_id,alias_key))"
+                )
             if write:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection
@@ -161,13 +164,55 @@ class PersonalStore:
 
     def contacts(self):
         with self._db() as db:
-            return {
+            contacts = {
                 key: {"name": name, "email": email}
                 for key, name, email in db.execute(
                     "SELECT id,name,email FROM contacts WHERE scope=? ORDER BY rowid",
                     (self.scope,),
                 )
             }
+            for contact_id, alias in db.execute(
+                "SELECT contact_id,alias FROM contact_aliases WHERE scope=? ORDER BY rowid",
+                (self.scope,),
+            ):
+                if contact_id in contacts:
+                    contacts[contact_id].setdefault("aliases", []).append(alias)
+            return contacts
+
+    def set_contact_aliases(self, contact_id, aliases):
+        if (
+            not isinstance(aliases, list)
+            or len(aliases) > 20
+            or any(
+                not isinstance(a, str)
+                or not 1 <= len(a.strip()) <= 40
+                or "@" in a
+                or any(ord(c) < 32 or ord(c) == 127 for c in a)
+                for a in aliases
+            )
+        ):
+            raise PersonalDataError(
+                "Provide up to 20 single-line aliases of 1–40 characters."
+            )
+        aliases = [a.strip() for a in aliases]
+        if len({a.casefold() for a in aliases}) != len(aliases):
+            raise PersonalDataError("Aliases for one contact must be unique.")
+        with self._db(write=True) as db:
+            row = db.execute(
+                "SELECT name,email FROM contacts WHERE scope=? AND id=?",
+                (self.scope, contact_id),
+            ).fetchone()
+            if not row:
+                raise PersonalDataError("That saved co-booker no longer exists.")
+            db.execute(
+                "DELETE FROM contact_aliases WHERE scope=? AND contact_id=?",
+                (self.scope, contact_id),
+            )
+            db.executemany(
+                "INSERT INTO contact_aliases(scope,contact_id,alias,alias_key) VALUES(?,?,?,?)",
+                [(self.scope, contact_id, a, a.casefold()) for a in aliases],
+            )
+        return {"id": contact_id, "name": row[0], "email": row[1], "aliases": aliases}
 
     def save_contact(self, name, email, *, contact_id=None):
         name, email = valid_contact(name, email)
@@ -215,6 +260,10 @@ class PersonalStore:
                 "DELETE FROM contacts WHERE scope=? AND id=?", (self.scope, contact_id)
             ).rowcount:
                 raise PersonalDataError("That saved co-booker no longer exists.")
+            db.execute(
+                "DELETE FROM contact_aliases WHERE scope=? AND contact_id=?",
+                (self.scope, contact_id),
+            )
         return {"deleted": True, "id": contact_id}
 
     def templates(self):
@@ -290,6 +339,10 @@ class PersonalStore:
         return {"deleted": True, "id": template_id}
 
     def resolve_contact(self, value):
+        if not isinstance(value, str):
+            raise PersonalDataError(
+                "Choose a saved co-booker ID, name, email or alias."
+            )
         saved = self.contacts()
         if value in saved:
             return saved[value]["email"]
@@ -297,7 +350,11 @@ class PersonalStore:
             person["email"]
             for person in saved.values()
             if value.casefold()
-            in {person["name"].casefold(), person["email"].casefold()}
+            in {
+                person["name"].casefold(),
+                person["email"].casefold(),
+                *(a.casefold() for a in person.get("aliases", ())),
+            }
         ]
         if len(matches) != 1:
             raise PersonalDataError(

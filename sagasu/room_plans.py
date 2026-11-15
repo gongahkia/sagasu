@@ -23,6 +23,7 @@ from .room_preferences import merge_preferences
 
 MAX_DATES = 31
 MAX_CANDIDATES = 200
+MAX_EVALUATED_CANDIDATES = 100_000
 
 
 def prepare_plan(
@@ -305,9 +306,10 @@ async def find_room_plans(payload, search, progress=_noop_progress):
                 }
             )
     count = 0
+    computation_limited = False
 
     def candidates():
-        nonlocal count
+        nonlocal count, computation_limited
         if payload["mode"] == "common":
             if len(calendars) != len(payload["dates"]):
                 return
@@ -321,6 +323,9 @@ async def find_room_plans(payload, search, progress=_noop_progress):
                 }
                 common = keys if common is None else common & keys
             for room, start in sorted(common or ()):
+                if count == MAX_EVALUATED_CANDIDATES:
+                    computation_limited = True
+                    return
                 count += 1
                 legs = [_leg(room, start, start + payload["duration_minutes"])]
                 yield {
@@ -337,6 +342,9 @@ async def find_room_plans(payload, search, progress=_noop_progress):
                     payload["allow_split"],
                     payload["transition_minutes"],
                 ):
+                    if count == MAX_EVALUATED_CANDIDATES:
+                        computation_limited = True
+                        return
                     count += 1
                     yield {
                         "date": date,
@@ -360,10 +368,12 @@ async def find_room_plans(payload, search, progress=_noop_progress):
         "room_preferences": payload["preferences"],
         "candidates": options,
         "total": len(options),
-        "total_matching_candidates": count,
+        "total_matching_candidates": None if computation_limited else count,
+        "matching_candidates_evaluated": count,
+        "ranking_complete": not computation_limited,
         "candidate_limit": MAX_CANDIDATES,
-        "truncated": count > MAX_CANDIDATES,
-        "complete": not failed,
+        "truncated": count > MAX_CANDIDATES or computation_limited,
+        "complete": not failed and not computation_limited,
         "partial_failure": bool(failed),
         "probes": probes,
         "scope": "Explicit dates, requested filters and duration; only future starts. Split plans include at most one room change and only where no single room fits that start. Transition gaps are additional to booked duration.",
@@ -375,7 +385,11 @@ async def find_room_plans(payload, search, progress=_noop_progress):
             else (
                 "retry_failed_dates"
                 if failed
-                else "inspect_date_restrictions_or_change_requested_scope"
+                else (
+                    "refine_planning_scope"
+                    if computation_limited
+                    else "inspect_date_restrictions_or_change_requested_scope"
+                )
             )
         ),
     }

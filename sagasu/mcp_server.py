@@ -224,6 +224,22 @@ def create_server(
             open_world_hint=False,
         )
     )
+    async def set_cobooker_aliases(
+        cobooker_id: str, aliases: list[str]
+    ) -> dict[str, Any]:
+        """Set the complete alias list for an explicitly selected saved co-booker. [] removes aliases. Shared aliases across people remain ambiguous and require a contact ID. Names/aliases resolve only to saved verified emails; no FBS writes and no email guessing. Existing booking reviews keep their email snapshot."""
+        return safe(
+            safe(service.personal_profile).set_contact_aliases, cobooker_id, aliases
+        )
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        )
+    )
     async def set_search_preferences(
         preferences: SearchPreferencesInput,
     ) -> dict[str, Any]:

@@ -269,6 +269,19 @@ class PlannerTests(unittest.IsolatedAsyncioTestCase):
         late = prepare_plan(CONFIG, now=now.replace(hour=16))
         self.assertEqual(late["configs"], [None])
 
+    async def test_computation_limit_is_explicit_without_inventing_a_total_or_best_match(
+        self,
+    ):
+        with patch("sagasu.room_plans.MAX_EVALUATED_CANDIDATES", 2):
+            result = await find_room_plans(
+                prepare_plan(CONFIG), AsyncMock(side_effect=lambda c: snapshot(c))
+            )
+        self.assertEqual(result["matching_candidates_evaluated"], 2)
+        self.assertIsNone(result["total_matching_candidates"])
+        self.assertFalse(result["ranking_complete"])
+        self.assertFalse(result["complete"])
+        self.assertTrue(result["truncated"])
+
     def test_invalid_inputs_fail_before_fbs_queries(self):
         for patch in [
             {"dates": []},
