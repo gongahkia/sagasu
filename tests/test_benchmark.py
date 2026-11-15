@@ -145,6 +145,12 @@ class LiveBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 )
             self.assertTrue(report["ok"])
             self.assertEqual([c["name"] for c in report["cases"]], ["action_history"])
+            self.assertTrue(
+                all(
+                    s["mcp_calls"] == 1 and s["structured_response_bytes"] > 0
+                    for s in report["cases"][0]["measurements"]
+                )
+            )
             self.assertFalse(json.loads(output.read_text())["in_progress"])
             self.assertFalse((root / "prefs.sqlite3").exists())
             self.assertFalse((root / "history.sqlite3").exists())

@@ -148,6 +148,7 @@ class Harness:
         self.selected = selected or []
         self.checkpoint = checkpoint
         self.room_sets = {}
+        self.calls = self.structured_bytes = 0
 
     def includes(self, name):
         return not self.selected or any(
@@ -158,6 +159,12 @@ class Harness:
         if name not in LIVE_TOOLS:
             raise BenchmarkFailure("benchmark_write_forbidden")
         response = await self.client.call_tool(name, arguments or {})
+        self.calls += 1
+        self.structured_bytes += len(
+            json.dumps(
+                response.structured_content, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+        )
         if response.is_error:
             raise BenchmarkFailure("tool_rejected")
         return response.structured_content
@@ -205,6 +212,7 @@ class Harness:
         self.cases.append(case)
         for index in range(repetitions or self.repetitions):
             self.capture.reset()
+            self.calls = self.structured_bytes = 0
             started = time.perf_counter_ns()
             sample = {"status": "success"}
             try:
@@ -243,6 +251,8 @@ class Harness:
                     "error_code": getattr(error, "code", None) or type(error).__name__,
                 }
             sample["elapsed_ms"] = round((time.perf_counter_ns() - started) / 1e6, 3)
+            sample["mcp_calls"] = self.calls
+            sample["structured_response_bytes"] = self.structured_bytes
             sample["phases_ms"] = {
                 key: round(sum(values), 3) for key, values in self.capture.steps.items()
             }
@@ -328,6 +338,7 @@ async def run_benchmark(
         "first_sample": "Shared Chromium context closed before each case; subsequent samples may reuse it. HTTP reads may start their own request contexts.",
         "p95_policy": "Only reported with at least 20 successful samples.",
         "phase_policy": "Nested phase totals are inclusive; do not sum them as exclusive time.",
+        "response_size_policy": "Compact UTF-8 structured JSON summed over MCP responses, including polls; excludes text/image blocks and transport framing. This is not a token count.",
         "latency_policy": "Median/min/max/warm/p95 use successful samples; failures are retained individually. first_ms is the first attempt.",
         "live_writes": "Booking submission, cancellation, approval and profile mutations are excluded; benchmark those with synthetic fixtures.",
         "cases": [],
