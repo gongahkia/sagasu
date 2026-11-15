@@ -537,11 +537,14 @@ async def run_benchmark(
                             "No matching booking in the current account.",
                         )
                 await harness.measure("list_tasks", lambda: harness.job("list_tasks"))
-                await harness.measure(
-                    "browser_screenshot",
-                    lambda: harness.job("browser_screenshot"),
-                    preserve_browser=True,
-                )
+                if harness.includes("browser_screenshot"):
+                    # API reads do not necessarily leave a loaded browser page.
+                    await harness.job("session_status")
+                    await harness.measure(
+                        "browser_screenshot",
+                        lambda: harness.job("browser_screenshot"),
+                        preserve_browser=True,
+                    )
                 tasks_id, task_result = harness.latest.get("list_tasks", (None, {}))
                 if tasks_id is None and harness.includes("task_details"):
                     try:

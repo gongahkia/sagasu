@@ -3,7 +3,7 @@
 REASONS = {
     "browser_screenshot_unavailable": (
         "No browser screenshot was captured. The page is unavailable, changed during capture, or contains authentication controls.",
-        "Use a normal FBS read to load the relevant page, then retry browser_screenshot while the browser is idle. Authentication/MFA pages are excluded. This tool does not navigate or sign in.",
+        "If no FBS browser page exists, use session_status to load it without signing in, then retry browser_screenshot while idle. Authentication/MFA pages are excluded. The screenshot tool does not navigate or sign in.",
         None,
     ),
     "fbs_application_error": (
