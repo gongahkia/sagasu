@@ -16,7 +16,7 @@ from pathlib import Path
 from .personal_options import SCRAPE_PARAM_CHOICES
 
 SMU_EMAIL_RE = re.compile(
-    r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$",
+    r"^[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|computing|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)$",
     re.I,
 )
 FILTERS = {

@@ -40,6 +40,17 @@ class StoreTests(unittest.TestCase):
         self.store.delete_contact(first["id"])
         self.assertEqual(PersonalStore(self.path).contacts(), {})
 
+    def test_computing_school_addresses_are_accepted_without_allowing_other_domains(
+        self,
+    ):
+        contact = self.store.save_contact("Friend", "Friend@computing.smu.edu.sg")
+        self.assertEqual(
+            self.store.resolve_contact(contact["id"]), "friend@computing.smu.edu.sg"
+        )
+        for email in ["a@computing.smu.edu.sg.example.com", "a@unknown.smu.edu.sg"]:
+            with self.subTest(email=email), self.assertRaises(PersonalDataError):
+                self.store.save_contact("Other", email)
+
     def test_contact_validation_and_missing_ids_do_not_change_data(self):
         for name, email in (
             ("", "a@smu.edu.sg"),
