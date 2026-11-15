@@ -52,6 +52,14 @@ def error_details(error):
 def event(name, *, level=logging.INFO, **fields):
     operation = _operation.get()
     step = _step.get()
+    from .operation_diagnostics import record_event
+
+    record_event(
+        name,
+        step[0] if step else None,
+        (time.monotonic() - operation.started) * 1000 if operation else None,
+        fields,
+    )
     if operation and level >= logging.WARNING:
         operation.issues += 1
     logger.log(
@@ -103,7 +111,14 @@ def observed_step(name):
         @functools.wraps(function)
         async def wrapped(*args, **kwargs):
             with step(name):
-                return await function(*args, **kwargs)
+                try:
+                    return await function(*args, **kwargs)
+                except Exception as error:
+                    from .operation_diagnostics import capture_failure
+
+                    if args:
+                        await capture_failure(args[0], error)
+                    raise
 
         return wrapped
 

@@ -128,7 +128,11 @@ class Backend:
             )
         if kind in {"validate", "book"}:
             return await execute_booking(
-                payload, submit=kind == "book", progress=progress, auth_notify=notify
+                payload,
+                submit=kind == "book",
+                progress=progress,
+                auth_notify=notify,
+                interactive=self.interactive_auth,
             )
         if kind in {"search", "bookings", "tasks"} and self.reads.mode != "browser":
             try:
@@ -289,6 +293,9 @@ class Job:
     summary: dict = field(default_factory=dict)
     reconciliation: dict | None = None
     batch_members: list = field(default_factory=list, repr=False)
+    diagnostic_events: list = field(default_factory=list, repr=False)
+    diagnostic_dropped: int = 0
+    failure_screenshot: dict | None = field(default=None, repr=False)
 
     @property
     def terminal(self):
@@ -303,6 +310,7 @@ class Job:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "receipt_available": self.receipt is not None,
+            "failure_screenshot_available": self.failure_screenshot is not None,
             "error": self.error,
             "recovered": self.recovered,
             "history_warning": self.history_warning,
@@ -594,6 +602,10 @@ class AgentService:
             job.auth_event.set()
 
         backend_started = False
+        from .operation_diagnostics import diagnostic_scope
+
+        scope = diagnostic_scope()
+        diagnostic = scope.__enter__()
         token = VERIFIED_ACTION.set(lambda result: self._checkpoint(job, result))
         try:
             async with self.queue:
@@ -691,6 +703,11 @@ class AgentService:
                 outcome=job.status,
             )
         finally:
+            job.diagnostic_events = diagnostic.events
+            job.diagnostic_dropped = diagnostic.dropped
+            if job.status in {"failed", "outcome_unknown"}:
+                job.failure_screenshot = diagnostic.screenshot
+            scope.__exit__(None, None, None)
             VERIFIED_ACTION.reset(token)
             if job.verified_result is not None and job.status != "succeeded":
                 job.result = {

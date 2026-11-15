@@ -20,6 +20,30 @@ from sagasu.mcp_service import AgentService, Backend
 
 
 class BrowserDebugTests(unittest.IsolatedAsyncioTestCase):
+    async def test_automatic_capture_precedes_cleanup_and_keeps_first_failure_image(
+        self,
+    ):
+        from sagasu.observability import observed_step
+        from sagasu.operation_diagnostics import diagnostic_scope, capture_failure
+
+        @observed_step("fixture.failure")
+        async def fail(client):
+            raise ValueError("PRIVATE FAILURE")
+
+        with diagnostic_scope() as capture:
+            try:
+                await fail(self.client)
+            except ValueError:
+                await self.page.goto("about:blank")
+            first = capture.screenshot
+            await capture_failure(self.client, ValueError("SECOND"))
+        self.assertIs(first, capture.screenshot)
+        self.assertTrue(first["receipt_png"].startswith(b"\x89PNG"))
+        self.assertEqual(
+            first["scope"], "first_observed_browser_failure_before_cleanup"
+        )
+        self.assertEqual(self.page.url, "about:blank")
+
     async def asyncSetUp(self):
         driver = await async_playwright().start()
         self.addAsyncCleanup(driver.stop)

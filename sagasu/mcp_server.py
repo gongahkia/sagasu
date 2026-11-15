@@ -155,7 +155,7 @@ def create_server(
             "list_bookings returns summaries. Use booking_details for each requested reference when the user asks for purpose, booker, participants, confirmation history or additional metadata. "
             "Do not infer a confirmer from Confirmed status, a checked participant box, or Last Modified By. Inspect field_status and collection coverage; report unavailable history explicitly. Workflow comments are excluded. "
             "For failed operations follow error.next_action and next_tool; fix setup before retrying, and never infer empty availability from a failure. "
-            "For visual browser diagnostics use browser_screenshot, wait_operation, then operation_receipt. It captures the current page, not an earlier operation's page. "
+            "For failed browser operations inspect failure_screenshot_available and use operation_receipt(failure=true) for the automatic image captured before cleanup. support_bundle returns redacted operation traces and setup-check statuses without booking text, images or secrets. Images/traces expire with the operation. Manual browser_screenshot captures only the current page. "
             "Read jobs, reviews and receipts expire on restart; write outcomes persist in action_history. Nothing is replayed. "
             "Co-bookers and search preferences persist locally across agent sessions. "
             "list_cobookers only lists saved contacts. For an unsaved or partial name, use search_cobookers directly; room/search inputs are optional and must be supplied together. Inspect candidates and coverage, disambiguate with the user, then use the chosen exact email in booking_review. Partial coverage cannot establish a unique match. Email domain/year clues do not independently prove enrolment details. Never guess an email or pick the first name match. Save a contact only when requested. "
@@ -442,6 +442,13 @@ def create_server(
     async def action_history(offset: int = 0, limit: int = 20) -> dict[str, Any]:
         """Read private durable booking/amendment/cancellation/approval history, including interrupted outcomes, original operation/review IDs and minimal room/time/reference metadata. Amendment reconciliation uses private keyed comparisons without storing purpose text. No credentials, purpose, co-booker emails or screenshots are stored. Nothing is replayed. Reconcile outcome_unknown in FBS before creating a new review. operation_result can read recorded writes after restart."""
         return safe(service.action_history, offset, limit)
+
+    @server.tool(annotations=local)
+    async def support_bundle(operation_id: str) -> dict[str, Any]:
+        """Collect bounded redacted diagnostics for one retained operation: metadata, setup-check statuses and task-local timing/error locations. Does not contact FBS, read arbitrary files, replay actions or include raw logs, URLs, config values, purpose, people, MFA prompts or images. Failure images are separate via operation_receipt(failure=true); visible FBS text can be private. Restart/expiry loses historical diagnostics. A bundle does not establish booking outcomes or availability."""
+        from .operation_diagnostics import support_bundle as collect
+
+        return collect(safe(service.get, operation_id), configuration())
 
     @server.tool(annotations=read)
     async def plan_rooms(
@@ -899,8 +906,15 @@ def create_server(
         return safe(service.start, "screenshot")
 
     @server.tool(annotations=local, structured_output=False)
-    async def operation_receipt(operation_id: str) -> Image:
-        """Retrieve a booking, amendment, cancellation, task-details, approval or browser-debug screenshot. Check receipt_kind to distinguish the image's purpose."""
+    async def operation_receipt(operation_id: str, failure: bool = False) -> Image:
+        """Retrieve a retained receipt/debug image. With failure=true, retrieve the automatic first observed browser-failure screenshot captured before cleanup, not the current page. Form fields/external frames are masked; auth pages are refused, but visible FBS text can be private. Images expire on operation eviction/restart; unavailable images do not affect the recorded FBS outcome."""
+        if failure:
+            job = safe(service.get, operation_id)
+            if job.failure_screenshot is None:
+                raise ToolError(
+                    "No automatic failure screenshot is available for this operation. Use support_bundle for redacted diagnostics."
+                )
+            return Image(data=job.failure_screenshot["receipt_png"], format="png")
         return await booking_receipt(operation_id)
 
     @server.resource(

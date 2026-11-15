@@ -364,6 +364,11 @@ async def read_amendment_options(client, reference):
             }
         opened = True
         return await edit_snapshot(frame, record)
+    except Exception as error:
+        from .operation_diagnostics import capture_failure
+
+        await capture_failure(client, error)
+        raise
     finally:
         if opened:
             await client.page.goto(
@@ -674,6 +679,9 @@ async def execute_amendment(
         except asyncio.CancelledError:
             raise
         except Exception as error:
+            from .operation_diagnostics import capture_failure
+
+            await capture_failure(client, error)
             if attempted:
                 raise AmendmentOutcomeUnknown(
                     "Native amendment confirmation was attempted but its outcome could not be verified; reconcile the exact reference before another amendment"

@@ -29,17 +29,19 @@
     {"id": 27, "feature": "Multiple contact aliases", "tranche": "people"},
     {"id": 29, "feature": "Multiple verified co-bookers", "tranche": "people"}
   ],
-  "bonuses_after_main": [
+  "diagnostics_and_evaluation_next": [
+    {"id": 48, "feature": "Conversation-level agent evaluations"},
+    {"id": 45, "feature": "Operation-scoped automatic failure screenshots"},
+    {"id": 47, "feature": "Benchmark comparisons and regression alerts"},
+    {"id": 46, "feature": "Redacted support bundles"}
+  ],
+  "deferred_optional_scheduling": [
     {"id": 32, "feature": "Availability watches"},
     {"id": 33, "feature": "Pending-confirmation reminders"},
     {"id": 34, "feature": "Booking start/end reminders"},
     {"id": 35, "feature": "Booking-status change alerts"},
     {"id": 37, "feature": "Explicit co-booker reminder actions"},
-    {"id": 38, "feature": "Specifically authorized scheduled booking attempts"},
-    {"id": 45, "feature": "Operation-scoped automatic failure screenshots"},
-    {"id": 46, "feature": "Redacted support bundles"},
-    {"id": 47, "feature": "Benchmark comparisons and regression alerts"},
-    {"id": 48, "feature": "Conversation-level agent evaluations"}
+    {"id": 38, "feature": "Specifically authorized scheduled booking attempts"}
   ],
   "evaluation_policy": {
     "applies_to": "Every selected main feature and bonus; split-room planning is only an example",
@@ -50,7 +52,7 @@
     "evidence": "Fewer tool calls, smaller payloads and backend timings alone do not establish end-to-end savings"
   },
   "excluded": "Calendar/export features and all other unselected proposals",
-  "status": "Main implementation and functional checks completed for verified native fields; bonuses and comparative end-to-end Codex evaluation have not started",
+  "status": "Main implemented for verified native fields; operation diagnostics implemented; conversation evaluation and benchmark comparisons in progress; scheduling/notification additions deferred by the user",
   "implementation_progress": {
     "implemented_with_functional_tests": [7, 8, 9, 10, 11, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29],
     "remaining_main": [],

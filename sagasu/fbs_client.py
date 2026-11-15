@@ -624,6 +624,10 @@ class FBSClient:
 
     async def __aexit__(self, exc_type, exc, traceback) -> None:
         try:
+            if exc is not None:
+                from .operation_diagnostics import capture_failure
+
+                await capture_failure(self, exc)
             if not self.keep_alive:
                 try:
                     if self.context:
@@ -2166,10 +2170,13 @@ async def execute_booking(
     submit: bool,
     progress: ProgressCallback | None = None,
     auth_notify: ProgressCallback | None = None,
+    interactive: bool = True,
 ) -> dict:
     try:
         require_future_booking(request.search)
-        async with FBSClient(progress=progress, auth_notify=auth_notify) as client:
+        async with FBSClient(
+            progress=progress, auth_notify=auth_notify, interactive=interactive
+        ) as client:
             return await client.book(request, submit=submit)
     except FBSError:
         raise

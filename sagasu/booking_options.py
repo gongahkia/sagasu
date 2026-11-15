@@ -97,5 +97,10 @@ async def read_booking_options(client, search, room):
             "credit_estimate_note": "Credits shown for the current form selections; final costs and permissions may change when classifications or availability change.",
             "submitted": False,
         }
+    except Exception as error:
+        from .operation_diagnostics import capture_failure
+
+        await capture_failure(client, error)
+        raise
     finally:
         await client.page.goto(FBS_URL, wait_until="domcontentloaded", timeout=15000)

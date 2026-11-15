@@ -241,6 +241,9 @@ async def search_cobookers(client, search, room, query):
         )
         return {**result, "query": query, "source": "fbs_directory"}
     except (PlaywrightError, LayoutChanged, TimeoutError) as error:
+        from .operation_diagnostics import capture_failure
+
+        await capture_failure(client, error)
         raise CobookerLookupUnavailable(
             "The FBS co-booker picker could not be read reliably"
         ) from error
