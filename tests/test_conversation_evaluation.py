@@ -2,6 +2,7 @@ import asyncio
 import copy
 import json
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -128,6 +129,65 @@ class GradingTests(unittest.TestCase):
 
 
 class FixtureProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_clarification_can_reuse_a_directory_match_verified_in_the_previous_turn(
+        self,
+    ):
+        calls = 0
+
+        async def create(*command, **kwargs):
+            nonlocal calls
+            index = calls
+            calls += 1
+            config = tomllib.loads(command[command.index("-c") + 1])
+            args = config["mcp_servers"]["sagasu"]["args"]
+            trace = Path(args[args.index("--trace") + 1])
+            final = Path(command[command.index("--output-last-message") + 1])
+
+            async def communicate(prompt):
+                if index == 0:
+                    trace.write_text(json.dumps({"kind": "cobooker_search"}) + "\n")
+                final.write_text(
+                    json.dumps(
+                        {
+                            "decision": "clarify" if index == 0 else "verified",
+                            "answer": (
+                                "Two verified Alex matches: fixture.person.2023@scis.smu.edu.sg and fixture.person.2024@scis.smu.edu.sg"
+                                if index == 0
+                                else "The 2023 match is the first person."
+                            ),
+                            "email": (
+                                None
+                                if index == 0
+                                else "fixture.person.2023@scis.smu.edu.sg"
+                            ),
+                            "legs": [],
+                        }
+                    )
+                )
+                return (
+                    json.dumps(
+                        {
+                            "type": "turn.completed",
+                            "usage": {"input_tokens": 10, "output_tokens": 5},
+                        }
+                    ).encode(),
+                    b"",
+                )
+
+            return Mock(pid=12345, returncode=0, communicate=communicate)
+
+        with patch(
+            "benchmarks.conversations.asyncio.create_subprocess_exec",
+            side_effect=create,
+        ):
+            result = await run_case(
+                CASES["ambiguous_person"], Path("/tmp/snapshot"), "2099-11-01", 10
+            )
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["turns"], 2)
+        self.assertEqual(result["follow_up_decision"], "verified")
+        self.assertEqual(result["reported_total_tokens"], 30)
+
     async def test_cancellation_stops_only_the_spawned_cli_process_group(self):
         process = Mock(pid=12345, returncode=None)
         process.communicate = AsyncMock(

@@ -226,7 +226,9 @@ async def stop_process(process):
     await process.communicate()
 
 
-async def run_case(case, repo, reference_time, timeout, *, fixture_path=None):
+async def run_case(
+    case, repo, reference_time, timeout, *, fixture_path=None, prior_trace=None
+):
     with tempfile.TemporaryDirectory(prefix="sagasu-agent-run-") as temporary:
         root = Path(temporary)
         trace, final, schema = [
@@ -326,7 +328,7 @@ async def run_case(case, repo, reference_time, timeout, *, fixture_path=None):
                 if trace.exists()
                 else []
             )
-            problems = grade(case, answer, calls)
+            problems = grade(case, answer, [*(prior_trace or []), *calls])
             sample = {
                 "status": "success" if not problems else "failed",
                 "elapsed_ms": elapsed,
@@ -341,10 +343,16 @@ async def run_case(case, repo, reference_time, timeout, *, fixture_path=None):
                     f"Continue this conversation. Earlier user request: {case['request']}\nAssistant response: {answer['answer']}\nNew user message: {following['request']}"
                 )
                 next_sample = await run_case(
-                    following, repo, reference_time, timeout, fixture_path=fixture_path
+                    following,
+                    repo,
+                    reference_time,
+                    timeout,
+                    fixture_path=fixture_path,
+                    prior_trace=[*(prior_trace or []), *calls],
                 )
                 sample["status"] = next_sample["status"]
                 sample["grading_errors"] += next_sample.get("grading_errors", [])
+                sample["follow_up_decision"] = next_sample.get("reported_decision")
                 sample["turns"] = 2
                 for key in (*metrics, "elapsed_ms", "native_writes"):
                     if key == "mcp_tool_names":
