@@ -135,7 +135,16 @@ def parse_events(text):
 def grade(case, result, trace, *, replay_verified=False):
     problems = []
     kinds = [row["kind"] for row in trace]
-    if result.get("decision") != case["decision"]:
+    if case["id"] == "unknown_submission":
+        if result.get("decision") not in {"unknown", "pending"}:
+            problems.append("wrong_decision")
+        if result.get("action_outcome_verified") is not False:
+            problems.append("interrupted_action_falsely_verified")
+        if not ({"reconcile", "bookings"} & set(kinds)):
+            problems.append("existing_outcome_not_checked")
+        if result.get("decision") == "pending" and "bookings" not in kinds:
+            problems.append("pending_record_not_observed")
+    elif result.get("decision") != case["decision"]:
         problems.append("wrong_decision")
     writes = kinds.count("native_write")
     if case["id"] == "duplicate_submission" and not replay_verified:
@@ -266,7 +275,20 @@ async def run_case(
         trace, final, schema = [
             root / name for name in ("trace.jsonl", "answer.json", "schema.json")
         ]
-        schema.write_text(json.dumps(SCHEMA))
+        output_schema = SCHEMA
+        if case["id"] == "unknown_submission":
+            output_schema = {
+                **SCHEMA,
+                "properties": {
+                    **SCHEMA["properties"],
+                    "action_outcome_verified": {
+                        "type": "boolean",
+                        "description": "Whether the ORIGINAL interrupted submission was positively verified. An observed matching Pending Confirmation record can establish its displayed status while the original action remains unverified; unresolved reconciliation does not verify that action.",
+                    },
+                },
+                "required": [*SCHEMA["required"], "action_outcome_verified"],
+            }
+        schema.write_text(json.dumps(output_schema))
         config = {
             "command": sys.executable,
             "args": [
@@ -374,6 +396,9 @@ async def run_case(
                 **metrics,
                 "grading_errors": problems,
                 "reported_decision": answer.get("decision"),
+                "reported_action_outcome_verified": answer.get(
+                    "action_outcome_verified"
+                ),
                 "native_writes": sum(row["kind"] == "native_write" for row in calls),
             }
             if case.get("follow_up") and not problems:
