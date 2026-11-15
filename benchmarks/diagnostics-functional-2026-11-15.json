@@ -2,10 +2,12 @@
   "scope": "Functional verification of automatic failure capture and redacted support diagnostics; this is not model token/speed retention evidence",
   "unit_and_protocol_checks": {
     "python_versions": ["3.12", "3.14"],
-    "full_suite_tests_per_interpreter": 593,
+    "full_suite_tests_per_interpreter": 595,
     "full_suite_passed": true,
-    "subsequent_planner_routing_checks_per_interpreter": 73,
+    "subsequent_planner_routing_checks_per_interpreter": 76,
     "subsequent_planner_routing_checks_passed": true,
+    "subsequent_diagnostic_recovery_checks_per_interpreter": 51,
+    "subsequent_diagnostic_recovery_checks_passed": true,
     "checks": ["first browser failure captured before cleanup", "authentication pages excluded", "form fields and foreign frames masked", "capture failure preserves original error", "task-local concurrent trace isolation", "bounded trace truncation", "bundle omits private payloads and images", "failed-operation PNG retrievable over MCP", "noninteractive auth propagated to native booking validation", "regression thresholds preserve failed samples", "unmatched/incomplete benchmark inputs rejected", "conversation grading checks dates, room/time coverage and write counts", "evaluation opt-in and process-group cleanup"]
   },
   "live_read_only_control": {
