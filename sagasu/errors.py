@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "browser_screenshot_unavailable": (
+        "No browser screenshot was captured. The page is unavailable, changed during capture, or contains authentication controls.",
+        "Use a normal FBS read to load the relevant page, then retry browser_screenshot while the browser is idle. Authentication/MFA pages are excluded. This tool does not navigate or sign in.",
+        None,
+    ),
     "fbs_application_error": (
         "FBS returned an application error. The requested data could not be read; this is not an empty result.",
         "Check the same page in FBS and retry later. Local configuration or another login may not resolve an FBS application failure.",

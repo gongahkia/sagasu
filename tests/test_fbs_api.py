@@ -15,7 +15,12 @@ from unittest.mock import AsyncMock, Mock, patch
 from playwright.async_api import async_playwright
 
 from sagasu.fbs_api import FBSReadAPI
-from sagasu.fbs_client import AuthenticationRequired, FBSError, SearchConfig
+from sagasu.fbs_client import (
+    AuthenticationRequired,
+    FBSApplicationError,
+    FBSError,
+    SearchConfig,
+)
 from sagasu.fbs_http import HTTPReadUnavailable
 from tests.test_http_reads import bookings_html, tasks_html
 from tests.test_webforms import calendar_html
@@ -67,7 +72,9 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                     self.send(200, self.form())
                 elif path == "/redirect":
                     self.send_response(302)
-                    self.send_header("Location", "/should-not-follow")
+                    self.send_header(
+                        "Location", state.get("redirect", "/should-not-follow")
+                    )
                     self.end_headers()
                 else:
                     self.send(404, "unknown")
@@ -365,6 +372,13 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_redirect_is_rejected_without_following_or_exposing_destination(self):
         with self.assertRaises(AuthenticationRequired):
             await self.api.document(self.origin + "/redirect")
+
+    async def test_observed_application_error_redirect_does_not_request_login(self):
+        self.state["redirect"] = "//AppException.aspx"
+        with self.assertRaises(FBSApplicationError) as caught:
+            await self.api.document(self.origin + "/redirect")
+        self.assertEqual(caught.exception.reason, "fbs_application_error")
+        self.assertNotIsInstance(caught.exception, AuthenticationRequired)
 
 
 class APISessionTests(unittest.IsolatedAsyncioTestCase):

@@ -6,7 +6,7 @@ from .action_journal import checkpoint_verified
 
 from playwright.async_api import Error as PlaywrightError
 
-from .fbs_client import FBSError, LayoutChanged, FBSClient
+from .fbs_client import FBSError, FBSApplicationError, LayoutChanged, FBSClient
 from .observability import event, observed_operation, observed_step, step
 
 
@@ -35,9 +35,8 @@ async def open_account_tab(client, tab, marker):
                     frame
                     and (await frame.title()).strip().casefold() == "appexception.aspx"
                 ):
-                    raise FBSError(
+                    raise FBSApplicationError(
                         "FBS returned its application-error page.",
-                        reason="fbs_application_error",
                     )
                 if frame and await frame.locator(marker).first.is_visible():
                     await client._wait_for_idle(frame)

@@ -77,6 +77,12 @@ class CalendarSelectionLost(FBSError):
     """The calendar did not retain exactly the requested room/time selection."""
 
 
+class FBSApplicationError(FBSError):
+    """FBS returned its application-error page or observed error redirect."""
+
+    default_reason = "fbs_application_error"
+
+
 class BookingOutcomeUnknown(FBSError):
     """Final confirmation was attempted but its result could not be verified."""
 

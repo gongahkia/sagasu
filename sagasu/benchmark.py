@@ -47,6 +47,7 @@ LIVE_TOOLS = frozenset(
         "list_booking_templates",
         "action_history",
         "session_status",
+        "browser_screenshot",
         "search_rooms",
         "list_bookings",
         "list_tasks",
@@ -532,6 +533,9 @@ async def run_benchmark(
                             "No matching booking in the current account.",
                         )
                 await harness.measure("list_tasks", lambda: harness.job("list_tasks"))
+                await harness.measure(
+                    "browser_screenshot", lambda: harness.job("browser_screenshot")
+                )
                 tasks_id, task_result = harness.latest.get("list_tasks", (None, {}))
                 if tasks_id is None and harness.includes("task_details"):
                     try:

@@ -119,6 +119,7 @@ def create_server(
             "list_bookings returns summaries. Use booking_details for each requested reference when the user asks for purpose, booker, participants, confirmation history or additional metadata. "
             "Do not infer a confirmer from Confirmed status, a checked participant box, or Last Modified By. Inspect field_status and collection coverage; report unavailable history explicitly. Workflow comments are excluded. "
             "For failed operations follow error.next_action and next_tool; fix setup before retrying, and never infer empty availability from a failure. "
+            "For visual browser diagnostics use browser_screenshot, wait_operation, then operation_receipt. It captures the current page, not an earlier operation's page. "
             "Read jobs, reviews and receipts expire on restart; write outcomes persist in action_history. Nothing is replayed. "
             "Co-bookers and search preferences persist locally across agent sessions. "
             "list_cobookers only lists saved contacts. For an unsaved or partial name, use search_cobookers with a successful room search and a free room; inspect candidates and coverage, disambiguate with the user, then use the chosen exact email in booking_review. Partial coverage cannot establish a unique match. Never guess an email or pick the first name match. Save a contact only when requested. "
@@ -641,9 +642,14 @@ def create_server(
             )
         return Image(data=job.receipt, format="png")
 
+    @server.tool(annotations=local)
+    async def browser_screenshot() -> dict[str, Any]:
+        """Capture the current FBS browser viewport through the shared queue without navigating, signing in or submitting anything. Poll wait_operation, then retrieve the PNG with operation_receipt. Masks form fields and unrelated frames; refuses authentication pages and discards captures if frames navigate. Visible FBS text can contain private booking data. This is the page at capture time, not a historical failure snapshot. No arbitrary URLs, selectors, files or browser actions are accepted; images expire with the operation/restart."""
+        return safe(service.start, "screenshot")
+
     @server.tool(annotations=local, structured_output=False)
     async def operation_receipt(operation_id: str) -> Image:
-        """Retrieve a booking, cancellation, task-details, or approval screenshot. Check receipt_kind to distinguish booking details from an approval acknowledgement."""
+        """Retrieve a booking, cancellation, task-details, approval or browser-debug screenshot. Check receipt_kind to distinguish the image's purpose."""
         return await booking_receipt(operation_id)
 
     @server.resource(

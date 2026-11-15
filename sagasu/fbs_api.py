@@ -15,7 +15,13 @@ from urllib.parse import urlencode, urljoin, urlsplit
 from playwright.async_api import async_playwright
 
 from .config import DEFAULT_PROFILE
-from .fbs_client import AuthenticationRequired, FBS_URL, SearchResult, _noop_progress
+from .fbs_client import (
+    AuthenticationRequired,
+    FBSApplicationError,
+    FBS_URL,
+    SearchResult,
+    _noop_progress,
+)
 from .fbs_http import (
     HTTPReadUnavailable,
     MAX_DOCUMENT_BYTES,
@@ -113,6 +119,15 @@ class FBSReadAPI:
                 timeout=15000,
             )
         try:
+            if (
+                response.status in {301, 302, 303, 307, 308}
+                and response.headers.get("location", "").strip().casefold().rstrip("/")
+                == "//appexception.aspx"
+            ):
+                # the live Task List redirects to this malformed error-page host.
+                raise FBSApplicationError(
+                    "FBS returned its application-error redirect."
+                )
             if response.status in {301, 302, 303, 307, 308, 401, 403}:
                 raise AuthenticationRequired("Saved FBS HTTP session needs renewal.")
             if response.status != 200 or not fbs_document_url(response.url):

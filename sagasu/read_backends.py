@@ -11,12 +11,13 @@ from playwright.async_api import Error as PlaywrightError
 
 from .fbs_account import read_bookings, read_task_list
 from .fbs_api import FBSReadAPI
-from .fbs_client import AuthenticationRequired
+from .fbs_client import AuthenticationRequired, FBSApplicationError
 from .fbs_http import HTTPReadUnavailable
 
 READ_MODES = {"auto", "browser", "api"}
 READ_FAILURES = (
     HTTPReadUnavailable,
+    FBSApplicationError,
     AuthenticationRequired,
     PlaywrightError,
     TimeoutError,
@@ -83,6 +84,7 @@ class HybridReads:
                 "task_details",
                 "validate",
                 "smoke",
+                "browser_screenshot",
             ],
             "api": {
                 "protocol": "aspnet_webforms_and_html",

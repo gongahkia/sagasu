@@ -111,8 +111,12 @@ class Backend:
             progress=progress,
             auth_notify=notify,
             interactive=self.interactive_auth
-            and kind not in {"session", "smoke", "reconcile", "probe"},
+            and kind not in {"session", "smoke", "reconcile", "probe", "screenshot"},
         ) as client:
+            if kind == "screenshot":
+                from .browser_debug import capture_browser_screenshot
+
+                return await capture_browser_screenshot(client)
             if kind == "cobooker_search":
                 from .cobookers import search_cobookers
 
