@@ -652,6 +652,15 @@ async def run_benchmark(
                         "directory_partial",
                         "Provide --cobooker-query and a window with a free room.",
                     )
+                if cobooker_query:
+                    await harness.measure(
+                        "directory_standalone",
+                        lambda: harness.job(
+                            "search_cobookers", {"query": cobooker_query}
+                        ),
+                    )
+                else:
+                    harness.skip("directory_standalone", "Provide --cobooker-query.")
                 if bookings:
                     await harness.job("list_bookings")
                     book_id, _ = harness.latest["list_bookings"]

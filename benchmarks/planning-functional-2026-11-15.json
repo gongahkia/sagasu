@@ -1,0 +1,25 @@
+{
+  "read_only": true,
+  "purpose": "Functional live validation, not an end-to-end Codex token or speed comparison",
+  "room_plans": {
+    "dates": ["2026-11-23", "2026-11-24"],
+    "duration_minutes": 120,
+    "scope": "SCIS 1 Group Study Rooms, 08:00–23:30",
+    "verification": "Each retained leg independently checked minute by minute against explicit free cells in the primitive source snapshots",
+    "cases": [
+      {"mode": "any", "allow_split": false, "source_queries": 2, "candidates": 143, "verified_legs": 143, "complete": true},
+      {"mode": "common", "allow_split": false, "source_queries": 2, "candidates": 49, "verified_legs": 98, "complete": true},
+      {"mode": "any", "allow_split": true, "source_queries": 2, "candidates": 144, "verified_legs": 145, "complete": true}
+    ]
+  },
+  "standalone_directory": {
+    "complete": true,
+    "directory_total": 6,
+    "matching_candidates_after_email_clues": 1,
+    "temporary_context_probes": 2,
+    "booking_list_unchanged": true,
+    "submitted": false,
+    "identities_omitted": true
+  },
+  "end_to_end_evaluation": "Pending; no token or speed savings claimed"
+}

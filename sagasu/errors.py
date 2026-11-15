@@ -13,8 +13,8 @@ REASONS = {
     ),
     "cobooker_lookup_unavailable": (
         "FBS did not expose verified co-booker search results. No co-booker was selected and no booking was submitted.",
-        "Refresh search_rooms, choose a free room, then retry search_cobookers. Do not infer that a person is absent from an unreadable directory result.",
-        "search_rooms",
+        "Retry search_cobookers without room/search inputs for automatic temporary lookup context, or supply a fresh free room/search together. Do not infer that a person is absent from an unreadable directory result.",
+        "search_cobookers",
     ),
     "search_filter_unavailable": (
         "FBS could not match the requested facility types to its current search options. Availability was not determined.",

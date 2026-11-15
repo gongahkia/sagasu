@@ -114,6 +114,13 @@ class Backend:
                     operation=kind,
                     reason=getattr(error, "code", None) or "http_read_failed",
                 )
+        if kind == "cobooker_search" and payload["search"] is None:
+            from .cobookers import directory_context
+
+            async def read(config):
+                return await self.run("search", config, progress, notify)
+
+            payload = {**payload, **await directory_context(read, progress)}
         async with FBSClient(
             progress=progress,
             auth_notify=notify,
@@ -125,10 +132,20 @@ class Backend:
 
                 return await capture_browser_screenshot(client)
             if kind == "cobooker_search":
-                from .cobookers import search_cobookers
+                from .cobookers import search_cobookers, filter_candidates
 
-                return await search_cobookers(
+                result = await search_cobookers(
                     client, payload["search"], payload["room"], payload["query"]
+                )
+                if "context_probes" in payload:
+                    result["lookup_context"] = {
+                        "purpose": "directory_lookup_only",
+                        "automatic": True,
+                        "probes": payload["context_probes"],
+                        "submitted": False,
+                    }
+                return filter_candidates(
+                    result, payload.get("clues", {"school": None, "year": None})
                 )
             if kind == "booking_details":
                 from .booking_details import read_booking_details
@@ -992,16 +1009,31 @@ class AgentService:
             raise AgentError(f"A successful {kind} operation is required first.")
         return job.result
 
-    def search_cobookers(self, search_operation_id, room, query):
-        from .cobookers import validate_query
+    def search_cobookers(
+        self, search_operation_id=None, room=None, query=None, school=None, year=None
+    ):
+        from .cobookers import validate_query, validate_clues
         from .fbs_client import RoomAvailability, TimeSlot
 
+        try:
+            query = validate_query(query)
+            clues = validate_clues(school, year)
+        except (ValueError, BookingUnavailable) as error:
+            raise AgentError(str(error)) from None
+        if (search_operation_id is None) != (room is None):
+            raise AgentError(
+                "Supply both search_operation_id and room, or omit both for standalone lookup."
+            )
+        if search_operation_id is None:
+            return self.start(
+                "cobooker_search",
+                {"search": None, "room": None, "query": query, "clues": clues},
+            )
         result = self._completed(search_operation_id, "search")
         search = SearchConfig.from_mapping(result["config"])
         try:
-            query = validate_query(query)
             require_future_booking(search)
-        except (ValueError, BookingUnavailable) as error:
+        except BookingUnavailable as error:
             raise AgentError(str(error)) from None
         matches = [row for row in result["rooms"] if row["name"] == room]
         if len(matches) != 1 or not RoomAvailability(
@@ -1011,7 +1043,8 @@ class AgentService:
                 "Choose a room free for the entire window in this search result."
             )
         return self.start(
-            "cobooker_search", {"search": search, "room": room, "query": query}
+            "cobooker_search",
+            {"search": search, "room": room, "query": query, "clues": clues},
         )
 
     def review_booking(

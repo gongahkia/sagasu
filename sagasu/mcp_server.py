@@ -130,7 +130,7 @@ def create_server(
             "For visual browser diagnostics use browser_screenshot, wait_operation, then operation_receipt. It captures the current page, not an earlier operation's page. "
             "Read jobs, reviews and receipts expire on restart; write outcomes persist in action_history. Nothing is replayed. "
             "Co-bookers and search preferences persist locally across agent sessions. "
-            "list_cobookers only lists saved contacts. For an unsaved or partial name, use search_cobookers with a successful room search and a free room; inspect candidates and coverage, disambiguate with the user, then use the chosen exact email in booking_review. Partial coverage cannot establish a unique match. Never guess an email or pick the first name match. Save a contact only when requested. "
+            "list_cobookers only lists saved contacts. For an unsaved or partial name, use search_cobookers directly; room/search inputs are optional and must be supplied together. Inspect candidates and coverage, disambiguate with the user, then use the chosen exact email in booking_review. Partial coverage cannot establish a unique match. Email domain/year clues do not independently prove enrolment details. Never guess an email or pick the first name match. Save a contact only when requested. "
             "Change or delete personal data only when the user requests it; those tools never book rooms."
         ),
         lifespan=lifespan,
@@ -173,10 +173,16 @@ def create_server(
 
     @server.tool(annotations=read)
     async def search_cobookers(
-        query: str, search_operation_id: str, room: str
+        query: str,
+        search_operation_id: str | None = None,
+        room: str | None = None,
+        school: str | None = None,
+        year: int | None = None,
     ) -> dict[str, Any]:
-        """Search FBS's live co-booker directory by partial name or email (2–100 single-line characters), even with no saved contacts. Requires a successful search_rooms operation and an exact room free for that whole window: FBS exposes its picker inside the unsubmitted booking form. Rechecks that room/time, opens the picker and reads up to five result pages, then leaves the form. Poll wait_operation; inspect candidates, total, complete and pagination. Never selects a person, adds a co-booker, saves a contact or submits a booking. Ask the user to distinguish ambiguous matches; pass their chosen exact email to booking_review. List results are ephemeral; save_cobooker is separate and only on request."""
-        return safe(service.search_cobookers, search_operation_id, room, query)
+        """Search FBS's live co-booker directory by partial name/email (2–100 characters), without saved contacts or a room search. Omit search_operation_id AND room for automatic temporary unsent-form context, or supply both for a known free room. Reads up to five pages, then discards the form without selecting/submitting. Optional school matches the exact email prefix domain (scis, sis, computing, law, business, accountancy, economics, socsc, smu); year matches a trailing four-digit email token. These clues do not independently verify school membership or enrolment year. Poll; inspect complete, directory_total, unclassified_candidates_read and pagination before claiming uniqueness/absence. Ambiguous people require user selection; pass the exact returned email to booking_review. Never guesses emails, saves contacts or books."""
+        return safe(
+            service.search_cobookers, search_operation_id, room, query, school, year
+        )
 
     @server.tool(annotations=local)
     async def list_cobookers(offset: int = 0, limit: int = 20) -> dict[str, Any]:
@@ -375,7 +381,7 @@ def create_server(
         transition_minutes: int = 0,
         room_preferences: RoomPreferencesInput | None = None,
     ) -> dict[str, Any]:
-        """Find fixed-duration room plans inside a broad time window, using one FBS read per explicit date (1–31). dates accepts ISO and overrides config.date. any finds alternatives on individual dates; common requires the same room AND start time on every date. Explicit allow_split offers at most one room change only when no single room fits that start; transition_minutes adds a half-hour travel gap to the booked duration. Common mode does not split. Preserves all FBS filters and excludes past starts. Applies saved favourite/avoided rooms and scoring preferences; room_preferences overrides them for this operation only. Poll, inspect per-date failures/horizons, and paginate candidates. Common candidates use all_dates=true; their legs apply to every returned date. Keeps at most 200 ranked candidates and reports truncation. Does not book; each date/leg requires its own planned_booking_review and requested submission."""
+        """Find fixed-duration room plans inside a broad time window, using one FBS read per explicit date (1–31). dates accepts ISO and overrides config.date. any finds alternatives on individual dates; common requires the same room AND start time on every date. Explicit allow_split offers at most one room change only when no single room fits that start; transition_minutes adds a half-hour travel gap to the booked duration. Common mode does not split. Preserves all FBS filters and excludes past starts. Applies saved favourite/avoided rooms and scoring preferences; room_preferences overrides them for this operation only. Poll, inspect per-date failures/horizons, complete and ranking_complete, and paginate candidates. Common candidates use all_dates=true; their legs apply to every returned date. Keeps at most 200 candidates and bounds matching work; incomplete ranking does not establish the global best match or total. Does not book; each date/leg requires its own planned_booking_review and requested submission."""
         return safe(
             service.plan_rooms,
             config.model_dump(),
@@ -623,7 +629,7 @@ def create_server(
         co_booker: str | None = None,
         cobooker_id: str | None = None,
     ) -> dict[str, Any]:
-        """Prepare a ten-minute review of one free room. Supply a saved cobooker_id OR co_booker (full SMU email or unique saved name). For an unsaved/partial name, first use search_cobookers and choose a verified email. Resolves a saved contact now; later contact/preference changes do not alter this review. Does not submit."""
+        """Prepare a ten-minute review of one free room. Supply a saved cobooker_id OR co_booker (full SMU email or unique saved name/alias). For an unsaved/partial name, first use search_cobookers and choose a verified email. Resolves a saved contact now; later contact/preference changes do not alter this review. Does not submit."""
         return safe(
             service.review_booking,
             search_operation_id,
