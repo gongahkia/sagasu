@@ -1,0 +1,30 @@
+{
+  "scope": "Functional verification of automatic failure capture and redacted support diagnostics; this is not model token/speed retention evidence",
+  "unit_and_protocol_checks": {
+    "python_versions": ["3.12", "3.14"],
+    "full_suite_tests_per_interpreter": 593,
+    "full_suite_passed": true,
+    "subsequent_planner_routing_checks_per_interpreter": 73,
+    "subsequent_planner_routing_checks_passed": true,
+    "checks": ["first browser failure captured before cleanup", "authentication pages excluded", "form fields and foreign frames masked", "capture failure preserves original error", "task-local concurrent trace isolation", "bounded trace truncation", "bundle omits private payloads and images", "failed-operation PNG retrievable over MCP", "noninteractive auth propagated to native booking validation", "regression thresholds preserve failed samples", "unmatched/incomplete benchmark inputs rejected", "conversation grading checks dates, room/time coverage and write counts", "evaluation opt-in and process-group cleanup"]
+  },
+  "live_read_only_control": {
+    "request": "Dedicated room-details lookup for a deliberately nonexistent diagnostic name",
+    "server_operational": true,
+    "failure_status": "failed",
+    "failure_type": "LayoutChanged",
+    "automatic_failure_png_available": true,
+    "redacted_trace_events": 14,
+    "bundle_excludes_images": true,
+    "configured_private_values_absent": true,
+    "booking_list_complete_before_and_after": true,
+    "booking_list_unchanged": true,
+    "submitted": false,
+    "images_saved_to_disk": false
+  },
+  "verification_issues_resolved": [
+    "A development run rejected a source fingerprint change during a shared-host test; both full suites passed after keeping app source fixed",
+    "An existing MFA privacy test falsely matched challenge digits inside a random operation ID; the deterministic test now excludes only the opaque ID while checking all remaining public fields"
+  ],
+  "limitations": ["No real booking, amendment, cancellation or approval was submitted", "Unavailable/authentication/browserless failures may have no image", "Historical read operations and images cannot be recovered after expiry or restart", "Conversation scenarios use synthetic FBS records and do not replace live native-path verification"]
+}
