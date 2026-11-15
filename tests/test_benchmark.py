@@ -38,6 +38,21 @@ class BenchmarkTests(unittest.TestCase):
             main(["benchmark"])
         load.assert_not_called()
 
+    def test_equipment_control_can_choose_a_room_type_with_positive_matches(self):
+        from sagasu.cli import parser
+
+        args = parser().parse_args(
+            [
+                "benchmark",
+                "--live",
+                "--equipment-facility-type",
+                "Classroom",
+                "--equipment-facility-type",
+                "Project Room",
+            ]
+        )
+        self.assertEqual(args.equipment_facility_type, ["Classroom", "Project Room"])
+
     def test_reports_are_written_with_private_permissions(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "result.json"

@@ -280,6 +280,7 @@ async def run_benchmark(
     end="11:00",
     cobooker_query=None,
     equipment_matrix=False,
+    equipment_facility_types=None,
     timeout=3600,
     progress=None,
     selected=None,
@@ -312,6 +313,9 @@ async def run_benchmark(
         "buildings": [BUILDINGS["scis1"]],
         "facility_types": ["Group Study Room"],
     }
+    equipment_types = equipment_facility_types or config["facility_types"]
+    if any(t not in SCRAPE_PARAM_CHOICES["facility_type"] for t in equipment_types):
+        raise ConfigError("Choose advertised facility types for equipment checks.")
     report = {
         "version": __version__,
         "python": platform.python_version(),
@@ -423,6 +427,8 @@ async def run_benchmark(
                     ("search_projector_tv", {"equipment": ["Projector", "TV Panel"]}),
                 ]:
                     query = {**config, **patch}
+                    if "equipment" in patch:
+                        query["facility_types"] = equipment_types
                     await harness.measure(
                         name,
                         lambda query=query: harness.job(
@@ -437,7 +443,8 @@ async def run_benchmark(
                     projector, tv, combined = trio
                     intersection, union = projector & tv, projector | tv
                     report["equipment_matching"] = {
-                        "scope": "SCIS1 Group Study Rooms for this run's date/window",
+                        "scope": "SCIS1 for this run's date/window",
+                        "facility_types": equipment_types,
                         "projector_rooms": len(projector),
                         "tv_rooms": len(tv),
                         "combined_rooms": len(combined),
@@ -451,7 +458,8 @@ async def run_benchmark(
                             query = {
                                 **config,
                                 "buildings": [building],
-                                "facility_types": ["Group Study Room", "Project Room"],
+                                "facility_types": equipment_facility_types
+                                or ["Group Study Room", "Project Room"],
                                 "equipment": [equipment],
                             }
                             await harness.measure(
@@ -534,7 +542,12 @@ async def run_benchmark(
                     )
                 else:
                     harness.skip(
-                        "task_details", "No task with a permitted VIEW action."
+                        "task_details",
+                        (
+                            "Task listing failed; available tasks are unknown."
+                            if tasks_id is None
+                            else "No task with a permitted VIEW action."
+                        ),
                     )
                 await harness.job("search_rooms", {"config": config})
                 source_id, source = harness.latest["search_rooms"]

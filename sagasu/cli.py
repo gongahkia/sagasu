@@ -207,6 +207,11 @@ def parser():
     )
     benchmark.add_argument("--timeout", type=int, default=3600)
     benchmark.add_argument(
+        "--equipment-facility-type",
+        action="append",
+        help="Facility type for equipment checks; repeat for alternatives (e.g. Classroom)",
+    )
+    benchmark.add_argument(
         "--output",
         type=Path,
         help="Save a redacted JSON report with private permissions",
@@ -409,6 +414,7 @@ def main(argv=None):
                     end=args.end,
                     cobooker_query=args.cobooker_query,
                     equipment_matrix=args.equipment_matrix,
+                    equipment_facility_types=args.equipment_facility_type,
                     timeout=args.timeout,
                     progress=None if as_json else reporter.write,
                     selected=args.selected,
