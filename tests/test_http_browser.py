@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock, patch
 
 from playwright.async_api import async_playwright
 
-from sagasu.fbs_client import AuthenticationRequired
+from sagasu.fbs_client import AuthenticationRequired, FBSError
+from sagasu.fbs_account import read_task_list
+from sagasu.errors import public_failure
 from sagasu.fbs_http import read_account_http
 from sagasu.fbs_traffic import ReadTraffic
 from sagasu.read_backends import HybridReads
@@ -45,7 +47,11 @@ class BrowserHTTPTests(unittest.IsolatedAsyncioTestCase):
                 }:
                     html = bookings_html(status=state["status"])
                 elif self.path in {"/tasks", "/modules/homenavigation/tasklist.aspx"}:
-                    html = tasks_html() + '<input id="txtSearch_c1" value="">'
+                    html = (
+                        "<title>appexception.aspx</title><body>PRIVATE SERVER ERROR</body>"
+                        if state.get("task_application_error")
+                        else tasks_html() + '<input id="txtSearch_c1" value="">'
+                    )
                 else:
                     html = "<html><body>fixture</body></html>"
                 self.send_response(200)
@@ -90,6 +96,16 @@ class BrowserHTTPTests(unittest.IsolatedAsyncioTestCase):
     async def stop_server(self):
         await asyncio.to_thread(self.server.shutdown)
         self.server.server_close()
+
+    async def test_fbs_application_error_is_reported_before_waiting_for_a_grid(self):
+        self.state["task_application_error"] = True
+        async with asyncio.timeout(2):
+            with self.assertRaises(FBSError) as caught:
+                await read_task_list(self.client)
+        self.assertEqual(caught.exception.reason, "fbs_application_error")
+        failure = public_failure(caught.exception)
+        self.assertIn("application error", failure["message"])
+        self.assertNotIn("PRIVATE", str(failure))
 
     async def test_real_browser_and_http_share_auth_and_preserve_fresh_status(self):
         router = HybridReads("auto")

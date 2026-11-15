@@ -31,6 +31,14 @@ async def open_account_tab(client, tab, marker):
         while True:
             frame = client.page.frame(name="frameContent")
             try:
+                if (
+                    frame
+                    and (await frame.title()).strip().casefold() == "appexception.aspx"
+                ):
+                    raise FBSError(
+                        "FBS returned its application-error page.",
+                        reason="fbs_application_error",
+                    )
                 if frame and await frame.locator(marker).first.is_visible():
                     await client._wait_for_idle(frame)
                     return frame

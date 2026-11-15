@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "fbs_application_error": (
+        "FBS returned an application error. The requested data could not be read; this is not an empty result.",
+        "Check the same page in FBS and retry later. Local configuration or another login may not resolve an FBS application failure.",
+        None,
+    ),
     "cobooker_lookup_unavailable": (
         "FBS did not expose verified co-booker search results. No co-booker was selected and no booking was submitted.",
         "Refresh search_rooms, choose a free room, then retry search_cobookers. Do not infer that a person is absent from an unreadable directory result.",
