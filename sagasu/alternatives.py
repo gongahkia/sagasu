@@ -84,11 +84,12 @@ def report(source, probes):
     }
 
 
-async def find_alternatives(client, payload):
+async def find_alternatives(client, payload, *, search=None):
+    search = search or client.search
     probes = []
     for config in payload["configs"]:
         try:
-            result = await client.search(config)
+            result = await search(config)
             probes.append(
                 {
                     "config": asdict(config),

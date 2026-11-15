@@ -69,12 +69,16 @@ class HybridReads:
         now = time.monotonic()
         return {
             "mode": self.mode,
-            "routed_tools": ["search_rooms", "list_bookings", "list_tasks"],
+            "routed_tools": [
+                "search_rooms",
+                "list_bookings",
+                "list_tasks",
+                "search_alternatives",
+            ],
             "browser": sorted(READ_KINDS),
             "browser_workflows": [
                 "search_cobookers",
                 "booking_details",
-                "alternatives",
                 "repeat",
                 "task_details",
                 "validate",

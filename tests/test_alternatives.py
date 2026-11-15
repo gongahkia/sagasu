@@ -15,10 +15,93 @@ from sagasu.fbs_client import (
 )
 from sagasu.mcp_service import Backend, AgentError
 from sagasu.mcp_server import create_server
+from sagasu.fbs_http import HTTPReadUnavailable
 from tests.test_mcp import ServiceCase, CONFIG, ROOM
 
 
 class AlternativeTests(ServiceCase):
+    async def test_alternative_auto_mode_falls_back_only_for_the_failed_probe(self):
+        source = (await self.source()).result
+        configs = candidates(source, 30)
+        backend = Backend()
+        backend.reads.mode = "auto"
+        fallback = {"config": asdict(configs[0]), "rooms": []}
+        direct = {"config": asdict(configs[1]), "rooms": []}
+        backend.reads.direct = AsyncMock(
+            side_effect=[HTTPReadUnavailable("unreadable_form"), direct]
+        )
+        backend.reads.search = AsyncMock(return_value=fallback)
+        context = AsyncMock()
+        with patch("sagasu.mcp_service.FBSClient", return_value=context) as browser:
+            result = await backend.run(
+                "alternatives", {"source": source, "configs": configs}, None, None
+            )
+        browser.assert_called_once()
+        backend.reads.search.assert_awaited_once_with(
+            context.__aenter__.return_value, configs[0]
+        )
+        self.assertEqual(backend.reads.direct.await_count, 2)
+        self.assertEqual(
+            [p["status"] for p in result["probes"]], ["succeeded", "succeeded"]
+        )
+
+    async def test_alternative_probes_use_validated_direct_search_without_opening_browser(
+        self,
+    ):
+        source = (await self.source()).result
+        configs = candidates(source, 30)
+        backend = Backend()
+        backend.reads.mode = "api"
+        backend.reads.direct = AsyncMock(
+            side_effect=[
+                {
+                    "config": asdict(config),
+                    "rooms": [
+                        {
+                            "name": "Room",
+                            "timeslots": [
+                                {
+                                    "start": config.start_time,
+                                    "end": config.end_time,
+                                    "status": "free",
+                                }
+                            ],
+                        }
+                    ],
+                }
+                for config in configs
+            ]
+        )
+        with patch("sagasu.mcp_service.FBSClient") as browser:
+            result = await backend.run(
+                "alternatives", {"source": source, "configs": configs}, None, None
+            )
+        browser.assert_not_called()
+        self.assertEqual(
+            [p["available_rooms"] for p in result["probes"]], [["Room"], ["Room"]]
+        )
+        self.assertEqual(
+            [c.args[1] for c in backend.reads.direct.call_args_list], configs
+        )
+        self.assertFalse(result["submitted"])
+
+    async def test_direct_alternative_failure_remains_failure_in_api_only_mode(self):
+        source = (await self.source()).result
+        backend = Backend()
+        backend.reads.mode = "api"
+        backend.reads.direct = AsyncMock(
+            side_effect=HTTPReadUnavailable("incomplete_calendar_model")
+        )
+        with patch("sagasu.mcp_service.FBSClient") as browser:
+            result = await backend.run(
+                "alternatives",
+                {"source": source, "configs": candidates(source, 30)},
+                None,
+                None,
+            )
+        browser.assert_not_called()
+        self.assertEqual([p["status"] for p in result["probes"]], ["failed", "failed"])
+
     async def source(self, horizon=False):
         job = await self.finish(self.service.search(CONFIG))
         if horizon:

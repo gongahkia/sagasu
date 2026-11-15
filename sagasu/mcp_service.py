@@ -70,6 +70,15 @@ class Backend:
             from .alternatives import report
 
             return report(payload["source"], [])
+        if kind == "alternatives":
+            from .alternatives import find_alternatives, result_from_dict
+
+            async def search(config):
+                return result_from_dict(
+                    await self.run("search", config, progress, notify)
+                )
+
+            return await find_alternatives(None, payload, search=search)
         if kind in {"approve_task", "task_details"}:
             return await execute_task_action(
                 payload,
@@ -128,10 +137,6 @@ class Backend:
 
                 async with asyncio.timeout(180):
                     return await probe_client(client, self.reads, payload)
-            if kind == "alternatives":
-                from .alternatives import find_alternatives
-
-                return await find_alternatives(client, payload)
             if kind == "repeat":
                 from .repeat import repeat_plan
 
