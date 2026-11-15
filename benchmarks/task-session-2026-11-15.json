@@ -1,0 +1,107 @@
+{
+  "date": "2026-11-15",
+  "resolves_previous_note": "Task-list failure and unverified live task details in results-2026-11-15.json",
+  "observed_failure": {
+    "request": "Native FBS Task List button and its observed HTTP endpoint",
+    "http_status": 302,
+    "location": "//AppException.aspx",
+    "browser_error": "ERR_NAME_NOT_RESOLVED",
+    "same_session_bookings_read_complete": true,
+    "bookings_count": 7
+  },
+  "resolution_evidence": {
+    "fresh_browser_context_with_existing_login_cookies_and_new_application_session": {
+      "tasks_complete": true,
+      "task_count": 1
+    },
+    "original_browser_after_removing_only_its_ASP_NET_application_cookie": {
+      "tasks_complete": true,
+      "task_count": 1,
+      "same_exact_booking_references_before_and_after": true
+    }
+  },
+  "interpretation": "[Inference] The original FBS application-session state was stale or inconsistent. The reason it entered that state remains unknown. A new application session restored task access without entering login credentials.",
+  "automatic_recovery": {
+    "trigger": "Recognized FBS application error while opening Task List",
+    "maximum_read_retries": 1,
+    "cookie_removed": "ASP.NET_SessionId",
+    "required_scope": {
+      "domain": "fbs.intranet.smu.edu.sg",
+      "path": "/"
+    },
+    "authentication_cookies_cleared": false,
+    "interactive_authentication_during_recovery": false,
+    "failure_or_cancellation": "Restore the original application cookie and preserve the failed/cancelled outcome; do not report an empty task list.",
+    "replays_booking_or_approval_submissions": false,
+    "success_metadata": "application_session_recovered"
+  },
+  "live_benchmark": {
+    "list_tasks": {
+      "attempts": 5,
+      "successes": 5,
+      "failures": 0,
+      "median_ms": 915.727
+    },
+    "browser_screenshot": {
+      "attempts": 5,
+      "successes": 5,
+      "failures": 0,
+      "median_ms": 146.765
+    },
+    "task_details": {
+      "attempts": 5,
+      "successes": 5,
+      "failures": 0,
+      "median_ms": 6160.976
+    }
+  },
+  "live_shared_mcp_validation": {
+    "host_operational": true,
+    "screenshot_tool_listed": true,
+    "tasks_complete": true,
+    "task_count": 1,
+    "task_details_succeeded": true,
+    "task_details_receipt_available": true,
+    "debug_screenshot_png_bytes": 86139,
+    "debug_screenshot_kind": "browser_debug",
+    "debug_screenshot_form_fields_masked": true
+  },
+  "screenshot_workflow": [
+    "browser_screenshot",
+    "wait_operation",
+    "operation_receipt"
+  ],
+  "screenshot_scope": "Current FBS viewport; not a historical operation snapshot. No URL, selector or arbitrary file arguments. Fields and unrelated frames are masked. Authentication pages and captures during frame navigation are refused. Visible FBS text may contain private booking information. PNGs remain in bounded operation memory and expire on eviction/restart.",
+  "regression_checks": [
+    "Healthy task reads do not touch session cookies",
+    "Only the exact FBS application cookie is cleared; authentication cookies remain",
+    "At most one recovery; rollback after failure or cancellation",
+    "Unrelated layout failures do not reset sessions",
+    "PNG pixels cover masked fields and foreign frames",
+    "Authentication pages, OTP/password controls, and navigation races do not return images",
+    "MCP returns a separate image without adding screenshots to durable action history",
+    "Capture waits for the shared browser queue and does not start interactive login"
+  ],
+  "verification": {
+    "full_unit_tests_per_interpreter": {
+      "3.12": 463,
+      "3.14": 463
+    },
+    "pre_commit": "passed",
+    "package_check": "passed",
+    "compilation": "passed",
+    "benchmark_followup_unit_tests": 9,
+    "README_changed": false,
+    "real_booking_cancellation_or_approval_submitted": false
+  },
+  "raw_reports": [
+    ".sagasu/benchmarks/task-debug-verified.json",
+    ".sagasu/benchmarks/task-debug-final.json",
+    ".sagasu/diagnostics/tasks/mcp-validation.json"
+  ],
+  "research": [
+    "https://playwright.dev/python/docs/api/class-browsercontext#browser-context-clear-cookies",
+    "https://playwright.dev/python/docs/api/class-page#page-screenshot",
+    "https://developer.mozilla.org/en-US/docs/Learn_web_development/Howto/Web_mechanics/What_is_a_URL"
+  ]
+}

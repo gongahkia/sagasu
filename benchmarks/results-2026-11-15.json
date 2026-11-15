@@ -1,5 +1,6 @@
 {
   "date": "2026-11-15",
+  "task_issue_resolution": "task-session-2026-11-15.json",
   "platform": "Linux; Chromium headless; one configured SMU account",
   "fbs_window": {
     "date": "2026-11-23",
