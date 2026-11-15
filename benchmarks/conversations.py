@@ -17,6 +17,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 from sagasu.benchmark import save_report
@@ -119,6 +120,8 @@ def grade(case, result, trace):
         problems.append("unverified_person")
     if case["id"] == "ambiguous_person" and "cobooker_search" not in kinds:
         problems.append("directory_not_checked")
+    if case["id"] == "failed_search" and "search" not in kinds:
+        problems.append("search_not_attempted")
     if (
         case["id"] == "ambiguous_date"
         and case["decision"] == "clarify"
@@ -138,10 +141,21 @@ def grade(case, result, trace):
         )
     )
     legs = result.get("legs", [])
+    checked_dates = set()
+    for row in trace:
+        if row["kind"] == "search":
+            try:
+                checked_dates.add(
+                    datetime.strptime(row.get("date", ""), "%d-%b-%Y")
+                    .date()
+                    .isoformat()
+                )
+            except ValueError:
+                pass
     if (
         len(legs) != (2 if mode in {"split", "common", "recurring"} else 1)
         or set(leg.get("date") for leg in legs) != set(dates)
-        or kinds.count("search") < len(dates)
+        or not set(dates) <= checked_dates
     ):
         problems.append("incomplete_or_unverified_plan")
         return problems

@@ -50,7 +50,7 @@ class FixtureBackend(Backend):
             stream.write(json.dumps({"kind": kind, **metadata}) + "\n")
 
     async def run(self, kind, payload, progress, notify):
-        self.log(kind)
+        self.log(kind, **({"date": payload.date} if kind == "search" else {}))
         if kind in {"room_plan", "alternatives", "clashes"}:
             return await super().run(kind, payload, progress, notify)
         if kind == "search":

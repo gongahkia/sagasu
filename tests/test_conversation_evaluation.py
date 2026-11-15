@@ -78,7 +78,13 @@ class GradingTests(unittest.TestCase):
             },
         ]
         result = {"decision": "available", "legs": legs}
-        self.assertFalse(grade(CASES["split_rooms"], result, [{"kind": "search"}]))
+        self.assertFalse(
+            grade(
+                CASES["split_rooms"],
+                result,
+                [{"kind": "search", "date": "02-Nov-2099"}],
+            )
+        )
         for field, value in [
             ("room", "INVENTED ROOM"),
             ("start_time", "14:30"),
@@ -86,7 +92,13 @@ class GradingTests(unittest.TestCase):
         ]:
             wrong = copy.deepcopy(result)
             wrong["legs"][1][field] = value
-            self.assertTrue(grade(CASES["split_rooms"], wrong, [{"kind": "search"}]))
+            self.assertTrue(
+                grade(
+                    CASES["split_rooms"],
+                    wrong,
+                    [{"kind": "search", "date": "02-Nov-2099"}],
+                )
+            )
         self.assertTrue(
             grade(
                 CASES["split_rooms"],
