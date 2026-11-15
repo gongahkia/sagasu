@@ -31,5 +31,13 @@
     "booking_list_unchanged": true,
     "submitted": false
   },
+  "multiple_cobookers": {
+    "full_unsubmitted_form_validation": "ready",
+    "exact_directory_email_selections": 2,
+    "retained_native_name_rows_verified": true,
+    "native_rows_expose_email_addresses": false,
+    "booking_list_unchanged": true,
+    "submitted": false
+  },
   "end_to_end_evaluation": "Pending; no token or speed savings claimed"
 }

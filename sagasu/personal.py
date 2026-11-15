@@ -276,7 +276,9 @@ class PersonalStore:
                 )
             ]
 
-    def save_template(self, name, room, start_time, end_time, purpose, co_booker):
+    def save_template(
+        self, name, room, start_time, end_time, purpose, co_booker, *, co_bookers=None
+    ):
         from .fbs_client import SearchConfig
 
         if (
@@ -308,6 +310,27 @@ class PersonalStore:
             "purpose": purpose.strip(),
             "co_booker": co_booker.strip().casefold(),
         }
+        if co_bookers is not None:
+            if (
+                not isinstance(co_bookers, list)
+                or not 1 <= len(co_bookers) <= 8
+                or any(
+                    not isinstance(email, str) or not SMU_EMAIL_RE.fullmatch(email)
+                    for email in co_bookers
+                )
+            ):
+                raise PersonalDataError(
+                    "Use 1–8 distinct full SMU emails for a template's co-bookers."
+                )
+            participants = [email.casefold() for email in co_bookers]
+            if (
+                len(set(participants)) != len(participants)
+                or participants[0] != payload["co_booker"]
+            ):
+                raise PersonalDataError(
+                    "Template co-bookers must be distinct and match the legacy first co-booker."
+                )
+            payload["co_bookers"] = participants
         with self._db(write=True) as db:
             existing = db.execute(
                 "SELECT id FROM booking_templates WHERE scope=? AND name=?",

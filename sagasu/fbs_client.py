@@ -13,6 +13,7 @@ import logging
 import math
 import os
 import re
+from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +24,7 @@ from urllib.parse import parse_qs, urlparse
 from .observability import event, observed_operation, observed_step, step
 from .action_journal import checkpoint_verified
 from .personal_options import SCRAPE_PARAM_CHOICES
+from .personal import SMU_EMAIL_RE
 
 from playwright.async_api import (
     BrowserContext,
@@ -295,6 +297,7 @@ class BookingRequest:
     usage_type: str = "AdHoc"
     booking_usage: str = "Meeting"
     send_calendar_invite: bool = False
+    co_bookers: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.room.strip():
@@ -303,6 +306,27 @@ class BookingRequest:
             raise ValueError("A booking purpose is required")
         if not self.co_booker.strip():
             raise ValueError("A co-booker is required")
+        if (
+            not isinstance(self.co_bookers, tuple)
+            or self.co_bookers
+            and (
+                not 1 <= len(self.co_bookers) <= 8
+                or any(
+                    not isinstance(email, str) or not SMU_EMAIL_RE.fullmatch(email)
+                    for email in self.co_bookers
+                )
+                or len({email.casefold() for email in self.co_bookers})
+                != len(self.co_bookers)
+                or self.co_bookers[0].casefold() != self.co_booker.casefold()
+            )
+        ):
+            raise ValueError(
+                "Choose 1–8 distinct full SMU co-booker emails; the legacy co_booker must match the first entry."
+            )
+
+    @property
+    def participants(self):
+        return self.co_bookers or (self.co_booker,)
 
     @classmethod
     def from_mapping(cls, value: dict) -> "BookingRequest":
@@ -314,10 +338,14 @@ class BookingRequest:
             usage_type=value.get("usage_type", "AdHoc"),
             booking_usage=value.get("booking_usage", "Meeting"),
             send_calendar_invite=bool(value.get("send_calendar_invite", False)),
+            co_bookers=tuple(value.get("co_bookers", ())),
         )
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        result = asdict(self)
+        if not self.co_bookers:
+            result.pop("co_bookers")
+        return result
 
 
 def require_future_booking(
@@ -1315,7 +1343,24 @@ class FBSClient:
             ).select_option(label=request.booking_usage)
             await self._wait_for_idle(booking_frame)
             await self.progress("adding co-booker to booking form")
-            await self._add_co_booker(booking_frame, request.co_booker)
+            selected_names = [
+                await self._add_co_booker(booking_frame, email)
+                for email in request.participants
+            ]
+            if len(request.participants) > 1:
+                rows = booking_frame.locator(
+                    "#bookingFormControl1_GridCoBookers_content tr.row"
+                )
+                names = []
+                for row in await rows.all():
+                    cells = row.locator("td")
+                    if await cells.count() != 2:
+                        raise LayoutChanged("The co-booker form rows changed")
+                    names.append(" ".join((await cells.nth(1).inner_text()).split()))
+                if Counter(names) != Counter(selected_names):
+                    raise LayoutChanged(
+                        "Not all selected co-bookers were retained in the unsubmitted form"
+                    )
 
             invite = booking_frame.locator(
                 "input#bookingFormControl1_SendCalendarInvitation_c1"
@@ -1341,6 +1386,11 @@ class FBSClient:
             "usage_type": request.usage_type,
             "booking_usage": request.booking_usage,
         }
+        if request.co_bookers:
+            preview["co_bookers"] = list(request.co_bookers)
+            preview["co_booker_verification"] = (
+                "Exact directory email selections and retained name-row counts; native form rows do not expose email addresses."
+            )
         if not submit:
             event("booking.validation_passed", submitted=False)
             return preview
@@ -1984,13 +2034,23 @@ class FBSClient:
         await self._wait_for_idle(frame)
 
     @observed_step("booking.cobooker")
-    async def _add_co_booker(self, frame: Frame, query: str) -> None:
+    async def _add_co_booker(self, frame: Frame, query: str) -> str:
+        if not SMU_EMAIL_RE.fullmatch(query):
+            raise ValueError("Select a verified full SMU co-booker email first")
         await self._search_co_booker_picker(frame, query)
         result_link = frame.locator(
             "table#bookingFormControl1_DialogSearchCoBooker_searchPanel_gridView_gv"
         ).get_by_text(query, exact=False)
         await result_link.first.wait_for(timeout=20000)
+        if await result_link.count() != 1:
+            raise LayoutChanged("The exact co-booker email result is ambiguous")
         selected_label = (await result_link.first.inner_text()).strip()
+        if not re.fullmatch(
+            r".+?\s+\(" + re.escape(query) + r"\)", selected_label, re.I
+        ):
+            raise LayoutChanged(
+                "The directory result does not match the exact requested email"
+            )
         selected_name = re.sub(
             r"\s*\(" + re.escape(query) + r"\)\s*$", "", selected_label, flags=re.I
         ).strip()
@@ -2022,6 +2082,7 @@ class FBSClient:
         added_checkbox = added_row.locator('input[type="checkbox"]')
         if await added_checkbox.count():
             await added_checkbox.check()
+        return " ".join(selected_name.split())
 
 
 def search_config_from_preferences(config: dict) -> SearchConfig:

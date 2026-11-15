@@ -6,6 +6,28 @@ from datetime import datetime
 from .errors import public_failure
 from .fbs_client import FBSError, SearchConfig
 from .booking_details import booking_window
+from .personal import SMU_EMAIL_RE
+
+
+def verified_cobookers(details):
+    people = details.get("co_bookers")
+    if not isinstance(people, list) or not people:
+        return None
+    if all(isinstance(person, str) for person in people):
+        emails = people
+    elif details.get("co_bookers_coverage", {}).get("complete") is True and all(
+        isinstance(person, dict) for person in people
+    ):
+        emails = [person.get("email") for person in people]
+    else:
+        return None
+    if not 1 <= len(emails) <= 8 or any(
+        not isinstance(email, str) or not SMU_EMAIL_RE.fullmatch(email)
+        for email in emails
+    ):
+        return None
+    normalized = [email.casefold() for email in emails]
+    return normalized if len(set(normalized)) == len(normalized) else None
 
 
 def normalize_date(value):
@@ -43,17 +65,23 @@ async def repeat_plan(client, payload):
                 payload["date"], source["start_time"], source["end_time"]
             )
             result = await client.search(config, room_name=source["room"])
+            participants = verified_cobookers(details)
             slot = {
                 "source": source,
                 "details": details,
                 "search": result.to_dict(),
                 "available_rooms": [room.name for room in result.bookable_rooms],
                 "missing_fields": [
-                    key for key in ("purpose", "co_booker") if not details.get(key)
+                    key
+                    for key in ("purpose", "co_booker")
+                    if not details.get(key)
+                    and not (key == "co_booker" and participants)
                 ],
                 "status": "available" if result.bookable_rooms else "unavailable",
                 "submitted": False,
             }
+            if participants:
+                slot["booking_co_bookers"] = participants
             slots.append(slot)
         except (FBSError, PlaywrightError, TimeoutError, ValueError) as error:
             slots.append(

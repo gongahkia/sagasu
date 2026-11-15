@@ -418,8 +418,9 @@ def create_server(
         leg_index: int = 0,
         co_booker: str | None = None,
         cobooker_id: str | None = None,
+        co_bookers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Review one exact leg/date from a successful room plan. Use candidate_index from the result; occurrence_index selects a date for all_dates candidates, otherwise 0. Supplies that leg's exact room/time to the ordinary immutable review; validation/submission rechecks FBS. Does not submit other legs or dates, even for split/common plans."""
+        """Review one exact leg/date from a room plan. candidate_index selects the candidate; occurrence_index selects an all_dates date, otherwise 0. Supply one co_booker/cobooker_id OR co_bookers (1–8 full SMU emails or unique saved IDs/names/aliases). Resolves all participants now; review values stay fixed. Validation/submission rechecks FBS. Never submits other legs or dates."""
         return safe(
             service.planned_booking_review,
             operation_id,
@@ -429,6 +430,7 @@ def create_server(
             purpose,
             co_booker,
             cobooker_id,
+            co_bookers,
         )
 
     @server.tool(annotations=read)
@@ -584,18 +586,22 @@ def create_server(
         purpose: str,
         co_booker: str | None = None,
         cobooker_id: str | None = None,
+        co_bookers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Save/update an explicitly requested template by name. Stores a snapshot of room, times, purpose and co-booker email; later contact changes do not rewrite it. Does not book."""
-        if bool(co_booker) == bool(cobooker_id):
-            raise ToolError("Supply a co-booker email/name OR saved co-booker ID.")
+        """Save/update an explicitly requested template by name. Snapshots room, times, purpose and resolved co-booker emails; contact changes do not rewrite it. Supply one co_booker/cobooker_id OR co_bookers with 1–8 full SMU emails/saved IDs/names/aliases. Does not book."""
         store = safe(service.personal_profile)
-        email = (
-            safe(store.resolve_contact, cobooker_id or co_booker)
-            if cobooker_id or "@" not in co_booker
-            else co_booker
+        participants = safe(
+            service.resolve_cobookers, co_booker, cobooker_id, co_bookers
         )
         return safe(
-            store.save_template, name, room, start_time, end_time, purpose, email
+            store.save_template,
+            name,
+            room,
+            start_time,
+            end_time,
+            purpose,
+            participants[0],
+            co_bookers=participants if co_bookers is not None else None,
         )
 
     @server.tool(
@@ -631,8 +637,9 @@ def create_server(
         purpose: str | None = None,
         co_booker: str | None = None,
         cobooker_id: str | None = None,
+        co_bookers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Prepare one exact repeat-plan slot as an ordinary ten-minute booking review. Defaults to its source room/details; ask for missing fields or explicitly choose an available alternative. Plans are snapshots; final booking rechecks live FBS. Never submits a group implicitly."""
+        """Prepare one repeat-plan slot as an ordinary ten-minute review. Defaults to source room/details and all source co-bookers when their emails/coverage are verified. Supply one co_booker/cobooker_id OR co_bookers (1–8 full SMU emails or saved IDs/names/aliases) to override participants. Ask for missing fields. Final submission rechecks FBS; never submits a group implicitly."""
         return safe(
             service.repeat_review,
             operation_id,
@@ -641,6 +648,7 @@ def create_server(
             purpose,
             co_booker,
             cobooker_id,
+            co_bookers,
         )
 
     @server.tool(annotations=local)
@@ -650,8 +658,9 @@ def create_server(
         purpose: str,
         co_booker: str | None = None,
         cobooker_id: str | None = None,
+        co_bookers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Prepare a ten-minute review of one free room. Supply a saved cobooker_id OR co_booker (full SMU email or unique saved name/alias). For an unsaved/partial name, first use search_cobookers and choose a verified email. Resolves a saved contact now; later contact/preference changes do not alter this review. Does not submit."""
+        """Prepare a ten-minute review of one free room. Supply one cobooker_id/co_booker OR co_bookers with 1–8 full SMU emails or unique saved IDs/names/aliases. Unsaved partial names require search_cobookers and selection of a verified email. All resolved participants are frozen in this review; inspect co_bookers when present (co_booker is its legacy first entry). Later contact/preference changes do not alter it. Does not submit."""
         return safe(
             service.review_booking,
             search_operation_id,
@@ -659,6 +668,7 @@ def create_server(
             purpose,
             co_booker,
             cobooker_id,
+            co_bookers,
         )
 
     @server.tool(annotations=local)

@@ -935,6 +935,7 @@ class AgentService:
         purpose=None,
         co_booker=None,
         cobooker_id=None,
+        co_bookers=None,
     ):
         plan = self._completed(operation_id, "room_plan")
         if any(
@@ -984,7 +985,7 @@ class AgentService:
         }
         try:
             return self._review_booking_result(
-                snapshot, leg["room"], purpose, co_booker, cobooker_id
+                snapshot, leg["room"], purpose, co_booker, cobooker_id, co_bookers
             )
         except BookingUnavailable:
             raise AgentError(
@@ -1074,28 +1075,58 @@ class AgentService:
         )
 
     def review_booking(
-        self, search_operation_id, room, purpose, co_booker=None, cobooker_id=None
+        self,
+        search_operation_id,
+        room,
+        purpose,
+        co_booker=None,
+        cobooker_id=None,
+        co_bookers=None,
     ):
         result = self._completed(search_operation_id, "search")
         return self._review_booking_result(
-            result, room, purpose, co_booker, cobooker_id
+            result, room, purpose, co_booker, cobooker_id, co_bookers
         )
 
-    def _review_booking_result(
-        self, result, room, purpose, co_booker=None, cobooker_id=None
-    ):
-        if cobooker_id is not None:
-            if co_booker is not None:
+    def resolve_cobookers(self, co_booker=None, cobooker_id=None, co_bookers=None):
+        if co_bookers is not None:
+            if (
+                co_booker is not None
+                or cobooker_id is not None
+                or not isinstance(co_bookers, list)
+                or not 1 <= len(co_bookers) <= 8
+            ):
                 raise AgentError(
-                    "Provide either a saved co-booker ID or an email/name, not both."
+                    "Supply co_bookers with 1–8 emails/saved contacts OR one legacy co_booker/cobooker_id."
                 )
-            co_booker = self.personal_profile().resolve_contact(cobooker_id)
-        elif co_booker and "@" not in co_booker:
-            co_booker = self.personal_profile().resolve_contact(co_booker)
-        if not co_booker:
-            raise AgentError(
-                "Provide a co-booker email or choose a saved co-booker ID."
+            values = co_bookers
+        else:
+            if co_booker is not None and cobooker_id is not None:
+                raise AgentError("Supply an email/saved name OR a saved co-booker ID.")
+            values = [cobooker_id if cobooker_id is not None else co_booker]
+        emails = []
+        for value in values:
+            if not isinstance(value, str) or not value.strip() or len(value) > 254:
+                raise AgentError(
+                    "Choose a valid full SMU email or saved contact ID/name/alias for each co-booker."
+                )
+            email = (
+                self.personal_profile().resolve_contact(value)
+                if "@" not in value or value == cobooker_id
+                else value.strip().casefold()
             )
+            if not SMU_EMAIL_RE.fullmatch(email):
+                raise AgentError("Each co-booker needs a verified full SMU email.")
+            emails.append(email)
+        if len(set(emails)) != len(emails):
+            raise AgentError("Co-bookers must resolve to distinct email addresses.")
+        return emails
+
+    def _review_booking_result(
+        self, result, room, purpose, co_booker=None, cobooker_id=None, co_bookers=None
+    ):
+        participants = self.resolve_cobookers(co_booker, cobooker_id, co_bookers)
+        co_booker = participants[0]
         search = SearchConfig.from_mapping(result["config"])
         require_future_booking(search)
         from .fbs_client import RoomAvailability, TimeSlot
@@ -1114,7 +1145,11 @@ class AgentService:
                 "Provide a purpose of 1–200 characters and a valid SMU co-booker email."
             )
         request = BookingRequest(
-            search, room, purpose.strip(), co_booker.strip().lower()
+            search,
+            room,
+            purpose.strip(),
+            co_booker,
+            co_bookers=tuple(participants) if co_bookers is not None else (),
         )
         return self._review("book", request, request.to_dict())
 
@@ -1177,6 +1212,7 @@ class AgentService:
         purpose=None,
         co_booker=None,
         cobooker_id=None,
+        co_bookers=None,
     ):
         plan = self._completed(operation_id, "repeat")
         if type(slot_index) is not int or not 0 <= slot_index < len(plan["slots"]):
@@ -1187,6 +1223,8 @@ class AgentService:
                 "This slot could not be checked; refresh its source and availability."
             )
         details = slot["details"]
+        if co_booker is None and cobooker_id is None and co_bookers is None:
+            co_bookers = slot.get("booking_co_bookers")
         return self._review_booking_result(
             slot["search"],
             room or slot["source"]["room"],
@@ -1194,9 +1232,14 @@ class AgentService:
             (
                 co_booker
                 if co_booker is not None
-                else (None if cobooker_id else details.get("co_booker"))
+                else (
+                    None
+                    if cobooker_id or co_bookers is not None
+                    else details.get("co_booker")
+                )
             ),
             cobooker_id,
+            co_bookers,
         )
 
     def review_cancellation(self, bookings_operation_id, reference_number, reason):
