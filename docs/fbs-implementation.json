@@ -3,7 +3,7 @@
   "constraints": [
     "Do not edit README.md",
     "Research and verify native FBS capabilities before implementing them",
-    "Use atomic commits and test and benchmark each coherent tranche",
+    "Use atomic commits and rigorous tests during implementation; end-to-end feature benchmarking can follow implementation",
     "Development testing does not submit real bookings, amendments, cancellations or approvals",
     "Do not replace an unsupported native amendment with cancellation/rebooking implicitly"
   ],
@@ -41,6 +41,14 @@
     {"id": 47, "feature": "Benchmark comparisons and regression alerts"},
     {"id": 48, "feature": "Conversation-level agent evaluations"}
   ],
+  "evaluation_policy": {
+    "applies_to": "Every selected main feature and bonus; split-room planning is only an example",
+    "baseline": "Codex CLI completing the same natural-language task with the previous tools and agent-written orchestration",
+    "measurements": "Total reported model token usage and end-to-end completion time, with equivalent correctness and coverage",
+    "timing": "Build and test the feature first; comparative benchmarking may come later",
+    "retention": "Rework, consolidate or remove features that do not demonstrate worthwhile token and speed savings",
+    "evidence": "Fewer tool calls, smaller payloads and backend timings alone do not establish end-to-end savings"
+  },
   "excluded": "Calendar/export features and all other unselected proposals",
   "status": "Implementation starting; this file records agreed scope, not completed functionality"
 }
