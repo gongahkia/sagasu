@@ -1,14 +1,22 @@
+import asyncio
 import copy
 import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from mcp import Client
 
 from benchmarks.agent_fixture import FixtureBackend, calendar
-from benchmarks.conversations import DATASET, SCHEMA, grade, parse_events
+from benchmarks.conversations import (
+    DATASET,
+    SCHEMA,
+    grade,
+    parse_events,
+    run_case,
+    main,
+)
 from sagasu.fbs_client import BookingOutcomeUnknown, FBSError, SearchConfig
 from sagasu.mcp_server import create_server
 from sagasu.mcp_service import AgentService
@@ -18,6 +26,14 @@ CASES = {case["id"]: case for case in json.loads(DATASET.read_text())["cases"]}
 
 
 class GradingTests(unittest.TestCase):
+    def test_model_runs_require_explicit_opt_in(self):
+        with (
+            patch("benchmarks.conversations.evaluate") as evaluate,
+            self.assertRaises(SystemExit),
+        ):
+            main(["--output", "/tmp/unused-agent-report.json"])
+        evaluate.assert_not_called()
+
     def test_cli_usage_includes_cached_inputs_and_retains_reasoning_without_double_count(
         self,
     ):
@@ -92,6 +108,25 @@ class GradingTests(unittest.TestCase):
 
 
 class FixtureProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cancellation_stops_only_the_spawned_cli_process_group(self):
+        process = Mock(pid=12345, returncode=None)
+        process.communicate = AsyncMock(
+            side_effect=[asyncio.CancelledError(), (b"", b"")]
+        )
+        with (
+            patch(
+                "benchmarks.conversations.asyncio.create_subprocess_exec",
+                AsyncMock(return_value=process),
+            ),
+            patch("benchmarks.conversations.os.killpg") as kill,
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await run_case(
+                    CASES["flexible_time"], Path("/tmp/snapshot"), "2099-11-01", 10
+                )
+        kill.assert_called_once()
+        self.assertEqual(kill.call_args.args[0], 12345)
+
     async def test_fixture_uses_real_planner_and_rejects_all_unimplemented_native_paths(
         self,
     ):

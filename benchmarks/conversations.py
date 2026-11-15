@@ -197,7 +197,16 @@ def export_baseline(revision, destination):
     return resolved
 
 
-async def run_case(case, repo, reference_time, timeout):
+async def stop_process(process):
+    if process.returncode is None:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    await process.communicate()
+
+
+async def run_case(case, repo, reference_time, timeout, *, fixture_path=None):
     with tempfile.TemporaryDirectory(prefix="sagasu-agent-run-") as temporary:
         root = Path(temporary)
         trace, final, schema = [
@@ -207,7 +216,7 @@ async def run_case(case, repo, reference_time, timeout):
         config = {
             "command": sys.executable,
             "args": [
-                str(ROOT / "benchmarks/agent_fixture.py"),
+                str(fixture_path or ROOT / "benchmarks/agent_fixture.py"),
                 "--scenario",
                 case["id"],
                 "--trace",
@@ -277,13 +286,15 @@ async def run_case(case, repo, reference_time, timeout):
                 process.communicate(prompt.encode()), timeout
             )
         except asyncio.TimeoutError:
-            os.killpg(process.pid, signal.SIGKILL)
-            await process.communicate()
+            await stop_process(process)
             return {
                 "status": "failed",
                 "error": "deadline_exceeded",
                 "elapsed_ms": round((time.perf_counter() - started) * 1000, 3),
             }
+        except asyncio.CancelledError:
+            await stop_process(process)
+            raise
         elapsed = round((time.perf_counter() - started) * 1000, 3)
         try:
             if process.returncode:
@@ -309,7 +320,9 @@ async def run_case(case, repo, reference_time, timeout):
                 following["request"] = (
                     f"Continue this conversation. Earlier user request: {case['request']}\nAssistant response: {answer['answer']}\nNew user message: {following['request']}"
                 )
-                next_sample = await run_case(following, repo, reference_time, timeout)
+                next_sample = await run_case(
+                    following, repo, reference_time, timeout, fixture_path=fixture_path
+                )
                 sample["status"] = next_sample["status"]
                 sample["grading_errors"] += next_sample.get("grading_errors", [])
                 sample["turns"] = 2
@@ -337,15 +350,20 @@ async def evaluate(args):
     if not cases or args.case and set(args.case) - {c["id"] for c in cases}:
         raise ValueError("Choose known conversation case IDs")
     version = subprocess.check_output(["codex", "--version"], text=True).strip()
-    with tempfile.TemporaryDirectory(prefix="sagasu-agent-baseline-") as temporary:
-        baseline = Path(temporary)
+    with tempfile.TemporaryDirectory(prefix="sagasu-agent-snapshots-") as temporary:
+        baseline = Path(temporary) / "baseline"
+        candidate = Path(temporary) / "candidate"
         revision = export_baseline(args.baseline, baseline)
+        candidate_revision = export_baseline("HEAD", candidate)
+        fixture_path = Path(temporary) / "agent_fixture.py"
+        fixture_path.write_bytes(
+            Path(__file__).with_name("agent_fixture.py").read_bytes()
+        )
         report = {
             "format": "sagasu.agent-evaluation.v1",
             "baseline_revision": revision,
-            "candidate_revision": subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
-            ).strip(),
+            "candidate_revision": candidate_revision,
+            "source_isolation": "Both MCP packages and the shared fixture driver are immutable snapshots for this run; uncommitted changes are excluded",
             "codex_version": version,
             "model": "CLI default, identical configuration in both arms",
             "evaluation_source_sha256": hashlib.sha256(
@@ -370,10 +388,14 @@ async def evaluate(args):
             report["cases"].append(row)
             for index in range(args.repetitions):
                 # Alternate ordering to reduce systematic warm-up/cache effects.
-                arms = [("baseline", baseline), ("candidate", ROOT)]
+                arms = [("baseline", baseline), ("candidate", candidate)]
                 for arm, repo in arms if index % 2 == 0 else reversed(arms):
                     sample = await run_case(
-                        case, repo, data["reference_time"], args.timeout
+                        case,
+                        repo,
+                        data["reference_time"],
+                        args.timeout,
+                        fixture_path=fixture_path,
                     )
                     row[arm].append(sample)
                     print(
@@ -464,7 +486,12 @@ def main(argv=None):
     parser.add_argument("--case", action="append")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args(argv)
-    if not args.run or not 1 <= args.repetitions <= 10 or not 10 <= args.timeout <= 600:
+    if (
+        os.name == "nt"
+        or not args.run
+        or not 1 <= args.repetitions <= 10
+        or not 10 <= args.timeout <= 600
+    ):
         parser.error("Use --run, 1–10 repetitions and 10–600 seconds per sample")
     try:
         report = asyncio.run(evaluate(args))
