@@ -57,6 +57,7 @@ LIVE_TOOLS = frozenset(
         "booking_details",
         "room_details",
         "credit_status",
+        "booking_options",
         "task_details",
         "search_cobookers",
         "available_rooms",
@@ -678,6 +679,19 @@ async def run_benchmark(
                     )
                 else:
                     harness.skip("directory_standalone", "Provide --cobooker-query.")
+                if free:
+                    await harness.measure(
+                        "booking_options",
+                        lambda: harness.job(
+                            "booking_options",
+                            {"search_operation_id": source_id, "room": free[0]["name"]},
+                        ),
+                    )
+                else:
+                    harness.skip(
+                        "booking_options",
+                        "No free source room for an unsent booking form.",
+                    )
                 if bookings:
                     await harness.job("list_bookings")
                     book_id, _ = harness.latest["list_bookings"]

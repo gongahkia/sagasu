@@ -39,5 +39,16 @@
     "booking_list_unchanged": true,
     "submitted": false
   },
+  "booking_options": {
+    "current_usage_type_choices": 2,
+    "current_booking_usage_choices": 10,
+    "native_credit_estimate_exposed": true,
+    "nondefault_classification_validation": "ready",
+    "validated_usage_type": "AdHoc",
+    "validated_booking_usage": "Research",
+    "booking_list_unchanged": true,
+    "submitted": false,
+    "earlier_attempt": "Options were read successfully; the temporary room became unavailable before later validation. No submission occurred; a future free interval was used for the successful control."
+  },
   "end_to_end_evaluation": "Pending; no token or speed savings claimed"
 }

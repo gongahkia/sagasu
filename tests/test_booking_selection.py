@@ -282,6 +282,15 @@ class BookingDetailsTest(unittest.IsolatedAsyncioTestCase):
             "select#bookingFormControl1_DropDownEndTime_c1": Mock(
                 input_value=AsyncMock(return_value="11/2/2026 3:00:00 PM")
             ),
+            "input#bookingFormControl1_TextboxPurpose_c1": Mock(
+                input_value=AsyncMock(return_value="Meeting")
+            ),
+            "select#bookingFormControl1_DropDownUsageType_c1 option:checked": Mock(
+                all_text_contents=AsyncMock(return_value=["AdHoc"])
+            ),
+            "select#bookingFormControl1_DropDownSpaceBookingUsage_c1 option:checked": Mock(
+                all_text_contents=AsyncMock(return_value=["Meeting"])
+            ),
         }
         frame.locator.side_effect = fields.get
         await client._verify_booking_details(frame, request)

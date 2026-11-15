@@ -306,6 +306,9 @@ class BookingRequest:
             raise ValueError("A booking purpose is required")
         if not self.co_booker.strip():
             raise ValueError("A co-booker is required")
+        from .booking_options import validate_usage
+
+        validate_usage(self.usage_type, self.booking_usage)
         if (
             not isinstance(self.co_bookers, tuple)
             or self.co_bookers
@@ -1454,6 +1457,26 @@ class FBSClient:
             if actual != expected:
                 raise BookingUnavailable(
                     "FBS booking details do not match the requested date/time. Nothing was confirmed."
+                )
+        if (
+            await frame.locator(
+                "input#bookingFormControl1_TextboxPurpose_c1"
+            ).input_value()
+            != request.purpose
+        ):
+            raise BookingUnavailable(
+                "FBS changed the booking purpose. Nothing was confirmed."
+            )
+        for control, expected in (
+            ("DropDownUsageType_c1", request.usage_type),
+            ("DropDownSpaceBookingUsage_c1", request.booking_usage),
+        ):
+            selected = await frame.locator(
+                f"select#bookingFormControl1_{control} option:checked"
+            ).all_text_contents()
+            if selected != [expected]:
+                raise BookingUnavailable(
+                    "FBS changed the requested booking classification. Nothing was confirmed."
                 )
 
     @observed_step("booking.verify_result")

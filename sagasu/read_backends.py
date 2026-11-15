@@ -83,6 +83,7 @@ class HybridReads:
                 "booking_details",
                 "room_details",
                 "credit_status",
+                "booking_options",
                 "repeat",
                 "task_details",
                 "validate",

@@ -277,7 +277,17 @@ class PersonalStore:
             ]
 
     def save_template(
-        self, name, room, start_time, end_time, purpose, co_booker, *, co_bookers=None
+        self,
+        name,
+        room,
+        start_time,
+        end_time,
+        purpose,
+        co_booker,
+        *,
+        co_bookers=None,
+        usage_type="AdHoc",
+        booking_usage="Meeting",
     ):
         from .fbs_client import SearchConfig
 
@@ -310,6 +320,14 @@ class PersonalStore:
             "purpose": purpose.strip(),
             "co_booker": co_booker.strip().casefold(),
         }
+        from .booking_options import validate_usage
+
+        try:
+            payload["usage_type"], payload["booking_usage"] = validate_usage(
+                usage_type, booking_usage
+            )
+        except ValueError as error:
+            raise PersonalDataError(str(error)) from None
         if co_bookers is not None:
             if (
                 not isinstance(co_bookers, list)

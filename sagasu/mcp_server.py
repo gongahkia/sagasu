@@ -419,6 +419,8 @@ def create_server(
         co_booker: str | None = None,
         cobooker_id: str | None = None,
         co_bookers: list[str] | None = None,
+        usage_type: str = "AdHoc",
+        booking_usage: str = "Meeting",
     ) -> dict[str, Any]:
         """Review one exact leg/date from a room plan. candidate_index selects the candidate; occurrence_index selects an all_dates date, otherwise 0. Supply one co_booker/cobooker_id OR co_bookers (1–8 full SMU emails or unique saved IDs/names/aliases). Resolves all participants now; review values stay fixed. Validation/submission rechecks FBS. Never submits other legs or dates."""
         return safe(
@@ -431,6 +433,8 @@ def create_server(
             co_booker,
             cobooker_id,
             co_bookers,
+            usage_type,
+            booking_usage,
         )
 
     @server.tool(annotations=read)
@@ -500,6 +504,11 @@ def create_server(
     async def credit_status() -> dict[str, Any]:
         """Read starting allocation and currently available FBS credits from the native profile Credit Ledger. Amounts are decimal strings in FBS credits. Reports quota rules as unknown if not exposed here; use booking_details for an existing booking's credits deducted. Reads only labelled balances, without exporting profile contacts or the transaction ledger. Poll wait_operation; never changes profile data."""
         return safe(service.start, "credits")
+
+    @server.tool(annotations=read)
+    async def booking_options(search_operation_id: str, room: str) -> dict[str, Any]:
+        """Read current usage-type/category labels and estimated credits from an unsent form for a free room in a successful search. Rechecks availability, opens then discards the form; never selects participants or submits. Options/permissions depend on this room and account. Supply exact returned usage_type/booking_usage labels to a booking review; native FBS validates them again. Estimate applies only to displayed selections and may change. Poll wait_operation."""
+        return safe(service.booking_options, search_operation_id, room)
 
     @server.tool(annotations=read)
     async def booking_details(
@@ -587,6 +596,8 @@ def create_server(
         co_booker: str | None = None,
         cobooker_id: str | None = None,
         co_bookers: list[str] | None = None,
+        usage_type: str = "AdHoc",
+        booking_usage: str = "Meeting",
     ) -> dict[str, Any]:
         """Save/update an explicitly requested template by name. Snapshots room, times, purpose and resolved co-booker emails; contact changes do not rewrite it. Supply one co_booker/cobooker_id OR co_bookers with 1–8 full SMU emails/saved IDs/names/aliases. Does not book."""
         store = safe(service.personal_profile)
@@ -602,6 +613,8 @@ def create_server(
             purpose,
             participants[0],
             co_bookers=participants if co_bookers is not None else None,
+            usage_type=usage_type,
+            booking_usage=booking_usage,
         )
 
     @server.tool(
@@ -638,6 +651,8 @@ def create_server(
         co_booker: str | None = None,
         cobooker_id: str | None = None,
         co_bookers: list[str] | None = None,
+        usage_type: str | None = None,
+        booking_usage: str | None = None,
     ) -> dict[str, Any]:
         """Prepare one repeat-plan slot as an ordinary ten-minute review. Defaults to source room/details and all source co-bookers when their emails/coverage are verified. Supply one co_booker/cobooker_id OR co_bookers (1–8 full SMU emails or saved IDs/names/aliases) to override participants. Ask for missing fields. Final submission rechecks FBS; never submits a group implicitly."""
         return safe(
@@ -649,6 +664,8 @@ def create_server(
             co_booker,
             cobooker_id,
             co_bookers,
+            usage_type,
+            booking_usage,
         )
 
     @server.tool(annotations=local)
@@ -659,6 +676,8 @@ def create_server(
         co_booker: str | None = None,
         cobooker_id: str | None = None,
         co_bookers: list[str] | None = None,
+        usage_type: str = "AdHoc",
+        booking_usage: str = "Meeting",
     ) -> dict[str, Any]:
         """Prepare a ten-minute review of one free room. Supply one cobooker_id/co_booker OR co_bookers with 1–8 full SMU emails or unique saved IDs/names/aliases. Unsaved partial names require search_cobookers and selection of a verified email. All resolved participants are frozen in this review; inspect co_bookers when present (co_booker is its legacy first entry). Later contact/preference changes do not alter it. Does not submit."""
         return safe(
@@ -669,6 +688,8 @@ def create_server(
             co_booker,
             cobooker_id,
             co_bookers,
+            usage_type,
+            booking_usage,
         )
 
     @server.tool(annotations=local)
@@ -824,11 +845,17 @@ def create_server(
                     "search_rooms: partial preferences are one-off; use ISO dates and half-hour times",
                     "wait_operation: reuse the operation ID until terminal; never start duplicate jobs to poll",
                     "available_rooms: choose only a room free for the full interval",
-                    "For unsaved/partial co-booker names, search_cobookers with this search operation and room, then wait_operation; inspect coverage and let the user distinguish matches before using the exact email. Saving is optional and only on request.",
-                    "booking_review: exact room, purpose and saved co-booker ID or SMU email",
+                    "For unsaved/partial names, search_cobookers directly (room/search context is optional); inspect coverage and let the user distinguish matches before using exact emails. Saving is optional and only on request.",
+                    "booking_options reads native usage labels and estimated credits for a free room when needed",
+                    "booking_review: exact room, purpose, resolved co-booker(s), and requested usage_type/booking_usage; defaults are AdHoc/Meeting",
                     "Optional validate_booking, then wait_operation; validation does not submit",
                     "Submit using the advertised submission_tool only when the user requested the action",
                     "wait_operation, inspect actual fbs_status, and operation_receipt when available",
+                ],
+                "room_planning": [
+                    "plan_rooms: broad window, fixed duration, explicit dates OR bounded weekday recurrence; preserves FBS filters",
+                    "Inspect complete, ranking_complete and every date probe; failures are not unavailability",
+                    "planned_booking_review selects one candidate/date/leg; split/common/recurring plans never submit implicitly",
                 ],
                 "repeat_booking": [
                     "Read list_bookings/wait_operation for source references, or list_booking_templates for saved snapshots",
@@ -902,7 +929,7 @@ def create_server(
             "Handle this SMU room request: "
             + request
             + "\nRead sagasu://workflow and server_status first. In diagnostic mode read configuration_status and explain the local fixes before attempting FBS actions. Use one-off search preferences unless asked to save defaults. "
-            "Resolve saved co-bookers or use search_cobookers for an unsaved/partial name after selecting a free room; ask the user to distinguish multiple people. "
+            "Resolve saved co-bookers or use standalone search_cobookers for an unsaved/partial name; ask the user to distinguish multiple people. "
             "If the user asked to book, prepare the exact review and use the server's advertised submission_tool. "
             "Never submit on a search-only request. Report the actual FBS status and reference, and return a receipt when available."
         )

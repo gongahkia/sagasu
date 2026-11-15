@@ -141,6 +141,12 @@ class Backend:
                 from .fbs_catalogue import read_credit_status
 
                 return await read_credit_status(client)
+            if kind == "booking_options":
+                from .booking_options import read_booking_options
+
+                return await read_booking_options(
+                    client, payload["search"], payload["room"]
+                )
             if kind == "cobooker_search":
                 from .cobookers import search_cobookers, filter_candidates
 
@@ -936,6 +942,8 @@ class AgentService:
         co_booker=None,
         cobooker_id=None,
         co_bookers=None,
+        usage_type="AdHoc",
+        booking_usage="Meeting",
     ):
         plan = self._completed(operation_id, "room_plan")
         if any(
@@ -985,7 +993,14 @@ class AgentService:
         }
         try:
             return self._review_booking_result(
-                snapshot, leg["room"], purpose, co_booker, cobooker_id, co_bookers
+                snapshot,
+                leg["room"],
+                purpose,
+                co_booker,
+                cobooker_id,
+                co_bookers,
+                usage_type,
+                booking_usage,
             )
         except BookingUnavailable:
             raise AgentError(
@@ -1036,6 +1051,21 @@ class AgentService:
             "room_details", {"room": room.strip(), "include_image": include_image}
         )
 
+    def booking_options(self, search_operation_id, room):
+        from .fbs_client import RoomAvailability, TimeSlot
+
+        result = self._completed(search_operation_id, "search")
+        config = SearchConfig.from_mapping(result["config"])
+        require_future_booking(config)
+        matches = [row for row in result["rooms"] if row["name"] == room]
+        if len(matches) != 1 or not RoomAvailability(
+            room, [TimeSlot(**s) for s in matches[0]["timeslots"]]
+        ).is_free(config.start_time, config.end_time):
+            raise AgentError(
+                "Choose a room free for this search's complete interval before reading booking options."
+            )
+        return self.start("booking_options", {"search": config, "room": room})
+
     def search_cobookers(
         self, search_operation_id=None, room=None, query=None, school=None, year=None
     ):
@@ -1082,10 +1112,19 @@ class AgentService:
         co_booker=None,
         cobooker_id=None,
         co_bookers=None,
+        usage_type="AdHoc",
+        booking_usage="Meeting",
     ):
         result = self._completed(search_operation_id, "search")
         return self._review_booking_result(
-            result, room, purpose, co_booker, cobooker_id, co_bookers
+            result,
+            room,
+            purpose,
+            co_booker,
+            cobooker_id,
+            co_bookers,
+            usage_type,
+            booking_usage,
         )
 
     def resolve_cobookers(self, co_booker=None, cobooker_id=None, co_bookers=None):
@@ -1123,7 +1162,15 @@ class AgentService:
         return emails
 
     def _review_booking_result(
-        self, result, room, purpose, co_booker=None, cobooker_id=None, co_bookers=None
+        self,
+        result,
+        room,
+        purpose,
+        co_booker=None,
+        cobooker_id=None,
+        co_bookers=None,
+        usage_type="AdHoc",
+        booking_usage="Meeting",
     ):
         participants = self.resolve_cobookers(co_booker, cobooker_id, co_bookers)
         co_booker = participants[0]
@@ -1144,11 +1191,19 @@ class AgentService:
             raise AgentError(
                 "Provide a purpose of 1–200 characters and a valid SMU co-booker email."
             )
+        from .booking_options import validate_usage
+
+        try:
+            usage_type, booking_usage = validate_usage(usage_type, booking_usage)
+        except ValueError as error:
+            raise AgentError(str(error)) from None
         request = BookingRequest(
             search,
             room,
             purpose.strip(),
             co_booker,
+            usage_type=usage_type,
+            booking_usage=booking_usage,
             co_bookers=tuple(participants) if co_bookers is not None else (),
         )
         return self._review("book", request, request.to_dict())
@@ -1213,6 +1268,8 @@ class AgentService:
         co_booker=None,
         cobooker_id=None,
         co_bookers=None,
+        usage_type=None,
+        booking_usage=None,
     ):
         plan = self._completed(operation_id, "repeat")
         if type(slot_index) is not int or not 0 <= slot_index < len(plan["slots"]):
@@ -1240,6 +1297,20 @@ class AgentService:
             ),
             cobooker_id,
             co_bookers,
+            (
+                usage_type
+                if usage_type is not None
+                else details.get("usage_type")
+                or details.get("additional_details", {}).get("use_type")
+                or "AdHoc"
+            ),
+            (
+                booking_usage
+                if booking_usage is not None
+                else details.get("booking_usage")
+                or details.get("additional_details", {}).get("booking_usage")
+                or "Meeting"
+            ),
         )
 
     def review_cancellation(self, bookings_operation_id, reference_number, reason):

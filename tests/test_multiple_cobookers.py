@@ -262,6 +262,7 @@ class MultipleWorkflowTests(ServiceCase):
                     "end_time": "16:00",
                     "purpose": "Study",
                     "co_bookers": ["one@smu.edu.sg", "two@smu.edu.sg"],
+                    "booking_usage": "Research",
                 },
             )
             self.assertFalse(response.is_error)
@@ -284,3 +285,4 @@ class MultipleWorkflowTests(ServiceCase):
         operation = await self.finish(self.service.start("repeat", {}))
         review = self.service.repeat_review(operation.id, 0)
         self.assertEqual(list(review["summary"]["co_bookers"]), saved["co_bookers"])
+        self.assertEqual(review["summary"]["booking_usage"], "Research")

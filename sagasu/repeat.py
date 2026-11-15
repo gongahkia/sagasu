@@ -40,7 +40,7 @@ async def read_booking_details(client, reference):
     from .booking_details import read_booking_details as read_details
 
     return await read_details(
-        client, reference, source="bookings", include_additional=False
+        client, reference, source="bookings", include_additional=True
     )
 
 
