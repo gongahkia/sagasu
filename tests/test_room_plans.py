@@ -4,6 +4,8 @@ import asyncio
 import copy
 import json
 import unittest
+import tempfile
+from pathlib import Path
 from dataclasses import asdict
 from datetime import datetime
 from unittest.mock import AsyncMock, patch
@@ -13,6 +15,7 @@ from mcp import Client
 from sagasu.fbs_client import FBS_TIMEZONE, FBSError, SearchConfig
 from sagasu.mcp_server import create_server
 from sagasu.mcp_service import AgentError, AgentService, Backend
+from sagasu.personal import PersonalStore, PersonalDataError
 from sagasu.room_plans import find_room_plans, prepare_plan, MAX_CANDIDATES
 
 CONFIG = {
@@ -298,6 +301,87 @@ class PlannerTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PlanningWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_default_filter_planning_preserves_saved_scope_without_an_options_lookup_or_mutation(
+        self,
+    ):
+        with tempfile.TemporaryDirectory() as temporary:
+            self.service.profile = PersonalStore(Path(temporary) / "personal.sqlite3")
+            self.service.profile.update_preferences(
+                {
+                    "date_raw": "01 November 2099",
+                    "start_time": "08:00",
+                    "duration_hrs": 1,
+                    "buildings": ["Li Ka Shing Library"],
+                    "floors": ["Level 5"],
+                    "equipment": ["Projector"],
+                }
+            )
+            before = self.service.profile.preferences()
+            setup = lambda: {
+                "operational": True,
+                "mode": "operational",
+                "authentication": {},
+            }
+            async with Client(
+                create_server(self.service, configuration_provider=setup)
+            ) as client:
+                status = await client.call_tool("server_status")
+                self.assertEqual(
+                    status.structured_content["default_search"]["buildings"],
+                    ["Li Ka Shing Library"],
+                )
+                response = await client.call_tool(
+                    "plan_rooms",
+                    {
+                        "preferences": {
+                            "date_raw": "2099-11-02",
+                            "start_time": "12:00",
+                            "duration_hrs": 4,
+                        },
+                        "duration_minutes": 120,
+                    },
+                )
+                self.assertFalse(response.is_error, response.content)
+                job = self.service.get(response.structured_content["operation_id"])
+                await job.task
+                self.assertEqual(job.status, "succeeded")
+                config = self.backend.reads.direct.call_args.args[1]
+                self.assertEqual(
+                    (config.date, config.start_time, config.end_time),
+                    ("02-Nov-2099", "12:00", "16:00"),
+                )
+                self.assertEqual(config.buildings, ("Li Ka Shing Library",))
+                self.assertEqual(config.equipment, ("Projector",))
+                self.assertEqual(config.floors, ("Level 5",))
+                response = await client.call_tool(
+                    "plan_rooms",
+                    {"config": CONFIG, "preferences": {}, "duration_minutes": 120},
+                )
+                self.assertTrue(response.is_error)
+            self.assertEqual(before, self.service.profile.preferences())
+            self.assertEqual(self.backend.reads.direct.await_count, 1)
+
+    async def test_invalid_saved_defaults_do_not_hide_server_health(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            self.service.profile = PersonalStore(Path(temporary) / "personal.sqlite3")
+            setup = lambda: {
+                "operational": True,
+                "mode": "operational",
+                "authentication": {},
+            }
+            with patch.object(
+                self.service,
+                "get_preferences",
+                side_effect=PersonalDataError("PRIVATE"),
+            ):
+                async with Client(
+                    create_server(self.service, configuration_provider=setup)
+                ) as client:
+                    status = await client.call_tool("server_status")
+            self.assertFalse(status.is_error)
+            self.assertIsNone(status.structured_content["default_search"])
+            self.assertNotIn("PRIVATE", json.dumps(status.structured_content))
+
     async def asyncSetUp(self):
         self.backend = Backend(interactive_auth=False)
         self.backend.reads.mode = "api"

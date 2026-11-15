@@ -143,6 +143,7 @@ def create_server(
             "Never collect passwords in chat or rewrite configuration automatically. "
             "For an exact date/time interval use search_rooms, wait_operation and available_rooms. "
             "For a duration within a flexible window, multiple dates, common availability, recurring dates or a room-change plan, start directly with plan_rooms; it performs the searches and matching. Do not first run a redundant exact-window search. "
+            "server_status.default_search shows current search defaults. Use plan_rooms(preferences=...) to patch their date/window without rediscovering unchanged filter labels; preferences.duration_hrs sets the outer window, duration_minutes the required slot. "
             "When only one option is requested, wait_operation(limit=1) returns a compact candidate page; inspect completeness and per-date failures before drawing conclusions. "
             "All dates and times are SGT. Search results are snapshots; "
             "Read booking_horizon in search/availability results: it reports explicit FBS restrictions across checked rooms. "
@@ -369,6 +370,13 @@ def create_server(
         service.prune()
         setup = configuration()
         operational = setup["operational"]
+        default_search = None
+        if operational and service.profile is not None:
+            try:
+                default_search = service.get_preferences()["effective_search"]
+            except (PersonalDataError, ValueError, OSError):
+                # setup diagnostics must remain readable when saved defaults are invalid.
+                pass
         return {
             "version": __version__,
             "transport": "stdio",
@@ -376,6 +384,7 @@ def create_server(
             "host_pid": os.getpid(),
             "mode": setup["mode"],
             "operational": operational,
+            "default_search": default_search,
             "configuration_status_tool": "configuration_status",
             "configuration": setup,
             "backends": (
@@ -454,19 +463,20 @@ def create_server(
 
     @server.tool(annotations=read)
     async def plan_rooms(
-        config: SearchInput,
         duration_minutes: int,
+        config: SearchInput | None = None,
         dates: list[str] | None = None,
         mode: Literal["any", "common"] = "any",
         allow_split: bool = False,
         transition_minutes: int = 0,
         room_preferences: RoomPreferencesInput | None = None,
         recurrence: RecurrenceInput | None = None,
+        preferences: SearchPreferencesInput | None = None,
     ) -> dict[str, Any]:
-        """Plan fixed-duration rooms inside a broad time window, with one FBS read per date (1–31). Supply dates OR recurrence to override config.date; recurrence uses inclusive start/end dates, weekdays 0=Monday–6=Sunday and interval_weeks 1–4. Every generated date must be today/future. Per-date probes distinguish matches, unavailability and failures. any offers individual dates; common requires the same room AND start on every date. allow_split permits one room change only where no single room fits that start; transition_minutes adds a half-hour travel gap. Common does not split. Preserves FBS filters and future starts; saved room preferences apply unless overridden here. Poll, inspect horizons, complete and ranking_complete, then paginate candidates. Common all_dates legs apply to every date. Retains at most 200 candidates and bounds computation; incomplete ranking establishes neither the global best nor total. Each chosen date/leg needs planned_booking_review and requested submission; never books a series implicitly."""
+        """Plan fixed-duration rooms inside a broad window, one FBS read per date (1–31). Supply config OR preferences; omitting both uses saved search defaults shown by server_status.default_search. preferences patches defaults for this call only; duration_hrs sets the outer window, duration_minutes the required slot. Supply dates OR recurrence to override the date; recurrence weekdays are 0=Monday–6=Sunday. Dates must be today/future. any offers individual dates; common requires the same room/start on every date. allow_split permits one room change where no single room fits; transition_minutes adds travel time. Common does not split. Preserves filters and saved room preferences. Poll with limit=1 for one option; inspect per-date failures, horizons, complete and ranking_complete. Common all_dates legs apply to every date. Retains at most 200 candidates; incomplete ranking establishes neither the global best nor total. Each chosen date/leg needs planned_booking_review and requested submission; never books implicitly."""
         return safe(
             service.plan_rooms,
-            config.model_dump(),
+            config.model_dump() if config is not None else None,
             dates,
             duration_minutes,
             mode,
@@ -478,6 +488,11 @@ def create_server(
                 else None
             ),
             recurrence.model_dump() if recurrence is not None else None,
+            (
+                preferences.model_dump(exclude_unset=True)
+                if preferences is not None
+                else None
+            ),
         )
 
     @server.tool(annotations=local)

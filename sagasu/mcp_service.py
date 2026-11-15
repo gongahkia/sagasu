@@ -963,7 +963,7 @@ class AgentService:
 
     def plan_rooms(
         self,
-        config,
+        config=None,
         dates=None,
         duration_minutes=60,
         mode="any",
@@ -971,12 +971,32 @@ class AgentService:
         transition_minutes=0,
         room_preferences=None,
         recurrence=None,
+        preferences=None,
     ):
+        from dataclasses import asdict
         from .personal import validate_preferences
         from .room_plans import prepare_plan
         from .room_preferences import merge_preferences
 
+        if config is not None and preferences is not None:
+            raise AgentError("Provide config OR preferences, not both.")
         try:
+            if config is None:
+                merged = self.profile.preferences() if self.profile else {}
+                patch = validate_preferences(
+                    preferences if preferences is not None else {}
+                )
+                for key, value in patch.items():
+                    if value is None:
+                        merged.pop(key, None)
+                    else:
+                        merged[key] = value
+                config = {
+                    key: list(value) if isinstance(value, tuple) else value
+                    for key, value in asdict(
+                        search_config_from_preferences(merged)
+                    ).items()
+                }
             validated = validate_preferences(
                 {
                     k: config[k]
