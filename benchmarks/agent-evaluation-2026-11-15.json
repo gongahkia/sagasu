@@ -1,0 +1,340 @@
+{
+  "format": "sagasu.agent-evaluation-summary.v1",
+  "date": "2026-11-15",
+  "baseline_revision": "51fb3a274e8059c5b08add8b552f31312b8bed62",
+  "candidate_sagasu_tree": "2fc0c5eb95abe8fca27bd094f536f779dcda5f14",
+  "fixture_driver_blob": "135a10630dc34febd276d7940cc1441378aa33ab",
+  "dataset_blob": "50383e4e5f434e8d414c90693f33ee971d85688f",
+  "scope": "Actual Codex CLI reasoning/tool exchanges/startup over fictional FBS data. Excludes real FBS latency and user-specific Codex configuration. Input totals include cached tokens; reasoning remains included in output totals rather than added twice.",
+  "method": "Three repetitions per arm/case, baseline/candidate order alternated. Case groups used the identical immutable app package, fixture driver and dataset; harness changes strengthened grading and set invocation-only permissions for synthetic writes.",
+  "correctness": {
+    "scenarios": 11,
+    "matched_pairs": 33,
+    "total_trials": 66,
+    "cli_invocations": 78,
+    "all_selected_trials_passed": true,
+    "same_review_replay_verified": true,
+    "one_fixture_write_per_booking_trial": true,
+    "interrupted_actions_remained_unverified": true,
+    "uncertain_outcomes_checked_without_replacement": true,
+    "unrequested_write_review_tools_observed": false,
+    "real_fbs_writes": 0
+  },
+  "groups": [
+    {
+      "file": "benchmarks/agent-searches-2026-11-15.json",
+      "candidate_revision": "db14c45b7cb4ab6d373224dba42b3027d6ba1fac",
+      "evaluation_source_sha256": "de1a8218b04f6ab3d428793b9f2836b636d388d921cbdbfc9097d792f81baa50",
+      "cases": [
+        "flexible_time",
+        "split_rooms",
+        "common_dates",
+        "recurring_dates",
+        "failed_search",
+        "partial_name"
+      ],
+      "fixture_write_policy": "Read-only group; no submission calls were required"
+    },
+    {
+      "file": "benchmarks/agent-clarification-2026-11-15.json",
+      "candidate_revision": "23bee0ae654a2486b4a933c278d8c180a467512b",
+      "evaluation_source_sha256": "848bfb95d2d47ae57d456a5d77c1657c8fa4f9949996aeac5165d86051bbb180",
+      "cases": [
+        "ambiguous_person",
+        "ambiguous_date",
+        "relative_date"
+      ],
+      "fixture_write_policy": "Read-only group; no submission calls were required"
+    },
+    {
+      "file": "benchmarks/agent-replay-2026-11-15.json",
+      "candidate_revision": "18624b016709cfd6a17095e16321b41647ae2264",
+      "evaluation_source_sha256": "35f9d01324cb7adf6065e3ae5211ffb1679fdeb05158e306fd5d6d59c2172c0d",
+      "cases": [
+        "duplicate_submission"
+      ],
+      "fixture_write_policy": "Only submit_review on this synthetic MCP transport is preapproved for this invocation. No real client configuration, app safeguards or native FBS actions are changed."
+    },
+    {
+      "file": "benchmarks/agent-recovery-2026-11-15.json",
+      "candidate_revision": "eceb29546d891ca5eafa050a0bb235cc8d036926",
+      "evaluation_source_sha256": "4aced03b978678bb6c29f124830bb7dc741468eb2d07fc47bb2ba9b6de7f4053",
+      "cases": [
+        "unknown_submission"
+      ],
+      "fixture_write_policy": "Only submit_review on this synthetic MCP transport is preapproved for this invocation. No real client configuration, app safeguards or native FBS actions are changed."
+    }
+  ],
+  "cases": [
+    {
+      "name": "flexible_time",
+      "scenario_feature_ids": [
+        7
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 25919.545,
+        "reported_total_tokens": 175555
+      },
+      "candidate_medians": {
+        "elapsed_ms": 19069.416,
+        "reported_total_tokens": 101304
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -26.428,
+        "reported_total_tokens": -42.295
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "split_rooms",
+      "scenario_feature_ids": [
+        10
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 26073.155,
+        "reported_total_tokens": 154697
+      },
+      "candidate_medians": {
+        "elapsed_ms": 23137.71,
+        "reported_total_tokens": 124005
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -11.258,
+        "reported_total_tokens": -19.84
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "common_dates",
+      "scenario_feature_ids": [
+        8,
+        9
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 37517.309,
+        "reported_total_tokens": 240389
+      },
+      "candidate_medians": {
+        "elapsed_ms": 19122.304,
+        "reported_total_tokens": 121501
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -49.031,
+        "reported_total_tokens": -49.457
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "recurring_dates",
+      "scenario_feature_ids": [
+        20
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 32666.584,
+        "reported_total_tokens": 181469
+      },
+      "candidate_medians": {
+        "elapsed_ms": 25225.359,
+        "reported_total_tokens": 151924
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -22.779,
+        "reported_total_tokens": -16.281
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "failed_search",
+      "scenario_feature_ids": [],
+      "baseline_medians": {
+        "elapsed_ms": 24359.208,
+        "reported_total_tokens": 144962
+      },
+      "candidate_medians": {
+        "elapsed_ms": 19864.248,
+        "reported_total_tokens": 116689
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -18.453,
+        "reported_total_tokens": -19.504
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "partial_name",
+      "scenario_feature_ids": [
+        25,
+        26
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 32627.33,
+        "reported_total_tokens": 235278
+      },
+      "candidate_medians": {
+        "elapsed_ms": 20474.8,
+        "reported_total_tokens": 119312
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -37.246,
+        "reported_total_tokens": -49.289
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "ambiguous_person",
+      "scenario_feature_ids": [
+        25,
+        26
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 69305.68,
+        "reported_total_tokens": 482085
+      },
+      "candidate_medians": {
+        "elapsed_ms": 42377.892,
+        "reported_total_tokens": 236033
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -38.854,
+        "reported_total_tokens": -51.039
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "ambiguous_date",
+      "scenario_feature_ids": [
+        7
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 30199.209000000003,
+        "reported_total_tokens": 166406
+      },
+      "candidate_medians": {
+        "elapsed_ms": 31128.252,
+        "reported_total_tokens": 137222
+      },
+      "median_changes_percent": {
+        "elapsed_ms": 3.076,
+        "reported_total_tokens": -17.538
+      },
+      "direction": "mixed",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "relative_date",
+      "scenario_feature_ids": [
+        7
+      ],
+      "baseline_medians": {
+        "elapsed_ms": 25774.314,
+        "reported_total_tokens": 150226
+      },
+      "candidate_medians": {
+        "elapsed_ms": 19762.56,
+        "reported_total_tokens": 121167
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -23.325,
+        "reported_total_tokens": -19.344
+      },
+      "direction": "both_medians_lower",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "duplicate_submission",
+      "scenario_feature_ids": [],
+      "baseline_medians": {
+        "elapsed_ms": 38308.469,
+        "reported_total_tokens": 230680
+      },
+      "candidate_medians": {
+        "elapsed_ms": 35856.45,
+        "reported_total_tokens": 262311
+      },
+      "median_changes_percent": {
+        "elapsed_ms": -6.401,
+        "reported_total_tokens": 13.712
+      },
+      "direction": "mixed",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    },
+    {
+      "name": "unknown_submission",
+      "scenario_feature_ids": [],
+      "baseline_medians": {
+        "elapsed_ms": 48939.512,
+        "reported_total_tokens": 382408
+      },
+      "candidate_medians": {
+        "elapsed_ms": 49508.178,
+        "reported_total_tokens": 351790
+      },
+      "median_changes_percent": {
+        "elapsed_ms": 1.162,
+        "reported_total_tokens": -8.007
+      },
+      "direction": "mixed",
+      "trials": {
+        "baseline": 3,
+        "candidate": 3
+      }
+    }
+  ],
+  "evaluation_findings": [
+    "The first flexible-time evaluation used the old search path in all three candidate runs and regressed by 17.145 percent in reported tokens and 11.896 percent in elapsed time. Guidance now routes planning directly and planning can reuse one-off saved-default patches without a filter-options lookup.",
+    "Eight tested scenarios had lower median token totals and elapsed time. This is scenario evidence, not a universal retention verdict.",
+    "Basic booking replay used 13.712 percent more reported tokens while completing 6.401 percent faster. The cause of the token increase has not been isolated.",
+    "Ambiguous-date clarification was 3.076 percent slower despite using 17.538 percent fewer tokens. Lost-response recovery was 1.162 percent slower despite using 8.007 percent fewer tokens.",
+    "The test CLI initially rejected synthetic submission tools under its default never policy. Submission trials were rerun with submit_review preapproved only on the fixture transport; real user configuration and Sagasu safeguards were unchanged.",
+    "The initial recovery grader conflated an observed pending record with proof of the original action. The accepted recovery trials explicitly report action_outcome_verified=false and observe pending status without a replacement write."
+  ],
+  "limits": [
+    "Three samples per arm are exploratory medians, not statistical significance evidence or production latency estimates.",
+    "Structured facts, source room/time coverage, permissions and write counts were checked; the grader does not judge every phrase of freeform prose.",
+    "The scenario mix is not a measured distribution of the user's real workload.",
+    "Scenario feature tags do not independently prove every parameter/mode or feature's retention case. Native catalogue/amendment/credits, saved preferences/shortlists/aliases, batches, classifications, multiple co-bookers and diagnosis-specific token savings remain unevaluated end to end.",
+    "The four diagnostic/evaluation additions have functional verification; none is automatically exempt from the agreed future token/speed retention policy."
+  ],
+  "references": [
+    "https://learn.chatgpt.com/docs/non-interactive-mode",
+    "https://learn.chatgpt.com/docs/extend/mcp",
+    "https://developers.openai.com/api/docs/guides/token-counting"
+  ]
+}

@@ -1,0 +1,825 @@
+{
+  "format": "sagasu.agent-evaluation.v1",
+  "baseline_revision": "51fb3a274e8059c5b08add8b552f31312b8bed62",
+  "candidate_revision": "db14c45b7cb4ab6d373224dba42b3027d6ba1fac",
+  "source_isolation": "Both MCP packages and the shared fixture driver are immutable snapshots for this run; uncommitted changes are excluded",
+  "codex_version": "codex-cli 0.169.0",
+  "model": "CLI default, identical configuration in both arms",
+  "evaluation_source_sha256": "de1a8218b04f6ab3d428793b9f2836b636d388d921cbdbfc9097d792f81baa50",
+  "scope": "Synthetic MCP records; real Codex reasoning/tool exchanges/CLI startup included; excludes real FBS latency. Each sample is a fresh independent conversation task.",
+  "tokens": "Raw CLI usage. reported_total_tokens=input_tokens+output_tokens, without subtracting cached inputs; reasoning_output_tokens is retained separately without adding it a second time.",
+  "repetitions": 3,
+  "in_progress": false,
+  "cases": [
+    {
+      "name": "flexible_time",
+      "features": [
+        7
+      ],
+      "baseline": [
+        {
+          "status": "success",
+          "elapsed_ms": 26800.877,
+          "input_tokens": 175105,
+          "output_tokens": 492,
+          "cached_input_tokens": 145280,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 175597,
+          "mcp_calls": 6,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 25249.283,
+          "input_tokens": 175082,
+          "output_tokens": 473,
+          "cached_input_tokens": 157312,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 175555,
+          "mcp_calls": 6,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 25919.545,
+          "input_tokens": 146124,
+          "output_tokens": 374,
+          "cached_input_tokens": 117888,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 146498,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "candidate": [
+        {
+          "status": "success",
+          "elapsed_ms": 20951.182,
+          "input_tokens": 119106,
+          "output_tokens": 389,
+          "cached_input_tokens": 103040,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 119495,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 18652.505,
+          "input_tokens": 100954,
+          "output_tokens": 350,
+          "cached_input_tokens": 88960,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 101304,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 19069.416,
+          "input_tokens": 100874,
+          "output_tokens": 349,
+          "cached_input_tokens": 88832,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 101223,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "equivalent_correctness": true,
+      "median_changes_percent": {
+        "elapsed_ms": -26.428,
+        "reported_total_tokens": -42.295
+      },
+      "retention_status": "review_measured_changes"
+    },
+    {
+      "name": "split_rooms",
+      "features": [
+        10
+      ],
+      "baseline": [
+        {
+          "status": "success",
+          "elapsed_ms": 26073.155,
+          "input_tokens": 154179,
+          "output_tokens": 518,
+          "cached_input_tokens": 123776,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 154697,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 25744.384,
+          "input_tokens": 154800,
+          "output_tokens": 609,
+          "cached_input_tokens": 97280,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 155409,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 28444.097,
+          "input_tokens": 147298,
+          "output_tokens": 529,
+          "cached_input_tokens": 118656,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 147827,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "candidate": [
+        {
+          "status": "success",
+          "elapsed_ms": 19303.764,
+          "input_tokens": 123606,
+          "output_tokens": 417,
+          "cached_input_tokens": 105984,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 124023,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 24277.348,
+          "input_tokens": 120640,
+          "output_tokens": 409,
+          "cached_input_tokens": 91904,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 121049,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 23137.71,
+          "input_tokens": 123594,
+          "output_tokens": 411,
+          "cached_input_tokens": 105984,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 124005,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "equivalent_correctness": true,
+      "median_changes_percent": {
+        "elapsed_ms": -11.258,
+        "reported_total_tokens": -19.84
+      },
+      "retention_status": "review_measured_changes"
+    },
+    {
+      "name": "common_dates",
+      "features": [
+        8,
+        9
+      ],
+      "baseline": [
+        {
+          "status": "success",
+          "elapsed_ms": 41385.745,
+          "input_tokens": 267228,
+          "output_tokens": 818,
+          "cached_input_tokens": 245760,
+          "reasoning_output_tokens": 9,
+          "reported_total_tokens": 268046,
+          "mcp_calls": 15,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 37517.309,
+          "input_tokens": 239528,
+          "output_tokens": 861,
+          "cached_input_tokens": 217728,
+          "reasoning_output_tokens": 11,
+          "reported_total_tokens": 240389,
+          "mcp_calls": 16,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "configuration_status",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 26875.226,
+          "input_tokens": 176051,
+          "output_tokens": 631,
+          "cached_input_tokens": 146304,
+          "reasoning_output_tokens": 11,
+          "reported_total_tokens": 176682,
+          "mcp_calls": 12,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_options",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "candidate": [
+        {
+          "status": "success",
+          "elapsed_ms": 18695.277,
+          "input_tokens": 121080,
+          "output_tokens": 421,
+          "cached_input_tokens": 104192,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 121501,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 19122.304,
+          "input_tokens": 121144,
+          "output_tokens": 437,
+          "cached_input_tokens": 104576,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 121581,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 20344.089,
+          "input_tokens": 101138,
+          "output_tokens": 381,
+          "cached_input_tokens": 76928,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 101519,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "equivalent_correctness": true,
+      "median_changes_percent": {
+        "elapsed_ms": -49.031,
+        "reported_total_tokens": -49.457
+      },
+      "retention_status": "review_measured_changes"
+    },
+    {
+      "name": "recurring_dates",
+      "features": [
+        20
+      ],
+      "baseline": [
+        {
+          "status": "success",
+          "elapsed_ms": 32666.584,
+          "input_tokens": 180839,
+          "output_tokens": 630,
+          "cached_input_tokens": 161792,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 181469,
+          "mcp_calls": 7,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 24701.093,
+          "input_tokens": 174034,
+          "output_tokens": 599,
+          "cached_input_tokens": 157312,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 174633,
+          "mcp_calls": 7,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 40933.051,
+          "input_tokens": 193344,
+          "output_tokens": 773,
+          "cached_input_tokens": 177664,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 194117,
+          "mcp_calls": 11,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "candidate": [
+        {
+          "status": "success",
+          "elapsed_ms": 25225.359,
+          "input_tokens": 127294,
+          "output_tokens": 472,
+          "cached_input_tokens": 78720,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 127766,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 23652.974,
+          "input_tokens": 151501,
+          "output_tokens": 423,
+          "cached_input_tokens": 132352,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 151924,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 27115.265,
+          "input_tokens": 151638,
+          "output_tokens": 463,
+          "cached_input_tokens": 132480,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 152101,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "plan_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "available",
+          "native_writes": 0
+        }
+      ],
+      "equivalent_correctness": true,
+      "median_changes_percent": {
+        "elapsed_ms": -22.779,
+        "reported_total_tokens": -16.281
+      },
+      "retention_status": "review_measured_changes"
+    },
+    {
+      "name": "failed_search",
+      "features": [],
+      "baseline": [
+        {
+          "status": "success",
+          "elapsed_ms": 24359.208,
+          "input_tokens": 143153,
+          "output_tokens": 376,
+          "cached_input_tokens": 127488,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 143529,
+          "mcp_calls": 5,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "configuration_status",
+            "search_options",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "unknown",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 18273.24,
+          "input_tokens": 144643,
+          "output_tokens": 319,
+          "cached_input_tokens": 129280,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 144962,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "configuration_status",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "unknown",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 29105.292,
+          "input_tokens": 146005,
+          "output_tokens": 343,
+          "cached_input_tokens": 118528,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 146348,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "configuration_status",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "unknown",
+          "native_writes": 0
+        }
+      ],
+      "candidate": [
+        {
+          "status": "success",
+          "elapsed_ms": 19864.248,
+          "input_tokens": 116344,
+          "output_tokens": 345,
+          "cached_input_tokens": 101632,
+          "reasoning_output_tokens": 20,
+          "reported_total_tokens": 116689,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "unknown",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 18273.015,
+          "input_tokens": 116197,
+          "output_tokens": 326,
+          "cached_input_tokens": 76160,
+          "reasoning_output_tokens": 15,
+          "reported_total_tokens": 116523,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "unknown",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 20944.416,
+          "input_tokens": 143261,
+          "output_tokens": 372,
+          "cached_input_tokens": 115968,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 143633,
+          "mcp_calls": 4,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "search_rooms",
+            "server_status",
+            "support_bundle",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "unknown",
+          "native_writes": 0
+        }
+      ],
+      "equivalent_correctness": true,
+      "median_changes_percent": {
+        "elapsed_ms": -18.453,
+        "reported_total_tokens": -19.504
+      },
+      "retention_status": "review_measured_changes"
+    },
+    {
+      "name": "partial_name",
+      "features": [
+        25,
+        26
+      ],
+      "baseline": [
+        {
+          "status": "success",
+          "elapsed_ms": 32627.33,
+          "input_tokens": 234620,
+          "output_tokens": 587,
+          "cached_input_tokens": 215680,
+          "reasoning_output_tokens": 7,
+          "reported_total_tokens": 235207,
+          "mcp_calls": 8,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_cobookers",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "verified",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 30040.028,
+          "input_tokens": 255265,
+          "output_tokens": 595,
+          "cached_input_tokens": 233344,
+          "reasoning_output_tokens": 25,
+          "reported_total_tokens": 255860,
+          "mcp_calls": 8,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_cobookers",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "verified",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 33954.999,
+          "input_tokens": 234692,
+          "output_tokens": 586,
+          "cached_input_tokens": 215680,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 235278,
+          "mcp_calls": 8,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "available_rooms",
+            "search_cobookers",
+            "search_rooms",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "verified",
+          "native_writes": 0
+        }
+      ],
+      "candidate": [
+        {
+          "status": "success",
+          "elapsed_ms": 20474.8,
+          "input_tokens": 118951,
+          "output_tokens": 323,
+          "cached_input_tokens": 91264,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 119274,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "search_cobookers",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "verified",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 25545.594,
+          "input_tokens": 119010,
+          "output_tokens": 315,
+          "cached_input_tokens": 103296,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 119325,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "search_cobookers",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "verified",
+          "native_writes": 0
+        },
+        {
+          "status": "success",
+          "elapsed_ms": 17214.876,
+          "input_tokens": 118989,
+          "output_tokens": 323,
+          "cached_input_tokens": 91264,
+          "reasoning_output_tokens": 0,
+          "reported_total_tokens": 119312,
+          "mcp_calls": 3,
+          "command_executions": 0,
+          "mcp_tool_names": [
+            "search_cobookers",
+            "server_status",
+            "wait_operation"
+          ],
+          "grading_errors": [],
+          "reported_decision": "verified",
+          "native_writes": 0
+        }
+      ],
+      "equivalent_correctness": true,
+      "median_changes_percent": {
+        "elapsed_ms": -37.246,
+        "reported_total_tokens": -49.289
+      },
+      "retention_status": "review_measured_changes"
+    }
+  ],
+  "ok": true,
+  "completed_case_group": "Six search/directory scenarios; clarification and replay scenarios are evaluated separately with strengthened grading",
+  "candidate_sagasu_tree": "2fc0c5eb95abe8fca27bd094f536f779dcda5f14",
+  "fixture_driver_blob": "135a10630dc34febd276d7940cc1441378aa33ab",
+  "dataset_blob": "50383e4e5f434e8d414c90693f33ee971d85688f"
+}
