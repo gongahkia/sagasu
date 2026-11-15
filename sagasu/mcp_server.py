@@ -780,6 +780,11 @@ def create_server(
         """Read the immutable details of an unexpired, unconsumed review."""
         return safe(service.review, review_id)
 
+    @server.tool(annotations=local)
+    async def batch_review(review_ids: list[str]) -> dict[str, Any]:
+        """Combine 1–20 existing booking/cancellation/approval reviews into one immutable review. Does not submit; the normal advertised submission tool and confirmation policy apply. Rejects duplicate/competing targets and expired/consumed members. Each native action gets its own operation/history; successes are not rolled back on other failures. Poll the batch operation, inspect paginated members and use authentication_status for authentication_operations IDs. Never retries failed/unknown actions. Batch monitors expire on restart; individual write outcomes remain in action_history."""
+        return safe(service.review_batch, review_ids)
+
     @server.tool(annotations=read)
     async def validate_booking(review_id: str) -> dict[str, Any]:
         """Start the complete pre-confirmation FBS booking flow for a review. Never submits the final booking. Poll the operation ID."""

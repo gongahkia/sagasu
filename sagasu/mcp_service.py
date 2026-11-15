@@ -270,6 +270,7 @@ class Job:
     history_warning: str | None = None
     summary: dict = field(default_factory=dict)
     reconciliation: dict | None = None
+    batch_members: list = field(default_factory=list, repr=False)
 
     @property
     def terminal(self):
@@ -540,6 +541,11 @@ class AgentService:
     @observed_operation("agent.operation")
     async def _run(self, job, payload):
         event("agent.operation_started", agent_operation_id=job.id, kind=job.kind)
+        if job.kind == "batch":
+            from .batches import run_batch
+
+            await run_batch(self, job, payload)
+            return
         reconcile = (
             "Check Task List and the booking before retrying"
             if job.kind == "approve_task"
@@ -686,9 +692,15 @@ class AgentService:
             raise AgentError("Use offset >= 0 and limit between 1 and 50.")
         job = self.get(operation_id)
         output = job.public()
-        if job.result is not None:
-            result = copy.deepcopy(job.result)
-            for key in ("rooms", "bookings", "tasks", "candidates"):
+        if job.batch_members:
+            from .batches import batch_result
+
+            current = batch_result(job)
+        else:
+            current = job.result
+        if current is not None:
+            result = copy.deepcopy(current)
+            for key in ("rooms", "bookings", "tasks", "candidates", "members"):
                 if isinstance(result.get(key), list):
                     rows = result[key]
                     result[key] = rows[offset : offset + limit]
@@ -1525,6 +1537,51 @@ class AgentService:
             }
         )
 
+    def review_batch(self, review_ids):
+        from .reconciliation import identity
+
+        if (
+            not isinstance(review_ids, list)
+            or not 1 <= len(review_ids) <= 20
+            or any(not isinstance(key, str) for key in review_ids)
+            or len(set(review_ids)) != len(review_ids)
+        ):
+            raise AgentError("Choose 1–20 distinct existing action review IDs.")
+        members, seen, references = [], set(), set()
+        for key in review_ids:
+            self.review(key)
+            review = self.reviews[key]
+            if review["kind"] not in WRITE_KINDS:
+                raise AgentError(
+                    "Batches accept individual native-action reviews, not other batches."
+                )
+            summary = action_summary(review["kind"], review["payload"])
+            target = identity(review["kind"], summary)
+            reference = summary.get("reference_number")
+            if target in seen or reference and reference in references:
+                raise AgentError(
+                    "This batch contains duplicate or competing actions for the same booking. Review them separately."
+                )
+            seen.add(target)
+            if reference:
+                references.add(reference)
+            members.append(copy.deepcopy(review))
+        result = self._review(
+            "batch",
+            members,
+            {
+                "actions": [
+                    {key: member[key] for key in ("review_id", "kind", "summary")}
+                    for member in members
+                ],
+                "policy": "Each action executes independently. Inspect individual outcomes; no group rollback or automatic retries. The batch monitor is ephemeral; individual write outcomes persist.",
+            },
+        )
+        self.reviews[result["review_id"]]["expires_at"] = min(
+            member["expires_at"] for member in members
+        )
+        return self.review(result["review_id"])
+
     def validate(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
@@ -1538,6 +1595,25 @@ class AgentService:
     def confirm(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
+        if review["kind"] == "batch":
+            if self.journal_failed:
+                raise AgentError("Action history failed; no batch action was queued.")
+            for member in review["payload"]:
+                self.review(member["review_id"])
+                if self.reviews[member["review_id"]]["summary"] != member["summary"]:
+                    raise AgentError(
+                        "A batch member changed; prepare a fresh batch review."
+                    )
+                if member["kind"] == "book":
+                    require_future_booking(member["payload"].search)
+            job = self.start("batch", review["payload"])
+            for key in [
+                review_id,
+                *(member["review_id"] for member in review["payload"]),
+            ]:
+                self.submitted_reviews[key] = job["operation_id"]
+                del self.reviews[key]
+            return job
         if review["kind"] == "book":
             require_future_booking(review["payload"].search)
         job = self.start(review["kind"], review["payload"], review_id=review_id)
@@ -1566,7 +1642,9 @@ class AgentService:
     async def cancel(self, operation_id):
         job = self.get(operation_id)
         if not job.terminal:
-            if job.kind in WRITE_KINDS and job.status != "queued":
+            if (
+                job.kind in WRITE_KINDS or job.kind == "batch"
+            ) and job.status != "queued":
                 raise AgentError(
                     "A write is running. Wait for verification; it cannot safely be interrupted."
                 )
