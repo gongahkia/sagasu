@@ -1,0 +1,34 @@
+{
+  "scope": "Conversation tests, automatic operation failure screenshots, benchmark comparisons and redacted support bundles. Scheduling and notification features are deferred.",
+  "failure_screenshots": {
+    "discovery": "Failed retained operations advertise failure_screenshot_available",
+    "retrieve": "operation_receipt(operation_id, failure=true)",
+    "capture": "First observed browser failure before cleanup and browser queue release; never navigates or signs in to get an image",
+    "privacy": "Form controls and unrelated frames are masked; authentication pages are refused. Other visible FBS text may contain private booking data, so images are separate from redacted support bundles.",
+    "limits": "One image up to 4 MiB per failed/unknown operation, bounded by the existing operation count/TTL. No image is promised when no browser exists, the page changes, capture fails or authentication is present. No images survive restart. Screenshot failures do not alter write outcomes or trigger retries."
+  },
+  "support_bundle": {
+    "tool": "support_bundle(operation_id)",
+    "included": "Operation ID/kind/status/times, setup-check names/statuses, at most 100 task-local events with timings, exception type and code locations",
+    "excluded": "Raw log files, raw exception messages, URLs, configuration values/paths, credentials, cookies, MFA prompts, booking references/details/purpose, contacts, screenshots and amendment comparison keys",
+    "retention": "Traces follow existing in-memory operation retention. Recovered write history has no historical trace or image.",
+    "interpretation": "The bundle is diagnostic evidence, not proof of success, empty availability or safe retry. Reconcile uncertain writes."
+  },
+  "backend_regression_comparison": {
+    "command": "python -m benchmarks.compare baseline.json candidate.json --output comparison.json",
+    "inputs": "Completed benchmark reports with identical comparison_context and unique case names",
+    "defaults": "At least five samples; flag success-latency growth exceeding both 20 percent and 100 ms, or failure-rate growth of at least five percentage points",
+    "exit_codes": {"0": "Complete comparison without threshold alerts", "1": "Regression threshold exceeded", "2": "Invalid inputs, unmatched/skipped cases or insufficient samples"},
+    "limits": "Threshold alerts are not statistical significance tests. Successful latency does not hide failed samples. Backend timings and structured response bytes are not model token or end-to-end speed savings."
+  },
+  "conversation_evaluation": {
+    "command": "python -m benchmarks.conversations --run --repetitions 3 --output .sagasu/benchmarks/agent-evaluation.json",
+    "selection": "Repeat --case CASE_ID to run selected cases from benchmarks/conversation_cases.json",
+    "isolation": "Actual noninteractive Codex calls use only a synthetic Sagasu MCP. Both MCP packages come from immutable Git snapshots; the baseline defaults to 51fb3a2. No real .env, FBS session/profile, saved contacts or live booking writes are used. Unimplemented fixture operations fail instead of falling through to FBS.",
+    "measurement": "Full CLI-reported input/output/cached/reasoning tokens, end-to-end elapsed time including CLI startup and tool exchanges, MCP/command counts, tool names, independently graded room/time coverage and native fixture write counts",
+    "conversations": "Clarification cases include an initial request and a follow-up. Follow-ups replay the user/assistant text into a fresh CLI task and fixture context; they do not test Codex resume or shared-host continuation.",
+    "ordering": "Baseline/candidate order alternates across repetitions. Real model calls require explicit --run and are excluded from ordinary unit tests/CI.",
+    "interpretation": "Only compare savings when both arms pass the same correctness checks. Fewer calls alone are insufficient. Under three repetitions is exploratory; retain raw sample variation and review results rather than asserting significance or universal savings. Real FBS latency and user-specific Codex configuration are outside this synthetic comparison.",
+    "coverage": "Reports enumerate unevaluated feature IDs. Features not exercised by the dataset remain subject to the agreed evaluation policy; this harness does not establish their retention case automatically."
+  }
+}
