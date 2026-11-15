@@ -1,6 +1,7 @@
 """Private host configuration for Sagasu's agent runtime and browser."""
 
 import os
+import stat
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,7 +80,7 @@ class Settings:
     @property
     def env_file_exists(self):
         try:
-            return self.env_file.is_file()
+            return stat.S_ISREG(self.env_file.stat().st_mode)
         except OSError:
             return False
 
@@ -128,7 +129,7 @@ class Settings:
                 # A fallback path is for diagnostics only, never another source
                 # of credentials or operational settings.
                 pass
-            elif path.exists() and not path.is_file():
+            elif not stat.S_ISREG(path.stat().st_mode):
                 issue(
                     "config.file",
                     "The environment-file path must name a file.",
@@ -136,6 +137,8 @@ class Settings:
                 )
             else:
                 file_values = dotenv_values(path, interpolate=False)
+        except FileNotFoundError:
+            pass
         except (OSError, UnicodeError):
             issue(
                 "config.file",
