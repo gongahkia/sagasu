@@ -166,6 +166,15 @@ class FBSReadAPI:
         async def post(target, changes=None):
             return SearchForm(await self.document(url, form.payload(target, changes)))
 
+        # targeted browser reads leave this keyword in FBS's saved form state.
+        keyword = "panel$SimpleSearch_c1"
+        if form.fields().get(keyword, "").strip():
+            form = await post(
+                "panel$buttonSimpleSearch$buttonSimpleSearch_bt", {keyword: ""}
+            )
+            if form.fields().get(keyword, "").strip():
+                raise HTTPReadUnavailable("facility_keyword_not_cleared")
+
         target_date = datetime.strptime(config.date, "%d-%b-%Y").date()
         for _ in range(33):
             try:
@@ -200,6 +209,8 @@ class FBSReadAPI:
         if form.fields().get("DropCapacity_c1", "") != capacity:
             form = await post("DropCapacity_c1", {"DropCapacity_c1": capacity})
         fields = form.fields()
+        if fields.get(keyword, "").strip():
+            raise HTTPReadUnavailable("facility_keyword_not_cleared")
         if fields.get("DropCapacity_c1", "") != capacity or any(
             fields.get(control + "_textValue", "")
             != form.multi_values(control, getattr(config, attribute))

@@ -33,6 +33,7 @@ READ_TARGETS = {
     "BtnDpcNext$BtnDpcNext_bt",
     "BtnDpcPrev$BtnDpcPrev_bt",
     "CheckAvailability$CheckAvailability_bt",
+    "panel$buttonSimpleSearch$buttonSimpleSearch_bt",
     *(control + "_textValue" for control, _ in FILTERS),
 }
 

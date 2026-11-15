@@ -29,6 +29,7 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
             "from": "10:00",
             "to": "12:00",
             "building": "",
+            "keyword": "",
             "posts": [],
             "invalid_state": False,
         }
@@ -78,6 +79,9 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                     + str(state["version"])
                     + '"><input name="DateBookingFrom_c1$textDate" value="'
                     + state["date"]
+                    + '">'
+                    + '<input name="panel$SimpleSearch_c1" value="'
+                    + state["keyword"]
                     + '">'
                 )
                 for label, key in [("TimeFrom_c1", "from"), ("TimeTo_c1", "to")]:
@@ -159,11 +163,16 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                     "BtnDpcNext$BtnDpcNext_bt",
                     "BtnDpcPrev$BtnDpcPrev_bt",
                     "CheckAvailability$CheckAvailability_bt",
+                    "panel$buttonSimpleSearch$buttonSimpleSearch_bt",
                 } or target.startswith("DropMulti")
                 if not self.assert_read_target:
                     self.send(405, "write forbidden")
                     return
                 state["version"] += 1
+                if not state.get("retain_keyword"):
+                    state["keyword"] = fields.get("panel$SimpleSearch_c1", "")
+                if state.get("reintroduce_keyword") and target == "TimeFrom_c1$ctl04":
+                    state["keyword"] = "Room A"
                 if target.startswith("BtnDpc"):
                     date = datetime.strptime(state["date"], "%d-%b-%Y") + timedelta(
                         days=1 if "Next" in target else -1
@@ -243,6 +252,30 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(result.bookable_rooms), 1)
         self.assertEqual(self.state["DropMultiFacilityTypeList_c1_textValue"], "1")
         self.assertFalse(self.state["invalid_state"])
+
+    async def test_broad_search_clears_keyword_left_by_targeted_directory_lookup(self):
+        self.state["keyword"] = "Room A"
+        result = await self.api.search(SearchConfig("10-Nov-2099", "10:00", "12:00"))
+        self.assertEqual(len(result.rooms), 1)
+        self.assertEqual(self.state["keyword"], "")
+        self.assertEqual(
+            self.state["posts"][0], "panel$buttonSimpleSearch$buttonSimpleSearch_bt"
+        )
+        self.assertFalse(self.state["invalid_state"])
+
+    async def test_retained_keyword_cannot_report_a_narrowed_search_as_complete(self):
+        self.state.update(keyword="Room A", retain_keyword=True)
+        with self.assertRaises(HTTPReadUnavailable) as caught:
+            await self.api.search(SearchConfig("10-Nov-2099", "10:00", "12:00"))
+        self.assertEqual(caught.exception.code, "facility_keyword_not_cleared")
+        self.assertNotIn("CheckAvailability$CheckAvailability_bt", self.state["posts"])
+
+    async def test_postbacks_cannot_silently_restore_a_facility_keyword(self):
+        self.state["reintroduce_keyword"] = True
+        with self.assertRaises(HTTPReadUnavailable) as caught:
+            await self.api.search(SearchConfig("10-Nov-2099", "10:00", "12:00"))
+        self.assertEqual(caught.exception.code, "facility_keyword_not_cleared")
+        self.assertNotIn("CheckAvailability$CheckAvailability_bt", self.state["posts"])
 
     async def test_unavailable_or_unknown_types_cannot_clear_the_facility_filter(self):
         for types in [("Project Room",), ("Unknown type", "Group Study Room")]:
