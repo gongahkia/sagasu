@@ -10,7 +10,7 @@ import re
 import secrets
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .personal_options import SCRAPE_PARAM_CHOICES
@@ -144,6 +144,9 @@ class PersonalStore:
                 connection.execute(
                     "CREATE TABLE IF NOT EXISTS contact_aliases (scope TEXT NOT NULL, contact_id TEXT NOT NULL, alias TEXT NOT NULL, alias_key TEXT NOT NULL, PRIMARY KEY(scope,contact_id,alias_key))"
                 )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS saved_room_plans (scope TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,name))"
+                )
             if write:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection
@@ -265,6 +268,94 @@ class PersonalStore:
                 (self.scope, contact_id),
             )
         return {"deleted": True, "id": contact_id}
+
+    def saved_room_plans(self):
+        from .room_shortlists import validate_shortlist, shortlist_summary
+
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT id,name,payload,updated_at FROM saved_room_plans WHERE scope=? ORDER BY name LIMIT 51",
+                (self.scope,),
+            ).fetchall()
+            if len(rows) > 50:
+                raise PersonalDataError(
+                    "Saved room plans exceed their supported storage limit."
+                )
+            return [
+                {
+                    "id": key,
+                    "name": name,
+                    "updated_at": updated,
+                    **shortlist_summary(validate_shortlist(json.loads(payload))),
+                }
+                for key, name, payload, updated in rows
+            ]
+
+    def saved_room_plan(self, plan_id):
+        from .room_shortlists import validate_shortlist
+
+        with self._db() as db:
+            row = db.execute(
+                "SELECT name,payload,updated_at FROM saved_room_plans WHERE scope=? AND id=?",
+                (self.scope, plan_id),
+            ).fetchone()
+            if not row:
+                raise PersonalDataError("That saved room plan no longer exists.")
+            return {
+                "id": plan_id,
+                "name": row[0],
+                "updated_at": row[2],
+                "plan": validate_shortlist(json.loads(row[1])),
+            }
+
+    def save_room_plan(self, name, payload):
+        from .room_shortlists import validate_shortlist, shortlist_summary
+
+        if (
+            not isinstance(name, str)
+            or not 1 <= len(name.strip()) <= 80
+            or any(ord(c) < 32 or ord(c) == 127 for c in name)
+        ):
+            raise PersonalDataError(
+                "Use a single-line saved-plan name of 1–80 characters."
+            )
+        payload = validate_shortlist(payload)
+        updated = datetime.now(timezone.utc).isoformat()
+        with self._db(write=True) as db:
+            existing = db.execute(
+                "SELECT id FROM saved_room_plans WHERE scope=? AND name=?",
+                (self.scope, name.strip()),
+            ).fetchone()
+            if (
+                not existing
+                and db.execute(
+                    "SELECT COUNT(*) FROM saved_room_plans WHERE scope=?", (self.scope,)
+                ).fetchone()[0]
+                >= 50
+            ):
+                raise PersonalDataError(
+                    "Saved room plans are limited to 50 per profile."
+                )
+            key = existing[0] if existing else secrets.token_urlsafe(12)
+            db.execute(
+                "INSERT INTO saved_room_plans VALUES(?,?,?,?,?) ON CONFLICT(scope,id) DO UPDATE SET name=excluded.name,payload=excluded.payload,updated_at=excluded.updated_at",
+                (self.scope, key, name.strip(), json.dumps(payload), updated),
+            )
+        return {
+            "id": key,
+            "name": name.strip(),
+            "updated_at": updated,
+            **shortlist_summary(payload),
+        }
+
+    def delete_room_plan(self, plan_id):
+        with self._db(write=True) as db:
+            if not db.execute(
+                "DELETE FROM saved_room_plans WHERE scope=? AND id=?",
+                (self.scope, plan_id),
+            ).rowcount:
+                raise PersonalDataError("That saved room plan no longer exists.")
+        return {"id": plan_id, "deleted": True}
 
     def templates(self):
         with self._db() as db:

@@ -56,5 +56,15 @@
     "booking_list_unchanged": true,
     "submitted": false
   },
+  "saved_shortlists": {
+    "isolated_temporary_store": true,
+    "restart_verified": true,
+    "selected_dates": 2,
+    "refresh_queries": 2,
+    "independently_verified_exact_legs": 2,
+    "complete": true,
+    "booking_list_unchanged": true,
+    "submitted": false
+  },
   "end_to_end_evaluation": "Pending; no token or speed savings claimed"
 }

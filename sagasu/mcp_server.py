@@ -307,6 +307,50 @@ def create_server(
         )
 
     @server.tool(annotations=local)
+    async def list_saved_plans(plan_id: str | None = None) -> dict[str, Any]:
+        """List compact private shortlist metadata retained across sessions, or pass plan_id to inspect its complete saved choices without contacting FBS. These are historical snapshots, not reservations. Use refresh_saved_plan before reviewing a booking."""
+        if plan_id is not None:
+            return {
+                **safe(safe(service.personal_profile).saved_room_plan, plan_id),
+                "availability": "historical_snapshot_requires_refresh",
+            }
+        plans = safe(safe(service.personal_profile).saved_room_plans)
+        return {"plans": plans, "total": len(plans)}
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        )
+    )
+    async def save_room_plan(
+        name: str,
+        operation_id: str,
+        candidate_indices: list[int] | None = None,
+        rooms: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Save/update an explicitly requested shortlist by name. For a completed plan supply 1–20 candidate_indices; for a completed search supply 1–20 exact free rooms. Preserves selected dates/legs and original FBS filters, without people, purpose or booking authority. Max 31 dates/64 legs and 50 saved plans. Never saves other candidates implicitly or books. Existing reviews and queued refreshes stay unchanged."""
+        return safe(
+            service.save_room_plan, name, operation_id, candidate_indices, rooms
+        )
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False, destructive_hint=True, open_world_hint=False
+        )
+    )
+    async def delete_saved_plan(plan_id: str) -> dict[str, Any]:
+        """Delete an explicitly selected local shortlist. Does not cancel bookings or alter existing reviews/refresh snapshots."""
+        return safe(safe(service.personal_profile).delete_room_plan, plan_id)
+
+    @server.tool(annotations=read)
+    async def refresh_saved_plan(plan_id: str) -> dict[str, Any]:
+        """Refresh only a saved shortlist's exact rooms/dates/times and original FBS filters, with one availability read per nonelapsed date. No alternative is introduced and later room preferences do not rewrite saved choices. Poll; inspect every shortlist status and per-date failure/horizon. Available candidates use the ordinary planned_booking_review, then requested submission. Missing/failed reads are not proof of unavailability. Never submits."""
+        return safe(service.refresh_saved_plan, plan_id)
+
+    @server.tool(annotations=local)
     async def server_status(ctx: Context) -> dict[str, Any]:
         """Describe this private server and list retained operation IDs. Does not contact FBS."""
         service.prune()

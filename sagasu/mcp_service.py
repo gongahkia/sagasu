@@ -72,6 +72,18 @@ class Backend:
             async def read(config):
                 return await self.run("search", config, progress, notify)
 
+            if "saved_plan" in payload:
+                from .room_shortlists import refresh_shortlist
+
+                return {
+                    **await refresh_shortlist(
+                        payload["saved_plan"]["plan"], read, progress
+                    ),
+                    "saved_plan": {
+                        key: payload["saved_plan"][key]
+                        for key in ("id", "name", "updated_at")
+                    },
+                }
             return await find_room_plans(payload, read, progress)
         if kind == "clashes":
             from .clashes import check_clashes
@@ -937,6 +949,84 @@ class AgentService:
         except (ValueError, KeyError, TypeError, BookingUnavailable) as error:
             raise AgentError(str(error)) from None
         return self.start("room_plan", payload)
+
+    def save_room_plan(self, name, operation_id, candidate_indices=None, rooms=None):
+        from .fbs_client import RoomAvailability, TimeSlot
+
+        job = self.get(operation_id)
+        if job.kind not in {"search", "room_plan"} or job.status != "succeeded":
+            raise AgentError(
+                "Choose a successful room search or room plan before saving exact choices."
+            )
+        source, choices = job.result, []
+        if job.kind == "room_plan":
+            if (
+                rooms is not None
+                or not isinstance(candidate_indices, list)
+                or not 1 <= len(candidate_indices) <= 20
+                or any(
+                    type(i) is not int or not 0 <= i < len(source["candidates"])
+                    for i in candidate_indices
+                )
+                or len(set(candidate_indices)) != len(candidate_indices)
+            ):
+                raise AgentError(
+                    "Choose 1–20 unique candidate indices from the completed plan; omit rooms."
+                )
+            for index in candidate_indices:
+                candidate = source["candidates"][index]
+                for date in (
+                    source["dates"]
+                    if candidate.get("all_dates")
+                    else [candidate["date"]]
+                ):
+                    choices.append(
+                        {"date": date, "legs": copy.deepcopy(candidate["legs"])}
+                    )
+        else:
+            if (
+                candidate_indices is not None
+                or not isinstance(rooms, list)
+                or not 1 <= len(rooms) <= 20
+                or any(not isinstance(room, str) for room in rooms)
+                or len(set(rooms)) != len(rooms)
+            ):
+                raise AgentError(
+                    "Choose 1–20 exact free room names from the search; omit candidate_indices."
+                )
+            config = SearchConfig.from_mapping(source["config"])
+            for name in rooms:
+                matches = [row for row in source["rooms"] if row["name"] == name]
+                if len(matches) != 1 or not RoomAvailability(
+                    name, [TimeSlot(**slot) for slot in matches[0]["timeslots"]]
+                ).is_free(config.start_time, config.end_time):
+                    raise AgentError(
+                        "Only rooms free for the full source interval can be saved from a search."
+                    )
+                choices.append(
+                    {
+                        "date": config.date,
+                        "legs": [
+                            {
+                                "room": name,
+                                "start_time": config.start_time,
+                                "end_time": config.end_time,
+                            }
+                        ],
+                    }
+                )
+        try:
+            return self.personal_profile().save_room_plan(
+                name, {"config": copy.deepcopy(source["config"]), "choices": choices}
+            )
+        except (ValueError, KeyError, TypeError) as error:
+            raise AgentError(str(error)) from None
+
+    def refresh_saved_plan(self, plan_id):
+        return self.start(
+            "room_plan",
+            {"saved_plan": self.personal_profile().saved_room_plan(plan_id)},
+        )
 
     def planned_booking_review(
         self,

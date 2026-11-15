@@ -59,6 +59,8 @@ LIVE_TOOLS = frozenset(
         "credit_status",
         "booking_options",
         "check_booking_clashes",
+        "list_saved_plans",
+        "refresh_saved_plan",
         "task_details",
         "search_cobookers",
         "available_rooms",
@@ -419,6 +421,7 @@ async def run_benchmark(
                     "get_room_preferences",
                     "list_cobookers",
                     "list_booking_templates",
+                    "list_saved_plans",
                     "action_history",
                 ]:
                     await harness.measure(

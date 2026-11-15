@@ -77,6 +77,7 @@ class HybridReads:
                 "search_alternatives",
                 "plan_rooms",
                 "check_booking_clashes",
+                "refresh_saved_plan",
             ],
             "browser": sorted(READ_KINDS),
             "browser_workflows": [
