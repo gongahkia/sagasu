@@ -22,6 +22,10 @@ SUITES = [
     "tests.test_mcp_wire",
     "tests.test_personal.StoreTests",
     "tests.test_repeat",
+    "tests.test_alternatives",
+    "tests.test_cobookers",
+    "tests.test_booking_details_mcp",
+    "tests.test_booking_details_browser",
     "tests.test_reconciliation",
     "tests.test_action_journal",
 ]

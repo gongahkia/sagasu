@@ -1,0 +1,198 @@
+{
+  "date": "2026-11-15",
+  "platform": "Linux; Chromium headless; one configured SMU account",
+  "fbs_window": {
+    "date": "2026-11-23",
+    "start": "10:30",
+    "end": "11:00"
+  },
+  "scope": "In-process MCP tool execution through operation completion. Excludes model reasoning, stdio startup and remote MCP transport. No concurrent load/capacity test.",
+  "method": [
+    "Sequential live repetitions. Close shared Chromium before first attempt of each case; later attempts may reuse it.",
+    "Store redacted counts, timings, completeness, error codes, inclusive phases and optional compact structured JSON byte counts. Do not export names, emails, booking references, cookies or record contents.",
+    "Local metadata tools use at least 20 attempts; core live reads use five in the broad/final runs. Equipment matrix uses one attempt per choice/building.",
+    "Comparisons use medians of successful attempts, except the explicitly marked upstream task error latency. No p95 claims from fewer than 20 successful samples.",
+    "Synthetic fixture times include setup/cleanup. They do not measure real FBS write latency."
+  ],
+  "comparisons": [
+    {
+      "operation": "search_scis1",
+      "metric": "successful_latency_ms",
+      "before_median": 3880.438,
+      "after_median": 2813.804,
+      "reduction_percent": 27.5,
+      "before_samples": 3,
+      "after_samples": 3
+    },
+    {
+      "operation": "directory_partial",
+      "metric": "successful_latency_ms",
+      "before_median": 15858.551,
+      "after_median": 13925.542,
+      "reduction_percent": 12.2,
+      "before_samples": 3,
+      "after_samples": 3
+    },
+    {
+      "operation": "two alternative time probes",
+      "metric": "successful_latency_ms",
+      "before_median": 17112.356,
+      "after_median": 3808.479,
+      "reduction_percent": 77.7,
+      "before_samples": 5,
+      "after_samples": 5
+    },
+    {
+      "operation": "upstream task application error",
+      "metric": "failure_latency_ms",
+      "before_median": 46316.869,
+      "after_median": 1245.297,
+      "reduction_percent": 97.3,
+      "before_samples": 5,
+      "after_samples": 5
+    }
+  ],
+  "latest_median_ms": {
+    "search_scis1": 2065.363,
+    "search_scis2": 2581.184,
+    "search_soa": 2156.201,
+    "search_library": 2545.569,
+    "search_full_day": 2235.275,
+    "list_bookings": 3585.058,
+    "booking_details_confirmed_basic": 7519.498,
+    "booking_details_confirmed_full": 7885.787,
+    "booking_details_pending_basic": 7694.352,
+    "booking_details_pending_full": 7775.593,
+    "available_rooms": 0.871,
+    "search_alternatives": 3808.479,
+    "directory_partial": 13395.424,
+    "repeat_plan": 14534.941
+  },
+  "coverage": {
+    "broad_read_run": {
+      "measured_cases": 100,
+      "measurements": 332,
+      "successes": 327,
+      "failures": 5,
+      "skipped": [
+        {
+          "case": "task_details",
+          "reason": "Task listing failed upstream; available tasks are unknown."
+        }
+      ]
+    },
+    "optimized_followup": {
+      "measured_cases": 10,
+      "measurements": 95,
+      "successes": 95,
+      "failures": 0,
+      "skipped": []
+    },
+    "synthetic_workflows": {
+      "measured_cases": 143,
+      "measurements": 429,
+      "successes": 429,
+      "failures": 0,
+      "skipped": []
+    }
+  },
+  "equipment": {
+    "advertised_choices": 18,
+    "buildings": 4,
+    "matrix_checks": 72,
+    "matrix_failures": 0,
+    "paired_http_browser_scenarios": 6,
+    "exact_room_and_availability_parity": true,
+    "combination_controls": [
+      {
+        "building": "scis1",
+        "combined_matches_intersection": true,
+        "combined_matches_union": false,
+        "discriminating": true,
+        "combined_room_count": 0
+      },
+      {
+        "building": "library",
+        "combined_matches_intersection": true,
+        "combined_matches_union": false,
+        "discriminating": true,
+        "combined_room_count": 2
+      }
+    ],
+    "limit": "Verifies FBS metadata and availability responses, not the physical condition of equipment."
+  },
+  "unresolved": [
+    "The native FBS Task List returned an application error in all five attempts. Task details could not be benchmarked live; the task list is unknown, not empty.",
+    "The broad run began before the skip-description correction; its task_details skip text says no permitted VIEW action. The actual reason was the failed upstream task listing.",
+    "Real booking, cancellation and approval submissions were excluded. Fixtures cover validation, reviews, submissions, receipts, duplicate protection, restart recovery and reconciliation."
+  ],
+  "initial_harness_corrections": [
+    "History initially lacked a temporary action journal; corrected and rerun.",
+    "Library initially used an unsupported GSR-only scope; corrected to available Project Room alternatives and rerun."
+  ],
+  "validation": [
+    {
+      "check": "fixtures",
+      "exit_code": 0
+    },
+    {
+      "check": "unit-3.12",
+      "exit_code": 0
+    },
+    {
+      "check": "unit-3.14",
+      "exit_code": 0
+    },
+    {
+      "check": "format",
+      "exit_code": 0
+    },
+    {
+      "check": "packages",
+      "exit_code": 0
+    },
+    {
+      "check": "compile",
+      "exit_code": 0
+    },
+    {
+      "check": "readme-unchanged",
+      "exit_code": 0
+    },
+    {
+      "check": "diff",
+      "exit_code": 0
+    },
+    {
+      "check": "pre-commit",
+      "exit_code": 0
+    }
+  ],
+  "research": [
+    "https://playwright.dev/python/docs/actionability",
+    "https://learn.microsoft.com/en-us/dotnet/api/system.web.ui.adapters.pageadapter.renderpostbackevent?view=netframework-4.8",
+    "https://docs.python.org/3.14/library/pathlib.html#querying-file-type-and-status"
+  ],
+  "source_commits": [
+    "09affe4 perf: route alternative probes through validated hybrid searches",
+    "3229d41 fix: preserve configuration access errors on Python 3.14",
+    "9fe8ab8 feat: measure MCP response volume alongside workflow latency",
+    "20305c0 feat: support positive equipment controls in benchmarks",
+    "a6fe9d9 perf: select search dates directly and skip unchanged controls",
+    "97897c7 fix: report FBS application errors without waiting for missing grids",
+    "300cbc5 feat: add reproducible read-only workflow benchmarks"
+  ],
+  "raw_reports": [
+    ".sagasu/benchmarks/baseline-auto.json",
+    ".sagasu/benchmarks/before-300cbc5-api.json",
+    ".sagasu/benchmarks/after-api.json",
+    ".sagasu/benchmarks/final-auto.json",
+    ".sagasu/benchmarks/final-optimized.json",
+    ".sagasu/benchmarks/equipment-parity.json",
+    ".sagasu/benchmarks/fixtures-final.json"
+  ],
+  "unit_tests_per_interpreter": {
+    "3.12": 444,
+    "3.14": 444
+  }
+}
