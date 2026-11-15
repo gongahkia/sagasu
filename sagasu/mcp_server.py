@@ -141,8 +141,10 @@ def create_server(
             "In diagnostic mode explain the failing checks; FBS operations are blocked until setup is corrected and the MCP client reconnects. "
             "Missing autofill credentials do not prove the saved session is expired; use session_status before requesting login. "
             "Never collect passwords in chat or rewrite configuration automatically. "
-            "Use search_rooms, then wait_operation and "
-            "available_rooms for bookable choices. All dates and times are SGT. Search results are snapshots; "
+            "For an exact date/time interval use search_rooms, wait_operation and available_rooms. "
+            "For a duration within a flexible window, multiple dates, common availability, recurring dates or a room-change plan, start directly with plan_rooms; it performs the searches and matching. Do not first run a redundant exact-window search. "
+            "When only one option is requested, wait_operation(limit=1) returns a compact candidate page; inspect completeness and per-date failures before drawing conclusions. "
+            "All dates and times are SGT. Search results are snapshots; "
             "Read booking_horizon in search/availability results: it reports explicit FBS restrictions across checked rooms. "
             "If all checked rooms are affected, explain the date is outside their booking window rather than calling them occupied. "
             "Scope conclusions to checked facilities; never assume a university-wide horizon or invent an opening date. "
@@ -959,6 +961,7 @@ def create_server(
                     "wait_operation, inspect actual fbs_status, and operation_receipt when available",
                 ],
                 "room_planning": [
+                    "Use this path directly for flexible-time, multi-date, common, recurring or split-room requests; the exact-window booking path is for a specified interval",
                     "plan_rooms: broad window, fixed duration, explicit dates OR bounded weekday recurrence; preserves FBS filters",
                     "Inspect complete, ranking_complete and every date probe; failures are not unavailability",
                     "planned_booking_review selects one candidate/date/leg; split/common/recurring plans never submit implicitly",
