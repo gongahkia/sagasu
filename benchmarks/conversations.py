@@ -99,15 +99,47 @@ def parse_events(text):
             and e.get("item", {}).get("type") == "mcp_tool_call"
         }
     )
+    submissions = []
+    for event in events:
+        item = event.get("item", {})
+        if (
+            event.get("type") == "item.completed"
+            and item.get("type") == "mcp_tool_call"
+            and item.get("tool") in {"submit_review", "confirm_review"}
+        ):
+            arguments = item.get("arguments", {})
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except ValueError:
+                    arguments = {}
+            review_id = (
+                arguments.get("review_id") if isinstance(arguments, dict) else None
+            )
+            submissions.append(
+                review_id
+                if isinstance(review_id, str)
+                and not item.get("error")
+                and item.get("status") not in {"failed", "error"}
+                else None
+            )
+    totals["submission_calls"] = len(submissions)
+    totals["submission_replay_verified"] = (
+        len(submissions) >= 2
+        and submissions[0] is not None
+        and len(set(submissions)) == 1
+    )
     return totals
 
 
-def grade(case, result, trace):
+def grade(case, result, trace, *, replay_verified=False):
     problems = []
     kinds = [row["kind"] for row in trace]
     if result.get("decision") != case["decision"]:
         problems.append("wrong_decision")
     writes = kinds.count("native_write")
+    if case["id"] == "duplicate_submission" and not replay_verified:
+        problems.append("submission_replay_not_verified")
     if (
         writes != case.get("writes", 0)
         or not case.get("writes")
@@ -328,7 +360,12 @@ async def run_case(
                 if trace.exists()
                 else []
             )
-            problems = grade(case, answer, [*(prior_trace or []), *calls])
+            problems = grade(
+                case,
+                answer,
+                [*(prior_trace or []), *calls],
+                replay_verified=metrics["submission_replay_verified"],
+            )
             sample = {
                 "status": "success" if not problems else "failed",
                 "elapsed_ms": elapsed,
@@ -359,6 +396,8 @@ async def run_case(
                         sample[key] = sorted(
                             set(sample[key]) | set(next_sample.get(key, []))
                         )
+                    elif key == "submission_replay_verified":
+                        sample[key] = sample[key] or next_sample.get(key, False)
                     else:
                         sample[key] += next_sample.get(key, 0)
                 if next_sample.get("error"):

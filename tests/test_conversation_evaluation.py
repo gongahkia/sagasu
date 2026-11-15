@@ -53,6 +53,31 @@ class GradingTests(unittest.TestCase):
         )
         self.assertEqual(value["reported_total_tokens"], 120)
         self.assertEqual(value["reasoning_output_tokens"], 12)
+
+        def event(review):
+            return {
+                "type": "item.completed",
+                "item": {
+                    "type": "mcp_tool_call",
+                    "tool": "submit_review",
+                    "arguments": {"review_id": review},
+                    "status": "completed",
+                },
+            }
+
+        completed = {
+            "type": "turn.completed",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+        }
+        repeated = parse_events(
+            "\n".join(map(json.dumps, [event("same"), event("same"), completed]))
+        )
+        self.assertTrue(repeated["submission_replay_verified"])
+        self.assertEqual(repeated["submission_calls"], 2)
+        separate = parse_events(
+            "\n".join(map(json.dumps, [event("first"), event("second"), completed]))
+        )
+        self.assertFalse(separate["submission_replay_verified"])
         for events in [
             [],
             [{"type": "turn.failed"}],
