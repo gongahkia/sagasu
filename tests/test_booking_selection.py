@@ -372,7 +372,9 @@ class SelectionRetentionTest(unittest.IsolatedAsyncioTestCase):
                     "friend@smu.edu.sg",
                 )
                 with self.assertRaises(BookingUnavailable) as error:
-                    await client._prepare_booking_frame(frame, request)
+                    await client._prepare_booking_frame(
+                        frame, request.search, request.room
+                    )
                 client._drag_timeslot.assert_awaited_once()
                 button.click.assert_awaited_once()
                 client.page.wait_for_timeout.assert_not_awaited()
@@ -464,7 +466,10 @@ class SelectionRetentionTest(unittest.IsolatedAsyncioTestCase):
             "Meeting",
             "friend@smu.edu.sg",
         )
-        self.assertIs(await client._prepare_booking_frame(frame, request), details)
+        self.assertIs(
+            await client._prepare_booking_frame(frame, request.search, request.room),
+            details,
+        )
         self.assertEqual(client._drag_timeslot.await_count, 2)
         button.click.assert_awaited_once()
         clear.click.assert_awaited_once()
@@ -488,7 +493,7 @@ class SelectionRetentionTest(unittest.IsolatedAsyncioTestCase):
             "friend@smu.edu.sg",
         )
         with self.assertRaises(CalendarSelectionLost):
-            await client._prepare_booking_frame(frame, request)
+            await client._prepare_booking_frame(frame, request.search, request.room)
         self.assertEqual(client._drag_timeslot.await_count, 2)
         frame.locator.return_value.click.assert_not_awaited()
 
@@ -523,6 +528,6 @@ class SelectionRetentionTest(unittest.IsolatedAsyncioTestCase):
             "friend@smu.edu.sg",
         )
         with self.assertRaisesRegex(CalendarSelectionLost, "rejected"):
-            await client._prepare_booking_frame(frame, request)
+            await client._prepare_booking_frame(frame, request.search, request.room)
         client.page.wait_for_timeout.assert_not_awaited()
         self.assertEqual(dismiss.click.await_count, 2)

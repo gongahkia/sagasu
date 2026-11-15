@@ -121,6 +121,7 @@ def create_server(
             "For failed operations follow error.next_action and next_tool; fix setup before retrying, and never infer empty availability from a failure. "
             "Read jobs, reviews and receipts expire on restart; write outcomes persist in action_history. Nothing is replayed. "
             "Co-bookers and search preferences persist locally across agent sessions. "
+            "list_cobookers only lists saved contacts. For an unsaved or partial name, use search_cobookers with a successful room search and a free room; inspect candidates and coverage, disambiguate with the user, then use the chosen exact email in booking_review. Partial coverage cannot establish a unique match. Never guess an email or pick the first name match. Save a contact only when requested. "
             "Change or delete personal data only when the user requests it; those tools never book rooms."
         ),
         lifespan=lifespan,
@@ -160,6 +161,13 @@ def create_server(
             "timezone": "Asia/Singapore",
             "iso_dates_supported": True,
         }
+
+    @server.tool(annotations=read)
+    async def search_cobookers(
+        query: str, search_operation_id: str, room: str
+    ) -> dict[str, Any]:
+        """Search FBS's live co-booker directory by partial name or email (2–100 single-line characters), even with no saved contacts. Requires a successful search_rooms operation and an exact room free for that whole window: FBS exposes its picker inside the unsubmitted booking form. Rechecks that room/time, opens the picker and reads up to five result pages, then leaves the form. Poll wait_operation; inspect candidates, total, complete and pagination. Never selects a person, adds a co-booker, saves a contact or submits a booking. Ask the user to distinguish ambiguous matches; pass their chosen exact email to booking_review. List results are ephemeral; save_cobooker is separate and only on request."""
+        return safe(service.search_cobookers, search_operation_id, room, query)
 
     @server.tool(annotations=local)
     async def list_cobookers(offset: int = 0, limit: int = 20) -> dict[str, Any]:
@@ -422,7 +430,7 @@ def create_server(
     async def operation_result(
         operation_id: str, offset: int = 0, limit: int = 20
     ) -> dict[str, Any]:
-        """Read a finished operation result. Rooms/bookings/tasks are paginated (limit 1–50). Check complete/total fields for FBS coverage."""
+        """Read a finished operation result. Rooms/bookings/tasks/co-booker candidates are paginated (limit 1–50). Check complete/total fields for FBS coverage."""
         return safe(service.result, operation_id, offset, limit)
 
     @server.tool(annotations=local)
@@ -514,7 +522,7 @@ def create_server(
         co_booker: str | None = None,
         cobooker_id: str | None = None,
     ) -> dict[str, Any]:
-        """Prepare a ten-minute review of one free room. Supply a saved cobooker_id OR co_booker (full SMU email or unique saved name). Resolves a saved contact now; later contact/preference changes do not alter this review. Does not submit."""
+        """Prepare a ten-minute review of one free room. Supply a saved cobooker_id OR co_booker (full SMU email or unique saved name). For an unsaved/partial name, first use search_cobookers and choose a verified email. Resolves a saved contact now; later contact/preference changes do not alter this review. Does not submit."""
         return safe(
             service.review_booking,
             search_operation_id,
@@ -672,6 +680,7 @@ def create_server(
                     "search_rooms: partial preferences are one-off; use ISO dates and half-hour times",
                     "wait_operation: reuse the operation ID until terminal; never start duplicate jobs to poll",
                     "available_rooms: choose only a room free for the full interval",
+                    "For unsaved/partial co-booker names, search_cobookers with this search operation and room, then wait_operation; inspect coverage and let the user distinguish matches before using the exact email. Saving is optional and only on request.",
                     "booking_review: exact room, purpose and saved co-booker ID or SMU email",
                     "Optional validate_booking, then wait_operation; validation does not submit",
                     "Submit using the advertised submission_tool only when the user requested the action",
@@ -749,7 +758,7 @@ def create_server(
             "Handle this SMU room request: "
             + request
             + "\nRead sagasu://workflow and server_status first. In diagnostic mode read configuration_status and explain the local fixes before attempting FBS actions. Use one-off search preferences unless asked to save defaults. "
-            "Resolve saved co-bookers; ask only for missing required details or an ambiguous room choice. "
+            "Resolve saved co-bookers or use search_cobookers for an unsaved/partial name after selecting a free room; ask the user to distinguish multiple people. "
             "If the user asked to book, prepare the exact review and use the server's advertised submission_tool. "
             "Never submit on a search-only request. Report the actual FBS status and reference, and return a receipt when available."
         )

@@ -101,6 +101,12 @@ class Backend:
             auth_notify=notify,
             interactive=kind not in {"session", "smoke", "reconcile", "probe"},
         ) as client:
+            if kind == "cobooker_search":
+                from .cobookers import search_cobookers
+
+                return await search_cobookers(
+                    client, payload["search"], payload["room"], payload["query"]
+                )
             if kind == "booking_details":
                 from .booking_details import read_booking_details
 
@@ -612,7 +618,7 @@ class AgentService:
         output = job.public()
         if job.result is not None:
             result = copy.deepcopy(job.result)
-            for key in ("rooms", "bookings", "tasks"):
+            for key in ("rooms", "bookings", "tasks", "candidates"):
                 if isinstance(result.get(key), list):
                     rows = result[key]
                     result[key] = rows[offset : offset + limit]
@@ -820,6 +826,28 @@ class AgentService:
         if job.kind != kind or job.status != "succeeded":
             raise AgentError(f"A successful {kind} operation is required first.")
         return job.result
+
+    def search_cobookers(self, search_operation_id, room, query):
+        from .cobookers import validate_query
+        from .fbs_client import RoomAvailability, TimeSlot
+
+        result = self._completed(search_operation_id, "search")
+        search = SearchConfig.from_mapping(result["config"])
+        try:
+            query = validate_query(query)
+            require_future_booking(search)
+        except (ValueError, BookingUnavailable) as error:
+            raise AgentError(str(error)) from None
+        matches = [row for row in result["rooms"] if row["name"] == room]
+        if len(matches) != 1 or not RoomAvailability(
+            room, [TimeSlot(**slot) for slot in matches[0]["timeslots"]]
+        ).is_free(search.start_time, search.end_time):
+            raise AgentError(
+                "Choose a room free for the entire window in this search result."
+            )
+        return self.start(
+            "cobooker_search", {"search": search, "room": room, "query": query}
+        )
 
     def review_booking(
         self, search_operation_id, room, purpose, co_booker=None, cobooker_id=None

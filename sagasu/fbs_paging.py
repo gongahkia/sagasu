@@ -38,7 +38,15 @@ async def move_page(client, frame, grid, direction):
 
 
 async def collect_pages(
-    client, frame, grid, key, read_page, *, reference=None, max_pages=100
+    client,
+    frame,
+    grid,
+    key,
+    read_page,
+    *,
+    reference=None,
+    max_pages=100,
+    identity_key="reference_number",
 ):
     """Aggregate verified pages or leave the exact requested reference visible.
 
@@ -60,14 +68,14 @@ async def collect_pages(
                     "FBS account total changed during pagination; refresh the listing"
                 )
             rows = result[key]
-            refs = tuple(row["reference_number"] for row in rows)
+            refs = tuple(row[identity_key] for row in rows)
             if refs in signatures or len(set(refs)) != len(refs):
                 raise LayoutChanged(
                     "FBS account pagination repeated a page or reference"
                 )
             signatures.add(refs)
             for row in rows:
-                ref = row["reference_number"]
+                ref = row[identity_key]
                 if ref in records:
                     raise LayoutChanged(
                         "FBS account references overlapped across pages; refresh the listing"

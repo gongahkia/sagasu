@@ -1287,7 +1287,9 @@ class FBSClient:
             raise LayoutChanged("Availability frame disappeared")
 
         await self.progress("selecting requested room and timeslot")
-        booking_frame = await self._prepare_booking_frame(frame, request)
+        booking_frame = await self._prepare_booking_frame(
+            frame, request.search, request.room
+        )
         with step("booking.fill_form"):
             await booking_frame.locator(
                 "input#bookingFormControl1_TextboxPurpose_c1"
@@ -1782,7 +1784,7 @@ class FBSClient:
 
     @observed_step("booking.prepare")
     async def _prepare_booking_frame(
-        self, frame: Frame, request: BookingRequest
+        self, frame: Frame, search: SearchConfig, room: str
     ) -> Frame:
         for attempt in range(2):
             try:
@@ -1795,10 +1797,10 @@ class FBSClient:
                     await control.click()
                 await self._drag_timeslot(
                     frame,
-                    request.room,
-                    request.search.start_time,
-                    request.search.end_time,
-                    date=request.search.date,
+                    room,
+                    search.start_time,
+                    search.end_time,
+                    date=search.date,
                 )
                 button = frame.locator("a#btnMakeBooking")
                 # Moving to the toolbar can trigger scrolling or a late mouse
@@ -1806,10 +1808,10 @@ class FBSClient:
                 await button.hover()
                 await self._verify_calendar_selection(
                     frame,
-                    request.room,
-                    request.search.start_time,
-                    request.search.end_time,
-                    request.search.date,
+                    room,
+                    search.start_time,
+                    search.end_time,
+                    search.date,
                 )
                 await button.click()
                 for _ in range(60):
@@ -1929,8 +1931,8 @@ class FBSClient:
             await self.page.wait_for_timeout(500)
         raise LayoutChanged(f"FBS frame was not created: {name}")
 
-    @observed_step("booking.cobooker")
-    async def _add_co_booker(self, frame: Frame, query: str) -> None:
+    @observed_step("cobooker.search")
+    async def _search_co_booker_picker(self, frame: Frame, query: str) -> None:
         await frame.locator("a#bookingFormControl1_GridCoBookers_ctl14").click()
         search_input = frame.locator(
             "input#bookingFormControl1_DialogSearchCoBooker_searchPanel_textBox_c1"
@@ -1950,6 +1952,9 @@ class FBSClient:
         ).click()
         await self._wait_for_idle(frame)
 
+    @observed_step("booking.cobooker")
+    async def _add_co_booker(self, frame: Frame, query: str) -> None:
+        await self._search_co_booker_picker(frame, query)
         result_link = frame.locator(
             "table#bookingFormControl1_DialogSearchCoBooker_searchPanel_gridView_gv"
         ).get_by_text(query, exact=False)

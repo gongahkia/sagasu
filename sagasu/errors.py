@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "cobooker_lookup_unavailable": (
+        "FBS did not expose verified co-booker search results. No co-booker was selected and no booking was submitted.",
+        "Refresh search_rooms, choose a free room, then retry search_cobookers. Do not infer that a person is absent from an unreadable directory result.",
+        "search_rooms",
+    ),
     "search_filter_unavailable": (
         "FBS could not match the requested facility types to its current search options. Availability was not determined.",
         "Read search_options and revise the facility types or building/floor scope before searching again.",
