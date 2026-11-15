@@ -187,6 +187,17 @@ class FormTests(unittest.TestCase):
         with self.assertRaises(HTTPReadUnavailable):
             self.form(choices).multi_values("Filter", ["Unknown room type"])
 
+    def test_absent_facility_alternatives_do_not_bypass_duplicate_validation(self):
+        control = "DropMultiFacilityTypeList_c1"
+        form = self.form(
+            f'<div id="{control}::ddl::"><label><input type="checkbox" id="1">Group Study Room</label></div>'
+        )
+        with self.assertRaises(HTTPReadUnavailable):
+            form.multi_values(
+                control, ["Project Room", "Project Room", "Group Study Room"]
+            )
+        self.assertEqual(form.multi_values(control, []), "")
+
     def test_partial_facility_table_cannot_claim_complete_availability(self):
         table = '<table id="GridResults_gv"><tr><td><input type="checkbox" name="GridResults$gv$ctl02$checkMultiple"></td><td>Room A</td></tr></table>'
         self.assertEqual(list(self.form(table).rooms()), ["Room A"])

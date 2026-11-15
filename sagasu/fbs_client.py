@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .observability import event, observed_operation, observed_step, step
 from .action_journal import checkpoint_verified
+from .personal_options import SCRAPE_PARAM_CHOICES
 
 from playwright.async_api import (
     BrowserContext,
@@ -90,6 +91,24 @@ class LayoutChanged(FBSError):
     """The live FBS DOM no longer matches the expected structure."""
 
     default_reason = "layout_changed"
+
+
+def resolve_facility_types(
+    requested: Iterable[str], available: Iterable[str]
+) -> tuple[str, ...]:
+    requested = tuple(" ".join(value.split()) for value in requested)
+    available = set(available)
+    matched = tuple(value for value in requested if value in available)
+    # building postbacks remove inapplicable alternatives from this list.
+    if any(
+        value not in available and value not in SCRAPE_PARAM_CHOICES["facility_type"]
+        for value in requested
+    ) or (requested and not matched):
+        raise FBSError(
+            "The requested facility types do not match the current FBS options.",
+            reason="search_filter_unavailable",
+        )
+    return matched
 
 
 def calendar_time_x(headers: list[dict], value: str, header_minutes: int) -> float:
@@ -1469,6 +1488,23 @@ class FBSClient:
             await opener.click()
             panel = frame.locator(f"#{control_id}_panelContainer:visible").first
             await panel.wait_for(state="visible", timeout=10000)
+        if control_id == "DropMultiFacilityTypeList_c1" and values:
+            choices = frame.locator(f'[id="{control_id}::ddl::"]')
+            if await choices.count() != 1:
+                raise LayoutChanged("FBS facility-type options could not be verified")
+            labels = [
+                " ".join(label.split())
+                for label in await choices.locator("label").all_text_contents()
+            ]
+            if (
+                not labels
+                or len(set(labels)) != len(labels)
+                or any(not label for label in labels)
+            ):
+                raise LayoutChanged(
+                    "FBS facility-type options are unreadable or ambiguous"
+                )
+            values = resolve_facility_types(values, labels)
         for value in values:
             # FBS visually renders options inside the dropdown, but its legacy
             # control may mount their label nodes outside panelContainer.

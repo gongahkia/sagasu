@@ -4,9 +4,70 @@ from unittest.mock import AsyncMock, Mock, patch
 from playwright.async_api import (
     Error as PlaywrightError,
     TimeoutError as PlaywrightTimeoutError,
+    async_playwright,
 )
 
 from sagasu.fbs_client import FBSError, FBSClient, LayoutChanged, SearchConfig
+
+
+class FacilityTypeFilterTest(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        driver = await async_playwright().start()
+        self.addAsyncCleanup(driver.stop)
+        browser = await driver.chromium.launch(headless=True)
+        self.addAsyncCleanup(browser.close)
+        self.page = await browser.new_page()
+        self.client = FBSClient()
+        await self.page.set_content(
+            '<input id="DropMultiFacilityTypeList_c1_textValue" value="">'
+            '<button id="DropMultiFacilityTypeList_c1_textItem">Types</button>'
+            '<div id="DropMultiFacilityTypeList_c1_panelContainer">'
+            '<input type="button" value="Clear">'
+            "<input type=\"button\" value=\"OK\" onclick=\"document.querySelector('#DropMultiFacilityTypeList_c1_textValue').value = [...document.querySelectorAll('input[type=checkbox]:checked')].map(e => e.id).join(',')\">"
+            '</div><div id="DropMultiFacilityTypeList_c1::ddl::">'
+            '<label><input id="0" type="checkbox">Classroom</label>'
+            '<label><input id="1" type="checkbox">Group Study Room</label></div>'
+        )
+
+    async def test_building_scoped_options_select_only_matching_facility_types(self):
+        await self.client._set_multi_select(
+            self.page,
+            "DropMultiFacilityTypeList_c1",
+            ("Project Room", "Group Study Room"),
+        )
+        self.assertTrue(await self.page.get_by_label("Group Study Room").is_checked())
+        self.assertFalse(await self.page.get_by_label("Classroom").is_checked())
+        self.assertEqual(
+            await self.page.locator(
+                "#DropMultiFacilityTypeList_c1_textValue"
+            ).input_value(),
+            "1",
+        )
+
+    async def test_no_match_and_unknown_types_remain_errors_instead_of_all_types(self):
+        for types in [("Project Room",), ("Unknown type", "Group Study Room")]:
+            with self.subTest(types=types):
+                with self.assertRaises(FBSError) as caught:
+                    await self.client._set_multi_select(
+                        self.page, "DropMultiFacilityTypeList_c1", types
+                    )
+                self.assertEqual(caught.exception.reason, "search_filter_unavailable")
+                self.assertEqual(
+                    await self.page.locator("input[type=checkbox]:checked").count(), 0
+                )
+
+    async def test_all_requested_types_are_kept_when_both_are_offered(self):
+        await self.page.locator('[id="DropMultiFacilityTypeList_c1::ddl::"]').evaluate(
+            "e => e.insertAdjacentHTML('beforeend', '<label><input id=2 type=checkbox>Project Room</label>')"
+        )
+        await self.client._set_multi_select(
+            self.page,
+            "DropMultiFacilityTypeList_c1",
+            ("Project Room", "Group Study Room"),
+        )
+        self.assertTrue(await self.page.get_by_label("Group Study Room").is_checked())
+        self.assertTrue(await self.page.get_by_label("Project Room").is_checked())
+        self.assertFalse(await self.page.get_by_label("Classroom").is_checked())
 
 
 class NavigationTest(unittest.IsolatedAsyncioTestCase):

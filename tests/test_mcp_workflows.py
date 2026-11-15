@@ -130,6 +130,24 @@ class WorkflowServiceTests(ServiceCase):
 
 @unittest.skipIf(Client is None, "Install Sagasu for MCP protocol tests")
 class WorkflowProtocolTests(ServiceCase):
+    async def test_unmatched_facility_filter_is_not_an_empty_availability_result(self):
+        from sagasu.fbs_client import FBSError
+
+        self.backend.error = FBSError(
+            "PRIVATE PAGE TEXT", reason="search_filter_unavailable"
+        )
+        async with Client(create_server(self.service)) as client:
+            operation = await self.call(client, "search_rooms", config=CONFIG)
+            status = await self.call(
+                client, "wait_operation", operation_id=operation["operation_id"]
+            )
+            self.assertEqual(status["status"], "failed")
+            self.assertEqual(status["error"]["reason"], "search_filter_unavailable")
+            self.assertEqual(status["next_tool"], "search_options")
+            self.assertIn("Availability was not determined", status["error"]["message"])
+            self.assertNotIn("PRIVATE", json.dumps(status))
+            self.assertNotIn("result", status)
+
     async def test_actionable_failure_survives_mcp_without_raw_exception_text(self):
         from sagasu.fbs_client import AuthenticationRequired, BookingUnavailable
 

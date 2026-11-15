@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "search_filter_unavailable": (
+        "FBS could not match the requested facility types to its current search options. Availability was not determined.",
+        "Read search_options and revise the facility types or building/floor scope before searching again.",
+        "search_options",
+    ),
     "booking_details_unavailable": (
         "FBS did not expose verified booking details for this reference.",
         "Refresh list_bookings or list_tasks and inspect listing coverage. Use an exact returned reference_number and a permitted VIEW action before retrying booking_details.",

@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from playwright.async_api import async_playwright
 
 from sagasu.fbs_api import FBSReadAPI
-from sagasu.fbs_client import AuthenticationRequired, SearchConfig
+from sagasu.fbs_client import AuthenticationRequired, FBSError, SearchConfig
 from sagasu.fbs_http import HTTPReadUnavailable
 from tests.test_http_reads import bookings_html, tasks_html
 from tests.test_webforms import calendar_html
@@ -227,6 +227,35 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.state["posts"][-1], "CheckAvailability$CheckAvailability_bt"
         )
         self.assertFalse(self.state["invalid_state"])
+
+    async def test_facility_types_match_available_alternatives_after_building_selection(
+        self,
+    ):
+        config = SearchConfig(
+            "10-Nov-2099",
+            "10:00",
+            "12:00",
+            buildings=("Building A",),
+            facility_types=("Project Room", "Group Study Room"),
+        )
+        result = await self.api.search(config)
+        self.assertEqual(result.config, config)
+        self.assertEqual(len(result.bookable_rooms), 1)
+        self.assertEqual(self.state["DropMultiFacilityTypeList_c1_textValue"], "1")
+        self.assertFalse(self.state["invalid_state"])
+
+    async def test_unavailable_or_unknown_types_cannot_clear_the_facility_filter(self):
+        for types in [("Project Room",), ("Unknown type", "Group Study Room")]:
+            with self.subTest(types=types):
+                config = SearchConfig(
+                    "10-Nov-2099", "10:00", "12:00", facility_types=types
+                )
+                with self.assertRaises(FBSError) as caught:
+                    await self.api.search(config)
+                self.assertEqual(caught.exception.reason, "search_filter_unavailable")
+                self.assertNotIn(
+                    "CheckAvailability$CheckAvailability_bt", self.state["posts"]
+                )
 
     async def test_account_reads_issue_no_postbacks(self):
         for kind in ["bookings", "tasks"]:

@@ -16,6 +16,7 @@ from .fbs_client import (
     SearchResult,
     add_free_windows,
     parse_event_title,
+    resolve_facility_types,
 )
 from .fbs_http import HTTPReadUnavailable, _Document, _Node, _text
 
@@ -122,9 +123,11 @@ class SearchForm:
                 raise HTTPReadUnavailable("ambiguous_filter_options")
             choices[name] = inputs[0].attrs["id"]
         normalized = [" ".join(label.split()) for label in labels]
-        if len(set(normalized)) != len(normalized) or any(
-            label not in choices for label in normalized
-        ):
+        if len(set(normalized)) != len(normalized):
+            raise HTTPReadUnavailable("unsupported_filter_option")
+        if control == "DropMultiFacilityTypeList_c1":
+            normalized = resolve_facility_types(normalized, choices)
+        if any(label not in choices for label in normalized):
             raise HTTPReadUnavailable("unsupported_filter_option")
         # The website emits selections in the current dropdown's order.
         return ",".join(value for name, value in choices.items() if name in normalized)
