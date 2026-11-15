@@ -320,6 +320,8 @@ async def run_case(
             str(final),
             "-c",
             server_config,
+            "-c",
+            'mcp_servers.sagasu.tools.submit_review.approval_mode="approve"',
             "-",
         ]
         environment = {
@@ -433,6 +435,7 @@ async def evaluate(args):
             "source_isolation": "Both MCP packages and the shared fixture driver are immutable snapshots for this run; uncommitted changes are excluded",
             "codex_version": version,
             "model": "CLI default, identical configuration in both arms",
+            "fixture_write_policy": "Only submit_review on this synthetic MCP transport is preapproved for this invocation. No real client configuration, app safeguards or native FBS actions are changed.",
             "evaluation_source_sha256": hashlib.sha256(
                 Path(__file__).read_bytes()
                 + Path(__file__).with_name("agent_fixture.py").read_bytes()

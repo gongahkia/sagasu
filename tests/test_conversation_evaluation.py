@@ -160,6 +160,10 @@ class FixtureProtocolTests(unittest.IsolatedAsyncioTestCase):
         calls = 0
 
         async def create(*command, **kwargs):
+            self.assertIn(
+                'mcp_servers.sagasu.tools.submit_review.approval_mode="approve"',
+                command,
+            )
             nonlocal calls
             index = calls
             calls += 1
