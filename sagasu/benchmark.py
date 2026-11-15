@@ -51,6 +51,7 @@ LIVE_TOOLS = frozenset(
         "session_status",
         "browser_screenshot",
         "search_rooms",
+        "plan_rooms",
         "list_bookings",
         "list_tasks",
         "booking_details",
@@ -453,6 +454,42 @@ async def run_benchmark(
                             "search_rooms", {"config": query}
                         ),
                     )
+                await harness.measure(
+                    "plan_flexible",
+                    lambda: harness.job(
+                        "plan_rooms",
+                        {
+                            "config": {
+                                **config,
+                                "start_time": "12:00",
+                                "end_time": "18:00",
+                            },
+                            "duration_minutes": 120,
+                        },
+                    ),
+                )
+                await harness.measure(
+                    "plan_common_dates",
+                    lambda: harness.job(
+                        "plan_rooms",
+                        {
+                            "config": {
+                                **config,
+                                "start_time": "12:00",
+                                "end_time": "18:00",
+                            },
+                            "duration_minutes": 60,
+                            "dates": [
+                                date,
+                                (
+                                    datetime.strptime(date, "%Y-%m-%d").date()
+                                    + timedelta(days=1)
+                                ).isoformat(),
+                            ],
+                            "mode": "common",
+                        },
+                    ),
+                )
                 trio = [
                     harness.room_sets.get(name)
                     for name in ["search_projector", "search_tv", "search_projector_tv"]
