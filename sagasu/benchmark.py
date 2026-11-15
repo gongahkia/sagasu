@@ -55,6 +55,8 @@ LIVE_TOOLS = frozenset(
         "list_bookings",
         "list_tasks",
         "booking_details",
+        "room_details",
+        "credit_status",
         "task_details",
         "search_cobookers",
         "available_rooms",
@@ -425,6 +427,9 @@ async def run_benchmark(
                 await harness.measure(
                     "session_status", lambda: harness.job("session_status")
                 )
+                await harness.measure(
+                    "credit_status", lambda: harness.job("credit_status")
+                )
                 for label, building in BUILDINGS.items():
                     query = {
                         **config,
@@ -635,6 +640,18 @@ async def run_benchmark(
                         r["name"], [TimeSlot(**s) for s in r["timeslots"]]
                     ).is_free(start, end)
                 ]
+                if source["rooms"]:
+                    await harness.measure(
+                        "room_details",
+                        lambda: harness.job(
+                            "room_details", {"room": source["rooms"][0]["name"]}
+                        ),
+                    )
+                else:
+                    harness.skip(
+                        "room_details",
+                        "No room identity was returned by the source search.",
+                    )
                 if cobooker_query and free:
                     await harness.measure(
                         "directory_partial",

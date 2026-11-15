@@ -21,5 +21,15 @@
     "submitted": false,
     "identities_omitted": true
   },
+  "native_information": {
+    "facility_identity_and_capacity_verified": true,
+    "operating_hour_rules_read": 6,
+    "equipment_inventory": "not_exposed_for_checked_room",
+    "fbs_image_and_native_screenshot_available": true,
+    "labelled_credit_balances_verified": true,
+    "quota_limits": "not_exposed_in_credit_summary",
+    "booking_list_unchanged": true,
+    "submitted": false
+  },
   "end_to_end_evaluation": "Pending; no token or speed savings claimed"
 }

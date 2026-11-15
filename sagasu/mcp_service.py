@@ -131,6 +131,16 @@ class Backend:
                 from .browser_debug import capture_browser_screenshot
 
                 return await capture_browser_screenshot(client)
+            if kind == "room_details":
+                from .fbs_catalogue import read_room_details
+
+                return await read_room_details(
+                    client, payload["room"], include_image=payload["include_image"]
+                )
+            if kind == "credits":
+                from .fbs_catalogue import read_credit_status
+
+                return await read_credit_status(client)
             if kind == "cobooker_search":
                 from .cobookers import search_cobookers, filter_candidates
 
@@ -1010,6 +1020,20 @@ class AgentService:
         if job.kind != kind or job.status != "succeeded":
             raise AgentError(f"A successful {kind} operation is required first.")
         return job.result
+
+    def room_details(self, room, include_image=False):
+        if (
+            not isinstance(room, str)
+            or not 1 <= len(room.strip()) <= 200
+            or any(ord(c) < 32 or ord(c) == 127 for c in room)
+            or type(include_image) is not bool
+        ):
+            raise AgentError(
+                "Use an exact single-line FBS room name of 1–200 characters and a boolean image option."
+            )
+        return self.start(
+            "room_details", {"room": room.strip(), "include_image": include_image}
+        )
 
     def search_cobookers(
         self, search_operation_id=None, room=None, query=None, school=None, year=None

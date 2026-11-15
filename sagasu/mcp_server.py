@@ -490,6 +490,16 @@ def create_server(
         return safe(service.start, "bookings")
 
     @server.tool(annotations=read)
+    async def room_details(room: str, include_image: bool = False) -> dict[str, Any]:
+        """Read FBS facility details for an exact room name without requiring a free interval. Returns verified building/type/capacity, displayed description, period-specific operating hours and equipment text where exposed. Missing inventory/accessibility remains unknown; operating hours do not establish booking eligibility. include_image captures the native facility-details page for operation_receipt; its FBS image may illustrate a room type. Poll wait_operation. Does not book or select a co-booker."""
+        return safe(service.room_details, room, include_image)
+
+    @server.tool(annotations=read)
+    async def credit_status() -> dict[str, Any]:
+        """Read starting allocation and currently available FBS credits from the native profile Credit Ledger. Amounts are decimal strings in FBS credits. Reports quota rules as unknown if not exposed here; use booking_details for an existing booking's credits deducted. Reads only labelled balances, without exporting profile contacts or the transaction ledger. Poll wait_operation; never changes profile data."""
+        return safe(service.start, "credits")
+
+    @server.tool(annotations=read)
     async def booking_details(
         reference_number: str,
         source: Literal["auto", "bookings", "tasks"] = "auto",
