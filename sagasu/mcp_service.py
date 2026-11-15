@@ -54,8 +54,9 @@ class AgentError(ValueError):
 class Backend:
     """Domain operations with hybrid reads and a single browser write path."""
 
-    def __init__(self):
+    def __init__(self, *, interactive_auth=True):
         self.reads = HybridReads()
+        self.interactive_auth = interactive_auth
 
     def capabilities(self):
         return self.reads.capabilities()
@@ -75,6 +76,7 @@ class Backend:
                 approve=kind == "approve_task",
                 progress=progress,
                 auth_notify=notify,
+                interactive=self.interactive_auth,
             )
         if kind in {"validate", "book"}:
             return await execute_booking(
@@ -99,7 +101,8 @@ class Backend:
         async with FBSClient(
             progress=progress,
             auth_notify=notify,
-            interactive=kind not in {"session", "smoke", "reconcile", "probe"},
+            interactive=self.interactive_auth
+            and kind not in {"session", "smoke", "reconcile", "probe"},
         ) as client:
             if kind == "cobooker_search":
                 from .cobookers import search_cobookers

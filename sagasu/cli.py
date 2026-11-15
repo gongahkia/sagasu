@@ -182,6 +182,42 @@ def parser():
         help="Overall deadline in seconds, 1–600 (default: 180)",
     )
     probe.add_argument("--json", action="store_true")
+    benchmark = commands.add_parser(
+        "benchmark",
+        help="Measure common live read workflows; stop the shared host first",
+        parents=[common],
+    )
+    benchmark.add_argument("--live", action="store_true")
+    benchmark.add_argument("--repetitions", type=int, default=5)
+    benchmark.add_argument(
+        "--backend", choices=("auto", "api", "browser"), default="auto"
+    )
+    benchmark.add_argument(
+        "--date", help="Future SGT date, YYYY-MM-DD; default tomorrow"
+    )
+    benchmark.add_argument("--start", default="10:00")
+    benchmark.add_argument("--end", default="11:00")
+    benchmark.add_argument(
+        "--cobooker-query", help="Optional partial name; never written into the report"
+    )
+    benchmark.add_argument(
+        "--equipment-matrix",
+        action="store_true",
+        help="Check every advertised equipment choice in four buildings once",
+    )
+    benchmark.add_argument("--timeout", type=int, default=3600)
+    benchmark.add_argument(
+        "--output",
+        type=Path,
+        help="Save a redacted JSON report with private permissions",
+    )
+    benchmark.add_argument("--json", action="store_true")
+    benchmark.add_argument(
+        "--case",
+        action="append",
+        dest="selected",
+        help="Case-name glob; repeat to select several cases",
+    )
     paths = commands.add_parser(
         "paths",
         help="Show active configuration and data paths without secrets",
@@ -260,6 +296,14 @@ def main(argv=None):
     ):
         command_parser.error(
             f"{args.command} requires --live and --timeout between 1 and 600 seconds; no live check was run"
+        )
+    if args.command == "benchmark" and (
+        not args.live
+        or not 1 <= args.repetitions <= 30
+        or not 1 <= args.timeout <= 7200
+    ):
+        command_parser.error(
+            "benchmark requires --live, 1–30 repetitions and a timeout of 1–7200 seconds"
         )
     as_json = getattr(args, "json", False)
     reporter = Reporter(
@@ -352,6 +396,40 @@ def main(argv=None):
         # inspect the original invalid configuration and remain diagnostic.
         if not any(issue.blocks_startup for issue in settings.issues()):
             settings.activate()
+        if args.command == "benchmark":
+            from .benchmark import run_benchmark, save_report
+
+            report = asyncio.run(
+                run_benchmark(
+                    settings,
+                    repetitions=args.repetitions,
+                    mode=args.backend,
+                    date=args.date,
+                    start=args.start,
+                    end=args.end,
+                    cobooker_query=args.cobooker_query,
+                    equipment_matrix=args.equipment_matrix,
+                    timeout=args.timeout,
+                    progress=None if as_json else reporter.write,
+                    selected=args.selected,
+                    output=args.output,
+                )
+            )
+            if args.output:
+                save_report(args.output, report)
+            if as_json:
+                print(json.dumps(report, indent=2))
+            else:
+                for case in report["cases"]:
+                    reporter.write(
+                        f"{case['name']}: "
+                        + (
+                            f"skipped ({case['skipped']})"
+                            if "skipped" in case
+                            else f"median {case['median_ms']}ms; {case['failures']} failures"
+                        )
+                    )
+            return 0 if report["ok"] else 1
         if args.command == "backend-probe":
             from .backend_probe import run_probe
 

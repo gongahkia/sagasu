@@ -23,6 +23,7 @@ from .fbs_http import (
     fbs_document_url,
     parse_account_document,
 )
+from .observability import observed_step
 from .fbs_webforms import FILTERS, READ_TARGETS, SearchForm, parse_calendar_document
 
 ACCOUNT_PATHS = {
@@ -41,6 +42,7 @@ class FBSReadAPI:
         self._driver = None
         self._owns_request = request is None
 
+    @observed_step("http.open")
     async def __aenter__(self):
         if self.request is not None:
             return self
@@ -74,6 +76,7 @@ class FBSReadAPI:
             raise
         return self
 
+    @observed_step("http.close")
     async def __aexit__(self, *_):
         if self._owns_request:
             try:
@@ -83,6 +86,7 @@ class FBSReadAPI:
                 if self._driver:
                     await self._driver.stop()
 
+    @observed_step("http.request")
     async def document(self, url, fields=None):
         if not fbs_document_url(url):
             raise HTTPReadUnavailable("untrusted_endpoint")

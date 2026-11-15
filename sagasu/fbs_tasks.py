@@ -328,10 +328,12 @@ async def capture_approval_receipt(client, frame, outcome):
 
 @observed_operation("backend.task_action")
 async def execute_task_action(
-    expected, *, approve=False, auth_notify=None, progress=None
+    expected, *, approve=False, auth_notify=None, progress=None, interactive=True
 ):
     try:
-        async with FBSClient(auth_notify=auth_notify, progress=progress) as client:
+        async with FBSClient(
+            auth_notify=auth_notify, progress=progress, interactive=interactive
+        ) as client:
             if approve:
                 return await approve_task(client, expected)
             return await capture_task_details(client, expected)
