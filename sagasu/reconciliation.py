@@ -28,6 +28,7 @@ def evidence(state, *, verified=False, reference=None, status=None, complete=Fal
             "pending_confirmation": "The exact booking reference exists and still requires confirmation.",
             "cancelled": "The exact reference is marked cancelled in FBS.",
             "approved": "The exact task is marked approved; booking confirmation is a separate status.",
+            "amended": "The exact booking reference shows the requested amended fields; inspect its actual FBS status for confirmation.",
             "matching_booking_found": "A matching booking exists, but it cannot be attributed to the interrupted action without its reference. Do not submit another booking.",
             "not_found": "No matching record was found in the checked rows. Absence does not prove the action failed or a cancellation succeeded.",
             "unresolved": "The current records do not prove the action outcome. Inspect FBS before any retry.",
@@ -79,6 +80,40 @@ async def reconcile(client, payload):
     row = matches[0]
     status = row["fbs_status"]
     normalized = status.strip().casefold()
+    if kind == "amend":
+        from .amendments import matches_digest, observed_values
+        from .booking_details import read_booking_details
+
+        details = await read_booking_details(
+            client, known_ref, source="bookings", include_additional=True
+        )
+        if (
+            details.get("reference_verified") is True
+            and details.get("reference_number") == known_ref
+            and details.get("room") == summary.get("room")
+            and all(
+                details.get(key) == summary.get(key)
+                for key in ("date", "start_time", "end_time")
+            )
+            and isinstance(payload.get("verification_key"), bytes)
+            and matches_digest(
+                payload["verification_key"], summary, observed_values(details)
+            )
+            and (normalized == "confirmed" or normalized.startswith("pending"))
+        ):
+            return evidence(
+                "amended",
+                verified=True,
+                reference=known_ref,
+                status=status,
+                complete=listing["complete"],
+            )
+        return evidence(
+            "unresolved",
+            reference=known_ref,
+            status=status,
+            complete=listing["complete"],
+        )
     if kind == "book":
         try:
             match_identity = identity("book", {**row, **booking_window(row)})

@@ -1,6 +1,11 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
 REASONS = {
+    "amendment_unavailable": (
+        "The native FBS amendment could not be prepared. No CONFIRM action was attempted.",
+        "Refresh amendment_options for the exact reference, review current permissions/fields and prepare a fresh amendment_review. An unreadable added-interval search is not evidence of no availability.",
+        "amendment_options",
+    ),
     "browser_screenshot_unavailable": (
         "No browser screenshot was captured. The page is unavailable, changed during capture, or contains authentication controls.",
         "If no FBS browser page exists, use session_status to load it without signing in, then retry browser_screenshot while idle. Authentication/MFA pages are excluded. The screenshot tool does not navigate or sign in.",

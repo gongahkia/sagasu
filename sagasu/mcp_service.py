@@ -44,7 +44,7 @@ from .config import ConfigurationRequired
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
 from .read_backends import HybridReads, READ_FAILURES
 
-WRITE_KINDS = {"book", "cancel", "approve_task"}
+WRITE_KINDS = {"book", "cancel", "approve_task", "amend"}
 
 
 class AgentError(ValueError):
@@ -66,6 +66,20 @@ class Backend:
         direct_failure = None
         if kind in WRITE_KINDS or kind == "login":
             self.reads.invalidate()
+        if kind in {"amend", "validate_amend"}:
+            from .amendments import check_added_intervals, execute_amendment
+
+            async def read(config):
+                return await self.run("search", config, progress, notify)
+
+            await check_added_intervals(payload, read)
+            return await execute_amendment(
+                payload,
+                submit=kind == "amend",
+                progress=progress,
+                auth_notify=notify,
+                interactive=self.interactive_auth,
+            )
         if kind == "room_plan":
             from .room_plans import find_room_plans
 
@@ -165,6 +179,10 @@ class Backend:
                 return await read_booking_options(
                     client, payload["search"], payload["room"]
                 )
+            if kind == "amendment_options":
+                from .amendments import read_amendment_options
+
+                return await read_amendment_options(client, payload["reference_number"])
             if kind == "cobooker_search":
                 from .cobookers import search_cobookers, filter_candidates
 
@@ -330,6 +348,7 @@ class AgentService:
         self.profile = profile
         self.journal = journal
         self.journal_failed = False
+        self._comparison_key = None
 
     def personal_profile(self):
         if self.profile is None:
@@ -501,7 +520,7 @@ class AgentService:
         original = self.get(operation_id)
         if original.kind not in WRITE_KINDS or not original.terminal:
             raise AgentError(
-                "Choose a finished booking, cancellation or task approval operation. Active writes must finish first."
+                "Choose a finished booking, amendment, cancellation or task approval operation. Active writes must finish first."
             )
         if not original.summary:
             raise AgentError(
@@ -510,6 +529,11 @@ class AgentService:
         reference = (original.result or {}).get(
             "reference_number"
         ) or original.summary.get("reference_number")
+        extra = (
+            {"verification_key": self.comparison_key()}
+            if original.kind == "amend"
+            else {}
+        )
         return self.start(
             "reconcile",
             {
@@ -517,6 +541,7 @@ class AgentService:
                 "kind": original.kind,
                 "summary": copy.deepcopy(original.summary),
                 "reference_number": reference,
+                **extra,
             },
         )
 
@@ -1586,9 +1611,57 @@ class AgentService:
         )
         return self.review(result["review_id"])
 
+    def comparison_key(self):
+        if self._comparison_key is None:
+            self._comparison_key = (
+                self.journal.comparison_key()
+                if self.journal
+                else secrets.token_bytes(32)
+            )
+        return self._comparison_key
+
+    def amendment_options(self, reference_number):
+        if (
+            not isinstance(reference_number, str)
+            or not 1 <= len(reference_number.strip()) <= 100
+            or any(ord(c) < 32 or ord(c) == 127 for c in reference_number)
+        ):
+            raise AgentError(
+                "Use an exact single-line FBS reference number of 1–100 characters."
+            )
+        return self.start(
+            "amendment_options", {"reference_number": reference_number.strip()}
+        )
+
+    def review_amendment(self, operation_id, changes):
+        from .amendments import prepare_amendment
+
+        options = self._completed(operation_id, "amendment_options")
+        try:
+            payload = prepare_amendment(options, changes, self.comparison_key())
+        except (ValueError, KeyError, TypeError, BookingUnavailable) as error:
+            raise AgentError(str(error)) from None
+        return self._review(
+            "amend",
+            payload,
+            {
+                "reference_number": payload["expected"]["reference_number"],
+                "room": payload["expected"]["room"],
+                "before": {key: payload["expected"][key] for key in payload["changes"]},
+                "changes": payload["changes"],
+                "participant_count": len(payload["expected"]["participants"]),
+                "policy": "Native EDIT only; existing room and participants are preserved. Final FBS status may require confirmation.",
+            },
+        )
+
     def validate(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
+        if review["kind"] == "amend":
+            from .amendments import require_target
+
+            require_target(review["payload"])
+            return self.start("validate_amend", review["payload"])
         if review["kind"] != "book":
             raise AgentError(
                 "Only booking reviews support validation without submission."
@@ -1599,6 +1672,10 @@ class AgentService:
     def confirm(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
+        if review["kind"] == "amend":
+            from .amendments import require_target
+
+            require_target(review["payload"])
         if review["kind"] == "batch":
             if self.journal_failed:
                 raise AgentError("Action history failed; no batch action was queued.")
@@ -1610,6 +1687,10 @@ class AgentService:
                     )
                 if member["kind"] == "book":
                     require_future_booking(member["payload"].search)
+                elif member["kind"] == "amend":
+                    from .amendments import require_target
+
+                    require_target(member["payload"])
             job = self.start("batch", review["payload"])
             for key in [
                 review_id,

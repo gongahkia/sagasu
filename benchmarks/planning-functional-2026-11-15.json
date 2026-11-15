@@ -66,5 +66,19 @@
     "booking_list_unchanged": true,
     "submitted": false
   },
+  "native_amendments": {
+    "exact_native_edit_action_verified": true,
+    "reference_binding": "Complete My Bookings listing, unique reference and unique room/date/time/status tuple, exact row EDIT action, then matching native editable form identity. EDIT omits the reference field; VIEW verification remains unchanged.",
+    "unsent_controls": ["date/start/end rescheduling", "duration shortening", "purpose", "booking usage classification"],
+    "newly_reserved_interval_rechecked": true,
+    "existing_room_retained": true,
+    "existing_participant_names_retained": true,
+    "native_credit_estimate_exposed": true,
+    "booking_list_unchanged": true,
+    "credit_balance_unchanged_after_date_time_preview": true,
+    "submitted": false,
+    "write_verification": "Offline browser fixtures only: submission, response loss, restart, keyed target reconciliation, pending status and receipt failure",
+    "room_and_participant_changes": "Not exposed by the implemented amendment flow"
+  },
   "end_to_end_evaluation": "Pending; no token or speed savings claimed"
 }

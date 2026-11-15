@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import secrets
 import sqlite3
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -31,6 +32,8 @@ SUMMARY_KEYS = {
     "reference_number",
     "date_time",
     "fbs_status",
+    "verification_fields",
+    "verification_digest",
 }
 RESULT_KEYS = {
     "status",
@@ -58,6 +61,15 @@ def safe_fields(value, allowed):
 
 
 def action_summary(kind, payload):
+    if kind == "amend":
+        return safe_fields(
+            {
+                **payload["target"],
+                "verification_fields": payload["verification_fields"],
+                "verification_digest": payload["verification_digest"],
+            },
+            SUMMARY_KEYS,
+        )
     if kind == "book":
         return safe_fields(
             {
@@ -74,6 +86,41 @@ def action_summary(kind, payload):
 class ActionJournal:
     def __init__(self, path):
         self.path = Path(path).expanduser().resolve()
+
+    def comparison_key(self):
+        """Keep keyed comparison fingerprints useful after restart, without purpose text."""
+        with self._db() as db:
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS comparison_metadata (name TEXT PRIMARY KEY, value TEXT NOT NULL)"
+            )
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT value FROM comparison_metadata WHERE name='amendment_key'"
+            ).fetchone()
+            if row is None:
+                if db.execute(
+                    "SELECT 1 FROM actions WHERE kind='amend' LIMIT 1"
+                ).fetchone():
+                    raise JournalError(
+                        "The amendment comparison key is missing from existing history; restore the private history backup instead of resetting it."
+                    )
+                key = secrets.token_bytes(32)
+                db.execute(
+                    "INSERT INTO comparison_metadata VALUES('amendment_key',?)",
+                    (key.hex(),),
+                )
+                return key
+            try:
+                key = bytes.fromhex(row[0])
+            except (TypeError, ValueError):
+                raise JournalError(
+                    "The amendment comparison key is unreadable; no reset was performed."
+                ) from None
+            if len(key) != 32:
+                raise JournalError(
+                    "The amendment comparison key is invalid; no reset was performed."
+                )
+            return key
 
     @contextmanager
     def _db(self):
@@ -222,6 +269,7 @@ class ActionJournal:
             "pending_confirmation",
             "cancelled",
             "approved",
+            "amended",
             "matching_booking_found",
             "not_found",
             "unresolved",
@@ -245,7 +293,8 @@ class ActionJournal:
         )
         # A caller cannot assert verification for an absence or ambiguous match.
         data["action_outcome_verified"] = (
-            state in {"confirmed", "pending_confirmation", "cancelled", "approved"}
+            state
+            in {"confirmed", "pending_confirmation", "cancelled", "approved", "amended"}
             and result.get("action_outcome_verified") is True
         )
         data["safe_to_retry"] = False

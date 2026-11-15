@@ -58,6 +58,7 @@ LIVE_TOOLS = frozenset(
         "room_details",
         "credit_status",
         "booking_options",
+        "amendment_options",
         "check_booking_clashes",
         "list_saved_plans",
         "refresh_saved_plan",
