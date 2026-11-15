@@ -79,6 +79,7 @@ class DiagnosticMCPTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(status["configuration"], setup)
                 for name, arguments in [
                     ("list_bookings", {}),
+                    ("browser_screenshot", {}),
                     ("login", {}),
                     ("session_status", {}),
                     ("search_rooms", {"config": CONFIG}),

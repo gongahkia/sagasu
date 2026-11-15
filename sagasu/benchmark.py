@@ -1,8 +1,9 @@
 """Repeatable live read measurements over MCP; exported reports contain no records.
 
 The CLI owns the browser profile exclusively. Stop the shared host before running.
-Browser contexts close before each case's first sample; repeated samples can reuse
-them. MCP is in-process: timings exclude agent reasoning and stdio startup.
+Browser contexts close before each case's first sample except current-page
+screenshots; repeated samples can reuse them. MCP is in-process: timings exclude
+agent reasoning and stdio startup.
 """
 
 import asyncio
@@ -204,10 +205,13 @@ class Harness:
             if not self.service.get(operation_id).terminal:
                 await self.service.cancel(operation_id)
 
-    async def measure(self, name, operation, *, repetitions=None):
+    async def measure(
+        self, name, operation, *, repetitions=None, preserve_browser=False
+    ):
         if not self.includes(name):
             return None
-        await close_shared_browser()
+        if not preserve_browser:
+            await close_shared_browser()
         samples = []
         case = {"name": name, "in_progress": True, "measurements": samples}
         self.cases.append(case)
@@ -336,7 +340,7 @@ async def run_benchmark(
         "live": True,
         "read_only": True,
         "measurement_scope": "In-process MCP tool plus job completion; excludes agent reasoning and stdio startup. Dependency setup is excluded from individual case timing.",
-        "first_sample": "Shared Chromium context closed before each case; subsequent samples may reuse it. HTTP reads may start their own request contexts.",
+        "first_sample": "Shared Chromium context closed before each case except current-page screenshots; subsequent samples may reuse it. HTTP reads may start their own request contexts.",
         "p95_policy": "Only reported with at least 20 successful samples.",
         "phase_policy": "Nested phase totals are inclusive; do not sum them as exclusive time.",
         "response_size_policy": "Compact UTF-8 structured JSON summed over MCP responses, including polls; excludes text/image blocks and transport framing. This is not a token count.",
@@ -534,7 +538,9 @@ async def run_benchmark(
                         )
                 await harness.measure("list_tasks", lambda: harness.job("list_tasks"))
                 await harness.measure(
-                    "browser_screenshot", lambda: harness.job("browser_screenshot")
+                    "browser_screenshot",
+                    lambda: harness.job("browser_screenshot"),
+                    preserve_browser=True,
                 )
                 tasks_id, task_result = harness.latest.get("list_tasks", (None, {}))
                 if tasks_id is None and harness.includes("task_details"):

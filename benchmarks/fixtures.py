@@ -26,6 +26,7 @@ SUITES = [
     "tests.test_cobookers",
     "tests.test_booking_details_mcp",
     "tests.test_booking_details_browser",
+    "tests.test_browser_debug",
     "tests.test_reconciliation",
     "tests.test_action_journal",
 ]
