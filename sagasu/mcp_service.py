@@ -73,6 +73,12 @@ class Backend:
                 return await self.run("search", config, progress, notify)
 
             return await find_room_plans(payload, read, progress)
+        if kind == "clashes":
+            from .clashes import check_clashes
+
+            return check_clashes(
+                await self.run("bookings", None, progress, notify), payload
+            )
         if kind == "alternatives" and not payload["configs"]:
             from .alternatives import report
 
@@ -1050,6 +1056,15 @@ class AgentService:
         return self.start(
             "room_details", {"room": room.strip(), "include_image": include_image}
         )
+
+    def check_booking_clashes(self, windows):
+        from .clashes import prepare_windows
+
+        try:
+            windows = prepare_windows(windows)
+        except (ValueError, TypeError, KeyError, BookingUnavailable) as error:
+            raise AgentError(str(error)) from None
+        return self.start("clashes", windows)
 
     def booking_options(self, search_operation_id, room):
         from .fbs_client import RoomAvailability, TimeSlot

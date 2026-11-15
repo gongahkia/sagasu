@@ -58,6 +58,7 @@ LIVE_TOOLS = frozenset(
         "room_details",
         "credit_status",
         "booking_options",
+        "check_booking_clashes",
         "task_details",
         "search_cobookers",
         "available_rooms",
@@ -430,6 +431,20 @@ async def run_benchmark(
                 )
                 await harness.measure(
                     "credit_status", lambda: harness.job("credit_status")
+                )
+                await harness.measure(
+                    "check_booking_clashes",
+                    lambda: harness.job(
+                        "check_booking_clashes",
+                        {
+                            "windows": [
+                                {
+                                    key: config[key]
+                                    for key in ("date", "start_time", "end_time")
+                                }
+                            ]
+                        },
+                    ),
                 )
                 for label, building in BUILDINGS.items():
                     query = {

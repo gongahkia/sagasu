@@ -50,5 +50,11 @@
     "submitted": false,
     "earlier_attempt": "Options were read successfully; the temporary room became unavailable before later validation. No submission occurred; a future free interval was used for the successful control."
   },
+  "own_booking_clashes": {
+    "complete": true,
+    "known_future_booking_overlap_detected": true,
+    "booking_list_unchanged": true,
+    "submitted": false
+  },
   "end_to_end_evaluation": "Pending; no token or speed savings claimed"
 }

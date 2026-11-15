@@ -100,6 +100,13 @@ class RecurrenceInput(BaseModel):
     interval_weeks: int = 1
 
 
+class BookingWindowInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    date: str = Field(description="SGT date, ISO YYYY-MM-DD or DD-Mon-YYYY")
+    start_time: str
+    end_time: str
+
+
 def create_server(
     service, *, lifespan=None, allow_agent_submission=False, configuration_provider=None
 ):
@@ -494,6 +501,15 @@ def create_server(
     async def list_bookings() -> dict[str, Any]:
         """Start reading paginated My Bookings summaries: reference, room, date/time, actual FBS status and cancellation permission. Poll the operation ID. For purpose, booker, participants and confirmation details, call booking_details with each requested reference_number. Does not change bookings."""
         return safe(service.start, "bookings")
+
+    @server.tool(annotations=read)
+    async def check_booking_clashes(
+        windows: list[BookingWindowInput],
+    ) -> dict[str, Any]:
+        """Check 1–31 proposed future SGT windows with one My Bookings read. Includes confirmed/pending overlaps and compares proposed windows with each other; adjacent intervals do not clash. Cancelled/withdrawn/rejected records are excluded. Unknown status, unreadable dates or partial coverage cannot produce an all-clear. Reports My Bookings overlaps, not who created a booking or final FBS eligibility. Never submits. Poll wait_operation."""
+        return safe(
+            service.check_booking_clashes, [window.model_dump() for window in windows]
+        )
 
     @server.tool(annotations=read)
     async def room_details(room: str, include_image: bool = False) -> dict[str, Any]:

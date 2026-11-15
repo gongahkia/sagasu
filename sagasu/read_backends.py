@@ -76,6 +76,7 @@ class HybridReads:
                 "list_tasks",
                 "search_alternatives",
                 "plan_rooms",
+                "check_booking_clashes",
             ],
             "browser": sorted(READ_KINDS),
             "browser_workflows": [
