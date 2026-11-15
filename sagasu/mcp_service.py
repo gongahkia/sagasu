@@ -882,6 +882,7 @@ class AgentService:
         allow_split=False,
         transition_minutes=0,
         room_preferences=None,
+        recurrence=None,
     ):
         from .personal import validate_preferences
         from .room_plans import prepare_plan
@@ -909,6 +910,7 @@ class AgentService:
                 allow_split,
                 transition_minutes,
                 preferences,
+                recurrence=recurrence,
             )
         except (ValueError, KeyError, TypeError, BookingUnavailable) as error:
             raise AgentError(str(error)) from None

@@ -2,7 +2,7 @@
 
 import heapq
 from dataclasses import asdict, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from playwright.async_api import Error as PlaywrightError
 
@@ -26,6 +26,53 @@ MAX_CANDIDATES = 200
 MAX_EVALUATED_CANDIDATES = 100_000
 
 
+def recurrence_dates(value):
+    if not isinstance(value, dict) or set(value) - {
+        "start_date",
+        "end_date",
+        "weekdays",
+        "interval_weeks",
+    }:
+        raise ValueError(
+            "Use a bounded recurrence with start_date, end_date, weekdays and optional interval_weeks."
+        )
+    try:
+        start, end = [
+            datetime.strptime(normalize_date(value[key]), "%d-%b-%Y").date()
+            for key in ("start_date", "end_date")
+        ]
+    except (KeyError, ValueError, TypeError):
+        raise ValueError(
+            "Recurrence requires explicit valid start_date and end_date."
+        ) from None
+    weekdays, interval = value.get("weekdays"), value.get("interval_weeks", 1)
+    if (
+        not isinstance(weekdays, list)
+        or not weekdays
+        or len(weekdays) > 7
+        or any(type(day) is not int or not 0 <= day <= 6 for day in weekdays)
+        or len(set(weekdays)) != len(weekdays)
+        or type(interval) is not int
+        or not 1 <= interval <= 4
+        or not 0 <= (end - start).days <= 366
+    ):
+        raise ValueError(
+            "Choose unique weekdays 0–6 (Monday–Sunday), interval_weeks 1–4 and an inclusive range of at most 366 days."
+        )
+    anchor = start - timedelta(days=start.weekday())
+    dates = [
+        day.strftime("%d-%b-%Y")
+        for offset in range((end - start).days + 1)
+        if (day := start + timedelta(days=offset)).weekday() in weekdays
+        and ((day - anchor).days // 7) % interval == 0
+    ]
+    if not 1 <= len(dates) <= MAX_DATES:
+        raise ValueError(
+            "The recurrence must generate 1–31 dates; shorten or revise the range."
+        )
+    return dates
+
+
 def prepare_plan(
     config,
     dates=None,
@@ -36,6 +83,7 @@ def prepare_plan(
     preferences=None,
     *,
     now=None,
+    recurrence=None,
 ):
     config = SearchConfig.from_mapping(config)
     now = now or datetime.now(FBS_TIMEZONE)
@@ -66,7 +114,13 @@ def prepare_plan(
         < duration_minutes
     ):
         raise ValueError("The requested duration exceeds the search window.")
-    dates = [config.date] if dates is None else dates
+    if dates is not None and recurrence is not None:
+        raise ValueError("Supply explicit dates OR recurrence, not both.")
+    dates = (
+        recurrence_dates(recurrence)
+        if recurrence is not None
+        else [config.date] if dates is None else dates
+    )
     if (
         not isinstance(dates, list)
         or not 1 <= len(dates) <= MAX_DATES
@@ -284,6 +338,17 @@ async def find_room_plans(payload, search, progress=_noop_progress):
                     "scraped_at": snapshot.scraped_at,
                     "effective_start_time": config.start_time,
                     "read_backend": data.get("read_backend"),
+                    "matching_plan_available": next(
+                        _options(
+                            calendars[date][0],
+                            config,
+                            payload["duration_minutes"],
+                            payload["allow_split"],
+                            payload["transition_minutes"],
+                        ),
+                        None,
+                    )
+                    is not None,
                 }
             )
         except (

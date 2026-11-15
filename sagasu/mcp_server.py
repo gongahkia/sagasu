@@ -90,6 +90,16 @@ class RoomPreferencesInput(BaseModel):
     weights: dict[str, float] | None = None
 
 
+class RecurrenceInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    start_date: str
+    end_date: str
+    weekdays: list[int] = Field(
+        description="0=Monday through 6=Sunday; inclusive SGT date range"
+    )
+    interval_weeks: int = 1
+
+
 def create_server(
     service, *, lifespan=None, allow_agent_submission=False, configuration_provider=None
 ):
@@ -380,8 +390,9 @@ def create_server(
         allow_split: bool = False,
         transition_minutes: int = 0,
         room_preferences: RoomPreferencesInput | None = None,
+        recurrence: RecurrenceInput | None = None,
     ) -> dict[str, Any]:
-        """Find fixed-duration room plans inside a broad time window, using one FBS read per explicit date (1–31). dates accepts ISO and overrides config.date. any finds alternatives on individual dates; common requires the same room AND start time on every date. Explicit allow_split offers at most one room change only when no single room fits that start; transition_minutes adds a half-hour travel gap to the booked duration. Common mode does not split. Preserves all FBS filters and excludes past starts. Applies saved favourite/avoided rooms and scoring preferences; room_preferences overrides them for this operation only. Poll, inspect per-date failures/horizons, complete and ranking_complete, and paginate candidates. Common candidates use all_dates=true; their legs apply to every returned date. Keeps at most 200 candidates and bounds matching work; incomplete ranking does not establish the global best match or total. Does not book; each date/leg requires its own planned_booking_review and requested submission."""
+        """Plan fixed-duration rooms inside a broad time window, with one FBS read per date (1–31). Supply dates OR recurrence to override config.date; recurrence uses inclusive start/end dates, weekdays 0=Monday–6=Sunday and interval_weeks 1–4. Every generated date must be today/future. Per-date probes distinguish matches, unavailability and failures. any offers individual dates; common requires the same room AND start on every date. allow_split permits one room change only where no single room fits that start; transition_minutes adds a half-hour travel gap. Common does not split. Preserves FBS filters and future starts; saved room preferences apply unless overridden here. Poll, inspect horizons, complete and ranking_complete, then paginate candidates. Common all_dates legs apply to every date. Retains at most 200 candidates and bounds computation; incomplete ranking establishes neither the global best nor total. Each chosen date/leg needs planned_booking_review and requested submission; never books a series implicitly."""
         return safe(
             service.plan_rooms,
             config.model_dump(),
@@ -395,6 +406,7 @@ def create_server(
                 if room_preferences is not None
                 else None
             ),
+            recurrence.model_dump() if recurrence is not None else None,
         )
 
     @server.tool(annotations=local)
