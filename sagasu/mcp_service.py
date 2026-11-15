@@ -66,6 +66,13 @@ class Backend:
         direct_failure = None
         if kind in WRITE_KINDS or kind == "login":
             self.reads.invalidate()
+        if kind == "room_plan":
+            from .room_plans import find_room_plans
+
+            async def read(config):
+                return await self.run("search", config, progress, notify)
+
+            return await find_room_plans(payload, read, progress)
         if kind == "alternatives" and not payload["configs"]:
             from .alternatives import report
 
@@ -848,6 +855,112 @@ class AgentService:
                 "avoided_rooms": preferences["avoided_rooms"],
             },
         )
+
+    def plan_rooms(
+        self,
+        config,
+        dates=None,
+        duration_minutes=60,
+        mode="any",
+        allow_split=False,
+        transition_minutes=0,
+        room_preferences=None,
+    ):
+        from .personal import validate_preferences
+        from .room_plans import prepare_plan
+        from .room_preferences import merge_preferences
+
+        try:
+            validated = validate_preferences(
+                {
+                    k: config[k]
+                    for k in ("buildings", "floors", "facility_types", "equipment")
+                    if k in config
+                }
+                | {"room_capacity": config.get("capacity")}
+            )
+            config = {
+                **config,
+                **{k: v for k, v in validated.items() if k != "room_capacity"},
+            }
+            preferences = merge_preferences(self.room_preferences(), room_preferences)
+            payload = prepare_plan(
+                config,
+                dates,
+                duration_minutes,
+                mode,
+                allow_split,
+                transition_minutes,
+                preferences,
+            )
+        except (ValueError, KeyError, TypeError, BookingUnavailable) as error:
+            raise AgentError(str(error)) from None
+        return self.start("room_plan", payload)
+
+    def planned_booking_review(
+        self,
+        operation_id,
+        candidate_index,
+        occurrence_index=0,
+        leg_index=0,
+        purpose=None,
+        co_booker=None,
+        cobooker_id=None,
+    ):
+        plan = self._completed(operation_id, "room_plan")
+        if any(
+            type(index) is not int or index < 0
+            for index in (candidate_index, occurrence_index, leg_index)
+        ):
+            raise AgentError(
+                "Choose nonnegative candidate, occurrence and leg indices from this plan."
+            )
+        try:
+            candidate = plan["candidates"][candidate_index]
+            dates = plan["dates"] if candidate.get("all_dates") else [candidate["date"]]
+            date = dates[occurrence_index]
+            leg = candidate["legs"][leg_index]
+            source = next(
+                p
+                for p in plan["probes"]
+                if p["date"] == date and p["status"] == "succeeded"
+            )
+        except (IndexError, KeyError, StopIteration):
+            raise AgentError(
+                "Choose an existing candidate, occurrence and leg from this plan."
+            ) from None
+        if not purpose:
+            raise AgentError("Provide the booking purpose for the selected leg.")
+        config = {
+            **plan["config"],
+            "date": date,
+            "start_time": leg["start_time"],
+            "end_time": leg["end_time"],
+        }
+        snapshot = {
+            "config": config,
+            "rooms": [
+                {
+                    "name": leg["room"],
+                    "timeslots": [
+                        {
+                            "start": leg["start_time"],
+                            "end": leg["end_time"],
+                            "status": "free",
+                        }
+                    ],
+                }
+            ],
+            "scraped_at": source["scraped_at"],
+        }
+        try:
+            return self._review_booking_result(
+                snapshot, leg["room"], purpose, co_booker, cobooker_id
+            )
+        except BookingUnavailable:
+            raise AgentError(
+                "This planned leg has already started; run plan_rooms again."
+            ) from None
 
     def search(self, config=None, preferences=None):
         from .personal import validate_preferences

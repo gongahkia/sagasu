@@ -350,6 +350,54 @@ def create_server(
         return safe(service.action_history, offset, limit)
 
     @server.tool(annotations=read)
+    async def plan_rooms(
+        config: SearchInput,
+        duration_minutes: int,
+        dates: list[str] | None = None,
+        mode: Literal["any", "common"] = "any",
+        allow_split: bool = False,
+        transition_minutes: int = 0,
+        room_preferences: RoomPreferencesInput | None = None,
+    ) -> dict[str, Any]:
+        """Find fixed-duration room plans inside a broad time window, using one FBS read per explicit date (1–31). dates accepts ISO and overrides config.date. any finds alternatives on individual dates; common requires the same room AND start time on every date. Explicit allow_split offers at most one room change only when no single room fits that start; transition_minutes adds a half-hour travel gap to the booked duration. Common mode does not split. Preserves all FBS filters and excludes past starts. Applies saved favourite/avoided rooms and scoring preferences; room_preferences overrides them for this operation only. Poll, inspect per-date failures/horizons, and paginate candidates. Common candidates use all_dates=true; their legs apply to every returned date. Keeps at most 200 ranked candidates and reports truncation. Does not book; each date/leg requires its own planned_booking_review and requested submission."""
+        return safe(
+            service.plan_rooms,
+            config.model_dump(),
+            dates,
+            duration_minutes,
+            mode,
+            allow_split,
+            transition_minutes,
+            (
+                room_preferences.model_dump(exclude_unset=True)
+                if room_preferences is not None
+                else None
+            ),
+        )
+
+    @server.tool(annotations=local)
+    async def planned_booking_review(
+        operation_id: str,
+        candidate_index: int,
+        purpose: str,
+        occurrence_index: int = 0,
+        leg_index: int = 0,
+        co_booker: str | None = None,
+        cobooker_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Review one exact leg/date from a successful room plan. Use candidate_index from the result; occurrence_index selects a date for all_dates candidates, otherwise 0. Supplies that leg's exact room/time to the ordinary immutable review; validation/submission rechecks FBS. Does not submit other legs or dates, even for split/common plans."""
+        return safe(
+            service.planned_booking_review,
+            operation_id,
+            candidate_index,
+            occurrence_index,
+            leg_index,
+            purpose,
+            co_booker,
+            cobooker_id,
+        )
+
+    @server.tool(annotations=read)
     async def reconcile_operation(operation_id: str) -> dict[str, Any]:
         """Start a read-only comparison of a finished write with current FBS bookings/tasks, using its exact reference or immutable room/date/time history. Records observed evidence locally without replaying the action. Absence, partial listings, or ambiguous matches never authorize retry. Pending confirmation is separate from confirmed. Poll with wait_operation; original historical outcomes are preserved."""
         return safe(service.reconcile_operation, operation_id)
