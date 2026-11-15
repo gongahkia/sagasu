@@ -15,7 +15,8 @@ def measurements(case):
         raise ValueError("Every compared case needs nonempty measurements.")
     for sample in samples:
         if (
-            sample.get("status") not in {"success", "failed"}
+            not isinstance(sample, dict)
+            or sample.get("status") not in {"success", "failed"}
             or type(sample.get("elapsed_ms")) not in (int, float)
             or not math.isfinite(sample["elapsed_ms"])
             or sample["elapsed_ms"] < 0

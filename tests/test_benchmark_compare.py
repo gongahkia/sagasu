@@ -59,6 +59,7 @@ class ComparisonTests(unittest.TestCase):
     def test_unmatched_contexts_partial_reports_invalid_or_duplicate_samples_fail(self):
         base = report(samples(1000))
         candidates = [report(samples(float("nan"))), report(samples(-1))]
+        candidates.append(report([None]))
         mismatch = copy.deepcopy(base)
         mismatch["comparison_context"] = {"backend": "other"}
         candidates.append(mismatch)
