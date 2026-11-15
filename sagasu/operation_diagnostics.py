@@ -70,8 +70,11 @@ async def capture_failure(client, error):
     if capture is None or capture.capturing or capture.attempted:
         return
     from .fbs_client import AuthenticationRequired
+    from .browser_debug import ScreenshotUnavailable
 
-    if isinstance(error, (asyncio.CancelledError, AuthenticationRequired)):
+    if isinstance(
+        error, (asyncio.CancelledError, AuthenticationRequired, ScreenshotUnavailable)
+    ):
         return
     if getattr(client, "page", None) is None:
         return

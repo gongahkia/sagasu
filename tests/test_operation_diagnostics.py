@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from mcp import Client
 
 from sagasu.fbs_client import AuthenticationRequired
+from sagasu.browser_debug import ScreenshotUnavailable
 from sagasu.mcp_server import create_server
 from sagasu.mcp_service import AgentService, Backend
 from sagasu.observability import event, observed_step
@@ -74,6 +75,9 @@ class DiagnosticTests(unittest.IsolatedAsyncioTestCase):
         ):
             await capture_failure(
                 SimpleNamespace(page=object()), AuthenticationRequired("SECRET")
+            )
+            await capture_failure(
+                SimpleNamespace(page=object()), ScreenshotUnavailable("SECRET")
             )
             await capture_failure(SimpleNamespace(page=None), ValueError("SECRET"))
             screenshot.assert_not_awaited()
