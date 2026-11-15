@@ -138,6 +138,9 @@ class PersonalStore:
                 connection.execute(
                     "CREATE TABLE IF NOT EXISTS booking_templates (scope TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(scope,id), UNIQUE(scope,name))"
                 )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS room_preferences (scope TEXT PRIMARY KEY, payload TEXT NOT NULL)"
+                )
             if write:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection
@@ -341,3 +344,26 @@ class PersonalStore:
                 (self.scope, json.dumps(current)),
             )
         return current
+
+    def room_preferences(self):
+        from .room_preferences import merge_preferences
+
+        with self._db() as db:
+            row = db.execute(
+                "SELECT payload FROM room_preferences WHERE scope=?", (self.scope,)
+            ).fetchone()
+            return merge_preferences(json.loads(row[0]) if row else {})
+
+    def update_room_preferences(self, patch):
+        from .room_preferences import merge_preferences
+
+        with self._db(write=True) as db:
+            row = db.execute(
+                "SELECT payload FROM room_preferences WHERE scope=?", (self.scope,)
+            ).fetchone()
+            value = merge_preferences(json.loads(row[0]) if row else {}, patch)
+            db.execute(
+                "INSERT INTO room_preferences(scope,payload) VALUES(?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload",
+                (self.scope, json.dumps(value)),
+            )
+        return value

@@ -69,7 +69,7 @@ class Backend:
         if kind == "alternatives" and not payload["configs"]:
             from .alternatives import report
 
-            return report(payload["source"], [])
+            return report(payload["source"], [], payload.get("avoided_rooms", ()))
         if kind == "alternatives":
             from .alternatives import find_alternatives, result_from_dict
 
@@ -689,7 +689,31 @@ class AgentService:
             ),
         }
 
-    def available_rooms(self, operation_id, offset=0, limit=20, preferred_rooms=None):
+    def room_preferences(
+        self,
+        preferred_rooms=None,
+        avoided_rooms=None,
+        weights=None,
+        time_preference=None,
+    ):
+        from .room_preferences import merge_preferences
+
+        saved = self.profile.room_preferences() if self.profile else {}
+        patch = {
+            k: v
+            for k, v in {
+                "preferred_rooms": preferred_rooms,
+                "avoided_rooms": avoided_rooms,
+                "weights": weights,
+                "time_preference": time_preference,
+            }.items()
+            if v is not None
+        }
+        return merge_preferences(saved, patch)
+
+    def available_rooms(
+        self, operation_id, offset=0, limit=20, preferred_rooms=None, avoided_rooms=None
+    ):
         """Filter before pagination; preserve the full discovery snapshot for reviews."""
         from .fbs_client import RoomAvailability, TimeSlot, SearchResult
 
@@ -704,9 +728,12 @@ class AgentService:
             )
             for row in result["rooms"]
         ]
-        preferred_rooms = self._room_preferences(preferred_rooms)
+        preferences = self.room_preferences(preferred_rooms, avoided_rooms)
+        preferred_rooms = preferences["preferred_rooms"]
+        avoided = {name.casefold() for name in preferences["avoided_rooms"]}
         snapshot = SearchResult(config, rooms, result.get("scraped_at", ""))
-        available = snapshot.ranked_rooms(preferred_rooms)
+        discovered = snapshot.ranked_rooms(preferred_rooms)
+        available = [r for r in discovered if r.name.casefold() not in avoided]
         horizon = snapshot.booking_horizon
         horizon_blocked = bool(
             horizon and horizon["all_checked_rooms_affected"] and not available
@@ -724,9 +751,10 @@ class AgentService:
                     ]
                     + (
                         [
-                            f"Explicit room preference {preferred_rooms.index(room.name)+1}"
+                            f"Explicit room preference {[n.casefold() for n in preferred_rooms].index(room.name.casefold())+1}"
                         ]
-                        if room.name in preferred_rooms
+                        if room.name.casefold()
+                        in {n.casefold() for n in preferred_rooms}
                         else []
                     ),
                 }
@@ -734,6 +762,8 @@ class AgentService:
             ],
             "searched_total": len(rooms),
             "available_total": len(available),
+            "excluded_by_room_preferences": len(discovered) - len(available),
+            "room_preferences": preferences,
             "booking_horizon": horizon,
             "scraped_at": result.get("scraped_at"),
             "read_backend": copy.deepcopy(result.get("read_backend")),
@@ -742,16 +772,24 @@ class AgentService:
                 "choose_room"
                 if available
                 else (
-                    "wait_for_booking_window"
-                    if horizon_blocked
-                    else "consider_alternatives"
+                    "review_room_preferences"
+                    if discovered
+                    else (
+                        "wait_for_booking_window"
+                        if horizon_blocked
+                        else "consider_alternatives"
+                    )
                 )
             ),
             "next_offset": offset + limit if offset + limit < len(available) else None,
             "next_tool": (
                 "booking_review"
                 if available
-                else None if horizon_blocked else "search_alternatives"
+                else (
+                    "get_room_preferences"
+                    if discovered
+                    else None if horizon_blocked else "search_alternatives"
+                )
             ),
         }
 
@@ -778,6 +816,7 @@ class AgentService:
         buildings=None,
         floors=None,
         preferred_rooms=None,
+        avoided_rooms=None,
     ):
         from .alternatives import candidates
         from .personal import validate_preferences
@@ -798,14 +837,15 @@ class AgentService:
             if value is not None
         }
         validate_preferences(patch)
-        preferred_rooms = self._room_preferences(preferred_rooms)
+        preferences = self.room_preferences(preferred_rooms, avoided_rooms)
         configs = candidates(source, shift_minutes, buildings, floors)
         return self.start(
             "alternatives",
             {
                 "source": copy.deepcopy(source),
                 "configs": configs,
-                "preferred_rooms": preferred_rooms,
+                "preferred_rooms": preferences["preferred_rooms"],
+                "avoided_rooms": preferences["avoided_rooms"],
             },
         )
 

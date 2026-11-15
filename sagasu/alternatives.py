@@ -58,7 +58,7 @@ def candidates(source, shift_minutes=0, buildings=None, floors=None):
     return choices[:6]
 
 
-def report(source, probes):
+def report(source, probes, avoided_rooms=()):
     current = result_from_dict(source)
     horizon = current.booking_horizon
     blocked = bool(
@@ -67,7 +67,11 @@ def report(source, probes):
     return {
         "source_config": source["config"],
         "source_scraped_at": source.get("scraped_at"),
-        "current_available_rooms": [r.name for r in current.bookable_rooms],
+        "current_available_rooms": [
+            r.name
+            for r in current.bookable_rooms
+            if r.name.casefold() not in {n.casefold() for n in avoided_rooms}
+        ],
         "booking_horizon": horizon,
         "probes": probes,
         "probe_limit": 6,
@@ -86,6 +90,7 @@ def report(source, probes):
 
 async def find_alternatives(client, payload, *, search=None):
     search = search or client.search
+    avoided = {name.casefold() for name in payload.get("avoided_rooms", ())}
     probes = []
     for config in payload["configs"]:
         try:
@@ -97,6 +102,7 @@ async def find_alternatives(client, payload, *, search=None):
                     "available_rooms": [
                         r.name
                         for r in result.ranked_rooms(payload.get("preferred_rooms", ()))
+                        if r.name.casefold() not in avoided
                     ],
                     "booking_horizon": result.booking_horizon,
                     "scraped_at": result.scraped_at,
@@ -111,4 +117,4 @@ async def find_alternatives(client, payload, *, search=None):
                     or {"message": "Availability could not be verified."},
                 }
             )
-    return report(payload["source"], probes)
+    return report(payload["source"], probes, payload.get("avoided_rooms", ()))

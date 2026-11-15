@@ -242,11 +242,13 @@ class SearchResult:
             for room in self.rooms
             if room.is_free(self.config.start_time, self.config.end_time)
         ]
-        priorities = {name: index for index, name in enumerate(preferred_rooms)}
+        priorities = {
+            name.casefold(): index for index, name in enumerate(preferred_rooms)
+        }
         return sorted(
             rooms,
             key=lambda room: (
-                priorities.get(room.name, len(priorities)),
+                priorities.get(room.name.casefold(), len(priorities)),
                 room.name.casefold(),
             ),
         )

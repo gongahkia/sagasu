@@ -82,6 +82,14 @@ class SearchPreferencesInput(BaseModel):
         return value
 
 
+class RoomPreferencesInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    preferred_rooms: list[str] | None = None
+    avoided_rooms: list[str] | None = None
+    time_preference: Literal["earliest", "latest"] | None = None
+    weights: dict[str, float] | None = None
+
+
 def create_server(
     service, *, lifespan=None, allow_agent_submission=False, configuration_provider=None
 ):
@@ -240,6 +248,26 @@ def create_server(
         return safe(service.get_preferences)
 
     @server.tool(annotations=local)
+    async def get_room_preferences() -> dict[str, Any]:
+        """Read persistent preferred/avoided room names and room-plan scoring preferences. No FBS access."""
+        return safe(safe(service.personal_profile).room_preferences)
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=False,
+            idempotent_hint=True,
+            open_world_hint=False,
+        )
+    )
+    async def set_room_preferences(preferences: RoomPreferencesInput) -> dict[str, Any]:
+        """Persist explicitly requested room preferences. Patch supplied fields; null resets that field. Preferred rooms rank first; avoided rooms are excluded by availability and planning tools. Weights: room_preference, time_preference, date_preference, single_room (0–1000). Existing operations/reviews remain snapshots; never books or cancels."""
+        return safe(
+            safe(service.personal_profile).update_room_preferences,
+            preferences.model_dump(exclude_unset=True),
+        )
+
+    @server.tool(annotations=local)
     async def server_status(ctx: Context) -> dict[str, Any]:
         """Describe this private server and list retained operation IDs. Does not contact FBS."""
         service.prune()
@@ -332,10 +360,16 @@ def create_server(
         offset: int = 0,
         limit: int = 20,
         preferred_rooms: list[str] | None = None,
+        avoided_rooms: list[str] | None = None,
     ) -> dict[str, Any]:
         """List rooms free for the FULL interval, ranked by explicit preferred room order then name, with match reasons and horizon recovery instructions. Filters/ranks before pagination. Fails if the search start has passed."""
         return safe(
-            service.available_rooms, operation_id, offset, limit, preferred_rooms
+            service.available_rooms,
+            operation_id,
+            offset,
+            limit,
+            preferred_rooms,
+            avoided_rooms,
         )
 
     @server.tool(annotations=read)
@@ -345,6 +379,7 @@ def create_server(
         buildings: list[str] | None = None,
         floors: list[str] | None = None,
         preferred_rooms: list[str] | None = None,
+        avoided_rooms: list[str] | None = None,
     ) -> dict[str, Any]:
         """Start up to six read-only alternative searches from a completed search. Timing is unchanged unless shift_minutes (0–120, half-hour steps) is explicitly allowed; duration/date remain fixed. Optional buildings/floors replace ONLY those filters; all others remain. Ask before relaxing constraints the user required. No changed scope means no redundant FBS query. Use wait_operation and report each probe's coverage/horizon/failures; an empty result does not imply all campus rooms are unavailable."""
         return safe(
@@ -354,6 +389,7 @@ def create_server(
             buildings,
             floors,
             preferred_rooms,
+            avoided_rooms,
         )
 
     @server.tool(annotations=local)
