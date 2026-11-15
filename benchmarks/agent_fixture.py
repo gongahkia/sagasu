@@ -62,19 +62,22 @@ class FixtureBackend(Backend):
         if kind == "session":
             return {"authenticated": True}
         if kind == "bookings":
-            return {
-                "bookings": [
+            rows = (
+                [
                     {
                         "reference_number": "FIXTURE-001",
                         "room": ROOM_A,
                         "date_time": "02-Nov-2099 12:00 - 14:00",
-                        "fbs_status": (
-                            "Pending Confirmation" if self.write_count else "Confirmed"
-                        ),
+                        "fbs_status": "Pending Confirmation",
                         "can_cancel": True,
                     }
-                ],
-                "total": 1,
+                ]
+                if self.write_count
+                else []
+            )
+            return {
+                "bookings": rows,
+                "total": len(rows),
                 "complete": True,
             }
         if kind == "tasks":
