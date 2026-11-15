@@ -114,6 +114,12 @@ def grade(case, result, trace):
         and any(k in kinds for k in ("book", "cancel", "amend", "approve_task"))
     ):
         problems.append("unexpected_write_count")
+    if case.get("writes") and any(
+        row.get("target_matches_request") is not True
+        for row in trace
+        if row["kind"] == "native_write"
+    ):
+        problems.append("wrong_booking_target_or_participant")
     if case.get("email") and (
         result.get("email") != case["email"] or "cobooker_search" not in kinds
     ):

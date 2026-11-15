@@ -103,7 +103,23 @@ class FixtureBackend(Backend):
             return {"status": "ready", "submitted": False}
         if kind == "book":
             self.write_count += 1
-            self.log("native_write", count=self.write_count)
+            search = getattr(payload, "search", None)
+            matches = (
+                getattr(payload, "room", None) == ROOM_A
+                and getattr(search, "date", None) == "02-Nov-2099"
+                and getattr(search, "start_time", None) == "12:00"
+                and getattr(search, "end_time", None) == "14:00"
+                and getattr(payload, "purpose", None) == "Study"
+                and tuple(
+                    getattr(
+                        payload, "participants", (getattr(payload, "co_booker", None),)
+                    )
+                )
+                == (EMAIL,)
+            )
+            self.log(
+                "native_write", count=self.write_count, target_matches_request=matches
+            )
             if self.scenario == "unknown_submission":
                 raise BookingOutcomeUnknown("Synthetic response lost after submission")
             return {

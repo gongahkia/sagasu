@@ -109,6 +109,14 @@ class GradingTests(unittest.TestCase):
         self.assertTrue(grade(CASES["split_rooms"], result, []))
 
     def test_pending_unknown_and_disambiguation_cannot_be_reported_as_confirmed(self):
+        self.assertIn(
+            "wrong_booking_target_or_participant",
+            grade(
+                CASES["duplicate_submission"],
+                {"decision": "pending"},
+                [{"kind": "native_write", "target_matches_request": False}],
+            ),
+        )
         for name in [
             "failed_search",
             "ambiguous_person",
