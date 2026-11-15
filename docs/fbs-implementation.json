@@ -1,0 +1,46 @@
+{
+  "scope": "FBS functionality selected by the user; main tranches precede bonuses",
+  "constraints": [
+    "Do not edit README.md",
+    "Research and verify native FBS capabilities before implementing them",
+    "Use atomic commits and test and benchmark each coherent tranche",
+    "Development testing does not submit real bookings, amendments, cancellations or approvals",
+    "Do not replace an unsupported native amendment with cancellation/rebooking implicitly"
+  ],
+  "main": [
+    {"id": 7, "feature": "Flexible-time search", "tranche": "search"},
+    {"id": 8, "feature": "Multi-day search", "tranche": "search"},
+    {"id": 9, "feature": "Common room/time availability across dates", "tranche": "search"},
+    {"id": 10, "feature": "Split-room alternatives", "tranche": "search"},
+    {"id": 11, "feature": "Preference-based scoring", "tranche": "search"},
+    {"id": 12, "feature": "Verified room catalogue", "tranche": "native-capabilities"},
+    {"id": 14, "feature": "Persistent favourite and avoided rooms", "tranche": "search"},
+    {"id": 16, "feature": "Native rescheduling", "tranche": "native-amendments"},
+    {"id": 17, "feature": "Native duration amendments", "tranche": "native-amendments"},
+    {"id": 18, "feature": "Native booking-detail amendments", "tranche": "native-amendments"},
+    {"id": 19, "feature": "Own-booking clash checks", "tranche": "booking-workflows"},
+    {"id": 20, "feature": "Recurring series planning", "tranche": "booking-workflows"},
+    {"id": 21, "feature": "Batch review and execution with individual outcomes", "tranche": "booking-workflows"},
+    {"id": 22, "feature": "Booking usage options", "tranche": "booking-workflows"},
+    {"id": 23, "feature": "Verified credits and quota dashboard", "tranche": "native-capabilities"},
+    {"id": 24, "feature": "Saved plans and shortlists", "tranche": "booking-workflows"},
+    {"id": 25, "feature": "Standalone verified co-booker lookup", "tranche": "people"},
+    {"id": 26, "feature": "Structured person-search clues", "tranche": "people"},
+    {"id": 27, "feature": "Multiple contact aliases", "tranche": "people"},
+    {"id": 29, "feature": "Multiple verified co-bookers", "tranche": "people"}
+  ],
+  "bonuses_after_main": [
+    {"id": 32, "feature": "Availability watches"},
+    {"id": 33, "feature": "Pending-confirmation reminders"},
+    {"id": 34, "feature": "Booking start/end reminders"},
+    {"id": 35, "feature": "Booking-status change alerts"},
+    {"id": 37, "feature": "Explicit co-booker reminder actions"},
+    {"id": 38, "feature": "Specifically authorized scheduled booking attempts"},
+    {"id": 45, "feature": "Operation-scoped automatic failure screenshots"},
+    {"id": 46, "feature": "Redacted support bundles"},
+    {"id": 47, "feature": "Benchmark comparisons and regression alerts"},
+    {"id": 48, "feature": "Conversation-level agent evaluations"}
+  ],
+  "excluded": "Calendar/export features and all other unselected proposals",
+  "status": "Implementation starting; this file records agreed scope, not completed functionality"
+}
