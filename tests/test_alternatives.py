@@ -193,7 +193,25 @@ class AlternativeTests(ServiceCase):
             [p["status"] for p in result["probes"]], ["failed", "succeeded"]
         )
         self.assertEqual(result["probes"][1]["available_rooms"], ["B"])
+        self.assertEqual(result["probes"][1]["rooms_checked"], 1)
+        self.assertTrue(result["probes"][1]["complete"])
+        self.assertFalse(result["complete"])
+        self.assertTrue(result["partial_failure"])
         self.assertNotIn("PRIVATE", str(result))
+
+    async def test_alternatives_preserve_explicit_partial_source_coverage(self):
+        from sagasu.alternatives import result_from_dict, report
+
+        source = (await self.source()).result
+        partial = result_from_dict({**source, "complete": False})
+        payload = {"source": source, "configs": candidates(source, 30)[:1]}
+        result = await find_alternatives(
+            None, payload, search=AsyncMock(return_value=partial)
+        )
+        self.assertEqual(result["probes"][0]["rooms_checked"], 1)
+        self.assertFalse(result["probes"][0]["complete"])
+        self.assertFalse(result["complete"])
+        self.assertFalse(result["partial_failure"])
 
     async def test_mcp_exposes_wait_action_and_preference_ranking(self):
         job = await self.source(True)

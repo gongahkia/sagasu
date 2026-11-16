@@ -264,6 +264,61 @@ class PlannerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["total_matching_candidates"], 400)
         self.assertTrue(result["truncated"])
 
+    async def test_each_date_has_a_retained_pointer_even_when_absent_from_first_page(
+        self,
+    ):
+        payload = prepare_plan(
+            CONFIG, dates=["2099-11-01", "2099-11-08"], duration_minutes=120
+        )
+        result = await find_room_plans(
+            payload,
+            AsyncMock(
+                side_effect=lambda c: snapshot(
+                    c,
+                    [
+                        room(f"Room {i}", [("12:00", "16:00", "free")])
+                        for i in range(10)
+                    ],
+                )
+            ),
+        )
+        self.assertEqual(
+            [entry["date"] for entry in result["date_options"]],
+            ["01-Nov-2099", "08-Nov-2099"],
+        )
+        for entry in result["date_options"]:
+            self.assertEqual(entry["status"], "option_found")
+            chosen = result["candidates"][entry["candidate_index"]]
+            self.assertEqual(chosen["date"], entry["date"])
+            self.assertEqual(chosen["legs"], entry["legs"])
+            self.assertEqual(entry["room_changes"], 0)
+        self.assertGreater(result["date_options"][1]["candidate_index"], 0)
+
+    async def test_a_date_omitted_by_retention_is_not_reported_unavailable(self):
+        with patch("sagasu.room_plans.MAX_CANDIDATES", 1):
+            result = await find_room_plans(
+                prepare_plan(
+                    CONFIG, dates=["2099-11-01", "2099-11-08"], duration_minutes=120
+                ),
+                AsyncMock(side_effect=lambda c: snapshot(c)),
+            )
+        self.assertTrue(result["complete"])
+        self.assertTrue(result["truncated"])
+        omitted = result["date_options"][1]
+        self.assertEqual(omitted["status"], "candidate_not_retained")
+        self.assertIsNone(omitted["candidate_index"])
+        self.assertIn("same constraints", omitted["next_action"])
+
+    async def test_explicitly_incomplete_calendar_is_not_a_complete_plan(self):
+        result = await find_room_plans(
+            prepare_plan(CONFIG),
+            AsyncMock(side_effect=lambda c: {**snapshot(c), "complete": False}),
+        )
+        self.assertFalse(result["complete"])
+        self.assertTrue(result["partial_failure"])
+        self.assertEqual(result["date_options"][0]["status"], "failed")
+        self.assertEqual(result["diagnostics_tool"], "support_bundle")
+
     def test_past_starts_are_trimmed_within_the_requested_window(self):
         now = datetime(2099, 11, 1, 12, 10, tzinfo=FBS_TIMEZONE)
         payload = prepare_plan(CONFIG, now=now)

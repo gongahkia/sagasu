@@ -233,6 +233,7 @@ class SearchResult:
     config: SearchConfig
     rooms: list[RoomAvailability]
     scraped_at: str
+    complete: bool | None = True
 
     @property
     def bookable_rooms(self) -> list[RoomAvailability]:
@@ -285,7 +286,11 @@ class SearchResult:
         }
 
     def to_dict(self) -> dict:
-        return {**asdict(self), "booking_horizon": self.booking_horizon}
+        return {
+            **asdict(self),
+            "booking_horizon": self.booking_horizon,
+            "rooms_checked": len(self.rooms),
+        }
 
 
 @dataclass(frozen=True)

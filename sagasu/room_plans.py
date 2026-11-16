@@ -193,6 +193,8 @@ def planning_scope(payload):
 
 
 def _free_intervals(snapshot, expected, avoided):
+    if snapshot.complete is not True:
+        raise LayoutChanged("The planning availability snapshot is incomplete")
     if snapshot.config != expected:
         raise LayoutChanged("FBS planning response changed the requested search scope.")
     names = set()
@@ -459,6 +461,52 @@ async def find_room_plans(payload, search, progress=_noop_progress):
     for index, candidate in enumerate(options):
         candidate["candidate_index"] = index
     failed = [p["date"] for p in probes if p["status"] == "failed"]
+    date_options = []
+    for occurrence, probe in enumerate(probes):
+        candidate = next(
+            (
+                c
+                for c in options
+                if c.get("all_dates") or c.get("date") == probe["date"]
+            ),
+            None,
+        )
+        if candidate is not None:
+            status = "option_found"
+        elif probe["status"] != "succeeded":
+            status = probe["status"]
+        elif (probe.get("booking_horizon") or {}).get("all_checked_rooms_affected"):
+            status = "outside_booking_horizon"
+        elif payload["mode"] == "common":
+            status = "common_search_incomplete" if failed else "no_common_option"
+        elif probe.get("matching_plan_available"):
+            status = "candidate_not_retained"
+        else:
+            status = "no_matching_option"
+        date_options.append(
+            {
+                "date": probe["date"],
+                "status": status,
+                "candidate_index": candidate["candidate_index"] if candidate else None,
+                "occurrence_index": (
+                    occurrence if candidate and candidate.get("all_dates") else 0
+                ),
+                "legs": candidate["legs"] if candidate else [],
+                "room_changes": candidate["room_changes"] if candidate else None,
+                "score": candidate["score"] if candidate else None,
+                "ranking_complete": probe["status"] == "succeeded"
+                and not computation_limited,
+                "next_action": (
+                    "Use this retained candidate_index with planned_booking_review only when booking is requested."
+                    if candidate
+                    else (
+                        "Rerun only this date with the same constraints to retrieve its candidates; availability is not absent."
+                        if status == "candidate_not_retained"
+                        else "Inspect this date's probe and restrictions."
+                    )
+                ),
+            }
+        )
     return {
         "config": payload["config"],
         "effective_scope": planning_scope(payload),
@@ -469,6 +517,7 @@ async def find_room_plans(payload, search, progress=_noop_progress):
         "transition_minutes": payload["transition_minutes"],
         "room_preferences": payload["preferences"],
         "candidates": options,
+        "date_options": date_options,
         "total": len(options),
         "total_matching_candidates": None if computation_limited else count,
         "matching_candidates_evaluated": count,
@@ -477,6 +526,7 @@ async def find_room_plans(payload, search, progress=_noop_progress):
         "truncated": count > MAX_CANDIDATES or computation_limited,
         "complete": not failed and not computation_limited,
         "partial_failure": bool(failed),
+        "diagnostics_tool": "support_bundle" if failed else None,
         "probes": probes,
         "scope": "Explicit dates, requested filters and duration; only future starts. Split plans include at most one room change and only where no single room fits that start. Transition gaps are additional to booked duration.",
         "submitted": False,

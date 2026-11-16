@@ -27,6 +27,7 @@ def result_from_dict(result):
             for row in result["rooms"]
         ],
         result.get("scraped_at", ""),
+        complete=result.get("complete", True),
     )
 
 
@@ -67,6 +68,8 @@ def report(source, probes, avoided_rooms=()):
     return {
         "source_config": source["config"],
         "source_scraped_at": source.get("scraped_at"),
+        "source_rooms_checked": len(current.rooms),
+        "source_complete": current.complete,
         "current_available_rooms": [
             r.name
             for r in current.bookable_rooms
@@ -74,6 +77,12 @@ def report(source, probes, avoided_rooms=()):
         ],
         "booking_horizon": horizon,
         "probes": probes,
+        "complete": current.complete is True
+        and all(
+            p.get("status") == "succeeded" and p.get("complete") is True for p in probes
+        ),
+        "partial_failure": any(p.get("status") == "failed" for p in probes),
+        "coverage_scope": "Source and returned probe configurations only; counts describe checked rooms before preference exclusions, not other facilities.",
         "probe_limit": 6,
         "submitted": False,
         "suggested_action": (
@@ -99,6 +108,8 @@ async def find_alternatives(client, payload, *, search=None):
                 {
                     "config": asdict(config),
                     "status": "succeeded",
+                    "rooms_checked": len(result.rooms),
+                    "complete": result.complete,
                     "available_rooms": [
                         r.name
                         for r in result.ranked_rooms(payload.get("preferred_rooms", ()))
@@ -113,6 +124,8 @@ async def find_alternatives(client, payload, *, search=None):
                 {
                     "config": asdict(config),
                     "status": "failed",
+                    "rooms_checked": None,
+                    "complete": False,
                     "error": public_failure(error)
                     or {"message": "Availability could not be verified."},
                 }

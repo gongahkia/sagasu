@@ -236,6 +236,7 @@ def create_server(
             "Never collect passwords in chat or rewrite configuration automatically. "
             "For an exact date/time interval use search_rooms, wait_operation and available_rooms. "
             "For a duration within a flexible window, multiple dates, common availability, recurring dates or a room-change plan, start directly with plan_rooms; it performs the searches and matching. Do not first run a redundant exact-window search. "
+            "For one option per date read plan_rooms.date_options; a first candidate page may contain only earlier dates. Different rooms across dates use mode=any, not allow_split. Enable allow_split only when the user permits room changes WITHIN a session. "
             "server_status.default_search shows current search defaults. Use plan_rooms(preferences=...) to patch their date/window without rediscovering unchanged filter labels; preferences.duration_hrs sets the outer window, duration_minutes the required slot. "
             "Planning results expose effective_scope and filter_sources: report inherited floor/type restrictions and scope completeness claims to the checked filters. [] removes a filter restriction; omitted filters inherit saved/default values. Exact facility labels do not automatically cover separately named variants. "
             "When only one option is requested, wait_operation(limit=1) returns a compact candidate page; inspect completeness and per-date failures before drawing conclusions. "
@@ -600,14 +601,24 @@ def create_server(
         duration_minutes: int,
         config: SearchInput | None = None,
         dates: list[str] | None = None,
-        mode: Literal["any", "common"] = "any",
-        allow_split: bool = False,
+        mode: Annotated[
+            Literal["any", "common"],
+            Field(
+                description="any allows different rooms/times on different dates; common requires one room/start across all dates."
+            ),
+        ] = "any",
+        allow_split: Annotated[
+            bool,
+            Field(
+                description="Allow one room change WITHIN a session, only when explicitly permitted by the user. Different rooms across dates do not require or authorize this; leave false for continuous single-room sessions."
+            ),
+        ] = False,
         transition_minutes: int = 0,
         room_preferences: RoomPreferencesInput | None = None,
         recurrence: RecurrenceInput | None = None,
         preferences: SearchPreferencesInput | None = None,
     ) -> dict[str, Any]:
-        """Plan fixed-duration rooms inside a broad same-day window, one FBS read per date (1–31). Supply config OR preferences; omitting both uses saved search defaults shown by server_status.default_search. preferences patches defaults for this call only; duration_hrs sets the outer window (e.g. 6 for 10:00–16:00), duration_minutes the required slot. Omitted filters inherit defaults; [] removes a restriction. Report effective_scope and inherited floor/type restrictions: complete/ranking_complete apply only to that scope. Exact facility labels do not imply coverage of other variants. Supply dates OR recurrence to override the date; recurrence weekdays are 0=Monday–6=Sunday. Dates must be today/future. any offers individual dates; common requires the same room/start on every date. allow_split permits one room change where no single room fits; transition_minutes adds travel time. Common does not split. Poll with limit=1 for one option; inspect per-date failures and horizons. Common all_dates legs apply to every date. Retains at most 200 candidates; incomplete ranking establishes neither the global best nor total. Each chosen date/leg needs planned_booking_review and requested submission; never books implicitly."""
+        """Plan slots in a broad same-day window, one FBS read per date (1–31). Supply config OR temporary preferences; duration_hrs is the outer window (6 for 10:00–16:00), duration_minutes the required slot. Omitted filters inherit defaults; [] removes a restriction. Report effective_scope and inherited floor/type restrictions; completeness applies only to that scope. Supply dates OR recurrence (weekdays 0=Monday–6=Sunday). any allows different rooms/times ACROSS dates; common requires one room/start across all dates. allow_split requires explicit permission to change rooms WITHIN a session; transition_minutes is additional travel time, not study time. For one option per date use date_options: retained candidate_index, occurrence_index and legs are supplied even when absent from the displayed candidate page. candidate_not_retained means rerun only that date with the same constraints, not no availability. Inspect all probes, horizons, complete/ranking_complete and truncation before claiming full success. Retains 200 candidates; incomplete ranking proves neither a global best nor total. Each chosen leg/date needs planned_booking_review and requested submission; never books implicitly."""
         return safe(
             service.plan_rooms,
             config.model_dump() if config is not None else None,
