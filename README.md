@@ -29,7 +29,7 @@ If anything, the sluggish impression it gives off results from the overly convol
 > [!NOTE]  
 > `Sagasu` relies on Python 3.11+.
 
-The below are for locally running `Sagasu` on your machine.
+The below are for locally running `Sagasu` on your machine. For agents, see [`SETUP.md`](./SETUP.md)
 
 1. First run the below set-up instructions using [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
