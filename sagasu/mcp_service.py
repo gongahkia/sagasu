@@ -979,6 +979,14 @@ class AgentService:
         if config is not None and preferences is not None:
             raise AgentError("Provide config OR preferences, not both.")
         try:
+            scope_fields = {
+                "buildings": "buildings",
+                "floors": "floors",
+                "facility_types": "facility_types",
+                "equipment": "equipment",
+                "capacity": "room_capacity",
+            }
+            scope_sources = {key: "explicit_config" for key in scope_fields}
             if config is None:
                 merged = self.profile.preferences() if self.profile else {}
                 patch = validate_preferences(
@@ -989,6 +997,16 @@ class AgentService:
                         merged.pop(key, None)
                     else:
                         merged[key] = value
+                scope_sources = {
+                    field: (
+                        "one_off_preferences"
+                        if key in patch and patch[key] is not None
+                        else (
+                            "saved_preferences" if key in merged else "built_in_default"
+                        )
+                    )
+                    for field, key in scope_fields.items()
+                }
                 config = {
                     key: list(value) if isinstance(value, tuple) else value
                     for key, value in asdict(
@@ -1017,6 +1035,7 @@ class AgentService:
                 transition_minutes,
                 preferences,
                 recurrence=recurrence,
+                scope_sources=scope_sources,
             )
         except (ValueError, KeyError, TypeError, BookingUnavailable) as error:
             raise AgentError(str(error)) from None

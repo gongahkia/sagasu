@@ -67,11 +67,26 @@ class SearchPreferencesInput(BaseModel):
         default=None,
         description="HH:MM on a half-hour boundary; explicit null restores the rolling start.",
     )
-    duration_hrs: float | None = None
+    duration_hrs: float | None = Field(
+        default=None,
+        ge=0.5,
+        le=24,
+        multiple_of=0.5,
+        description="Outer same-day search window, 0.5–24 hours in half-hour increments. For planning, duration_minutes is the required slot length; duration_hrs is not a booking-duration limit.",
+    )
     room_capacity: str | None = None
-    buildings: list[str] | None = None
-    floors: list[str] | None = None
-    facility_types: list[str] | None = None
+    buildings: list[str] | None = Field(
+        default=None,
+        description="Exact building labels. [] removes the restriction; omission inherits saved/default filters; null restores the default.",
+    )
+    floors: list[str] | None = Field(
+        default=None,
+        description="Exact floor labels. [] searches without a floor restriction; omission inherits saved/default floors; null restores the default.",
+    )
+    facility_types: list[str] | None = Field(
+        default=None,
+        description="Exact facility-type labels. [] removes the restriction. A base label does not automatically include separately named variants; omission inherits saved/default types.",
+    )
     equipment: list[str] | None = None
 
     @field_validator("date_raw")
@@ -165,6 +180,7 @@ def create_server(
             "For an exact date/time interval use search_rooms, wait_operation and available_rooms. "
             "For a duration within a flexible window, multiple dates, common availability, recurring dates or a room-change plan, start directly with plan_rooms; it performs the searches and matching. Do not first run a redundant exact-window search. "
             "server_status.default_search shows current search defaults. Use plan_rooms(preferences=...) to patch their date/window without rediscovering unchanged filter labels; preferences.duration_hrs sets the outer window, duration_minutes the required slot. "
+            "Planning results expose effective_scope and filter_sources: report inherited floor/type restrictions and scope completeness claims to the checked filters. [] removes a filter restriction; omitted filters inherit saved/default values. Exact facility labels do not automatically cover separately named variants. "
             "When only one option is requested, wait_operation(limit=1) returns a compact candidate page; inspect completeness and per-date failures before drawing conclusions. "
             "All dates and times are SGT. Search results are snapshots; "
             "Read booking_horizon in search/availability results: it reports explicit FBS restrictions across checked rooms. "
@@ -248,6 +264,7 @@ def create_server(
         """List the same valid date offsets, time, duration, capacity codes and room-filter choices supported by the search backend. Does not contact FBS."""
         return {
             "choices": SCRAPE_PARAM_CHOICES,
+            "duration_meaning": "duration is the outer same-day search window in hours; plan_rooms.duration_minutes is the required slot length. Native booking-duration and quota rules are checked separately.",
             "preferences_fields": list(SearchPreferencesInput.model_fields),
             "null_clears_override": True,
             "timezone": "Asia/Singapore",
@@ -527,7 +544,7 @@ def create_server(
         recurrence: RecurrenceInput | None = None,
         preferences: SearchPreferencesInput | None = None,
     ) -> dict[str, Any]:
-        """Plan fixed-duration rooms inside a broad window, one FBS read per date (1–31). Supply config OR preferences; omitting both uses saved search defaults shown by server_status.default_search. preferences patches defaults for this call only; duration_hrs sets the outer window, duration_minutes the required slot. Supply dates OR recurrence to override the date; recurrence weekdays are 0=Monday–6=Sunday. Dates must be today/future. any offers individual dates; common requires the same room/start on every date. allow_split permits one room change where no single room fits; transition_minutes adds travel time. Common does not split. Preserves filters and saved room preferences. Poll with limit=1 for one option; inspect per-date failures, horizons, complete and ranking_complete. Common all_dates legs apply to every date. Retains at most 200 candidates; incomplete ranking establishes neither the global best nor total. Each chosen date/leg needs planned_booking_review and requested submission; never books implicitly."""
+        """Plan fixed-duration rooms inside a broad same-day window, one FBS read per date (1–31). Supply config OR preferences; omitting both uses saved search defaults shown by server_status.default_search. preferences patches defaults for this call only; duration_hrs sets the outer window (e.g. 6 for 10:00–16:00), duration_minutes the required slot. Omitted filters inherit defaults; [] removes a restriction. Report effective_scope and inherited floor/type restrictions: complete/ranking_complete apply only to that scope. Exact facility labels do not imply coverage of other variants. Supply dates OR recurrence to override the date; recurrence weekdays are 0=Monday–6=Sunday. Dates must be today/future. any offers individual dates; common requires the same room/start on every date. allow_split permits one room change where no single room fits; transition_minutes adds travel time. Common does not split. Poll with limit=1 for one option; inspect per-date failures and horizons. Common all_dates legs apply to every date. Retains at most 200 candidates; incomplete ranking establishes neither the global best nor total. Each chosen date/leg needs planned_booking_review and requested submission; never books implicitly."""
         return safe(
             service.plan_rooms,
             config.model_dump() if config is not None else None,

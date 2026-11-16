@@ -84,6 +84,7 @@ def prepare_plan(
     *,
     now=None,
     recurrence=None,
+    scope_sources=None,
 ):
     config = SearchConfig.from_mapping(config)
     now = now or datetime.now(FBS_TIMEZONE)
@@ -153,6 +154,41 @@ def prepare_plan(
         "allow_split": allow_split,
         "transition_minutes": transition_minutes,
         "preferences": merge_preferences(preferences),
+        "scope_sources": scope_sources or {},
+    }
+
+
+def planning_scope(payload):
+    config = payload["config"]
+    fields = ("buildings", "floors", "facility_types", "capacity", "equipment")
+    sources = {
+        key: payload.get("scope_sources", {}).get(key, "explicit_config")
+        for key in fields
+    }
+    inherited = [
+        key
+        for key, source in sources.items()
+        if source in {"saved_preferences", "built_in_default"}
+    ]
+    labels = "; ".join(
+        f"{key}: {', '.join(config.get(key) or []) or 'unrestricted'}"
+        for key in ("buildings", "floors", "facility_types", "equipment")
+    )
+    labels += f"; capacity: {config.get('capacity') or 'unrestricted'}"
+    return {
+        "dates": payload["dates"],
+        "start_time": config["start_time"],
+        "end_time": config["end_time"],
+        "timezone": "Asia/Singapore",
+        **{
+            key: list(config.get(key) or []) if key != "capacity" else config.get(key)
+            for key in fields
+        },
+        "filter_sources": sources,
+        "inherited_filters": inherited,
+        "avoided_rooms": payload["preferences"]["avoided_rooms"],
+        "completeness_applies_to": "these_dates_windows_and_filters_only",
+        "notice": f"Search scope — {labels}. Complete and ranking_complete apply only to this scope. Report inherited floor/type restrictions; exact facility labels do not imply coverage of other type variants.",
     }
 
 
@@ -425,6 +461,7 @@ async def find_room_plans(payload, search, progress=_noop_progress):
     failed = [p["date"] for p in probes if p["status"] == "failed"]
     return {
         "config": payload["config"],
+        "effective_scope": planning_scope(payload),
         "dates": payload["dates"],
         "duration_minutes": payload["duration_minutes"],
         "mode": payload["mode"],

@@ -72,7 +72,7 @@ def validate_preferences(patch):
                 or value not in SCRAPE_PARAM_CHOICES["duration"]
             ):
                 raise PersonalDataError(
-                    "Choose a supported duration from search_options."
+                    "Search-window duration must be 0.5–24 hours in half-hour increments. Start and end must remain on one date; this is not a native booking-duration limit."
                 )
             result[key] = value
         elif key == "room_capacity":

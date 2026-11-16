@@ -13,7 +13,8 @@ SCRAPE_PARAM_CHOICES = {
     "start_time": [
         f"{hour:02d}:{minute:02d}" for hour in range(24) for minute in (0, 30)
     ],
-    "duration": [0.5, 1, 1.5, 2, 2.5, 3, 4],
+    # Outer search windows, not native booking-duration or quota limits.
+    "duration": [half_hours / 2 for half_hours in range(1, 49)],
     "capacity": [
         ("Any", None),
         ("<5 pax", "LessThan5Pax"),

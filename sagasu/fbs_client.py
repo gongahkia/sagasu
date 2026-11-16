@@ -2135,10 +2135,20 @@ def search_config_from_preferences(config: dict) -> SearchConfig:
         start_time=start,
         end_time=end,
         buildings=tuple(
-            config.get("buildings") or ("School of Computing & Information Systems 1",)
+            config["buildings"]
+            if config.get("buildings") is not None
+            else ("School of Computing & Information Systems 1",)
         ),
-        floors=tuple(config.get("floors") or ("Level 2", "Level 3", "Level 4")),
-        facility_types=tuple(config.get("facility_types") or ("Group Study Room",)),
+        floors=tuple(
+            config["floors"]
+            if config.get("floors") is not None
+            else ("Level 2", "Level 3", "Level 4")
+        ),
+        facility_types=tuple(
+            config["facility_types"]
+            if config.get("facility_types") is not None
+            else ("Group Study Room",)
+        ),
         capacity=config.get("room_capacity"),
         equipment=tuple(config.get("equipment") or ()),
     )

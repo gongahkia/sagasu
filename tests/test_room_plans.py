@@ -301,6 +301,131 @@ class PlannerTests(unittest.IsolatedAsyncioTestCase):
 
 
 class PlanningWorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unrestricted_floors_and_type_variants_are_explicit_without_changing_defaults(
+        self,
+    ):
+        self.backend.reads.direct = AsyncMock(
+            side_effect=lambda kind, config, progress: snapshot(
+                config, [room("A", [(config.start_time, config.end_time, "free")])]
+            )
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            self.service.profile = PersonalStore(Path(temporary) / "personal.sqlite3")
+            self.service.profile.update_preferences(
+                {
+                    "date_raw": "23 November 2099",
+                    "start_time": "10:00",
+                    "floors": ["Level 5"],
+                }
+            )
+            before = self.service.profile.preferences()
+            async with Client(create_server(self.service)) as client:
+                for floor_override, expected, source in [
+                    ([], [], "one_off_preferences"),
+                    (None, ["Level 2", "Level 3", "Level 4"], "built_in_default"),
+                ]:
+                    started = await client.call_tool(
+                        "plan_rooms",
+                        {
+                            "preferences": {
+                                "buildings": ["Li Ka Shing Library"],
+                                "floors": floor_override,
+                                "facility_types": [
+                                    "Project Room",
+                                    "Project Room (Level 5)",
+                                ],
+                            },
+                            "duration_minutes": 120,
+                        },
+                    )
+                    self.assertFalse(started.is_error, started.content)
+                    finished = (
+                        await client.call_tool(
+                            "wait_operation",
+                            {
+                                "operation_id": started.structured_content[
+                                    "operation_id"
+                                ]
+                            },
+                        )
+                    ).structured_content
+                    self.assertEqual(finished["status"], "succeeded", finished)
+                    scope = finished["result"]["effective_scope"]
+                    self.assertEqual(scope["floors"], expected)
+                    self.assertEqual(scope["filter_sources"]["floors"], source)
+                    self.assertEqual(
+                        scope["facility_types"],
+                        ["Project Room", "Project Room (Level 5)"],
+                    )
+                    self.assertIn("this scope", scope["notice"])
+                    self.assertEqual(
+                        self.backend.reads.direct.await_args.args[1].floors,
+                        tuple(expected),
+                    )
+            self.assertEqual(before, self.service.profile.preferences())
+
+    async def test_six_hour_preference_window_checks_each_date_once_without_saving(
+        self,
+    ):
+        self.backend.reads.direct = AsyncMock(
+            side_effect=lambda kind, config, progress: snapshot(
+                config, [room("A", [(config.start_time, config.end_time, "free")])]
+            )
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            self.service.profile = PersonalStore(Path(temporary) / "personal.sqlite3")
+            self.service.profile.update_preferences(
+                {"duration_hrs": 3, "floors": ["Level 2"]}
+            )
+            before = self.service.profile.preferences()
+            async with Client(create_server(self.service)) as client:
+                options = (
+                    await client.call_tool("search_options", {})
+                ).structured_content
+                self.assertIn(6, options["choices"]["duration"])
+                started = await client.call_tool(
+                    "plan_rooms",
+                    {
+                        "preferences": {"start_time": "10:00", "duration_hrs": 6},
+                        "dates": ["2099-11-23", "2099-11-30"],
+                        "duration_minutes": 120,
+                        "mode": "common",
+                    },
+                )
+                self.assertFalse(started.is_error, started.content)
+                result = (
+                    await client.call_tool(
+                        "wait_operation",
+                        {
+                            "operation_id": started.structured_content["operation_id"],
+                            "limit": 1,
+                        },
+                    )
+                ).structured_content
+                self.assertEqual(result["status"], "succeeded", result)
+                self.assertTrue(result["result"]["complete"])
+                self.assertEqual(result["result"]["duration_minutes"], 120)
+                self.assertTrue(result["result"]["candidates"][0]["all_dates"])
+                rejected = await client.call_tool(
+                    "plan_rooms",
+                    {"preferences": {"duration_hrs": 6.25}, "duration_minutes": 120},
+                )
+                self.assertTrue(rejected.is_error)
+                overnight = await client.call_tool(
+                    "plan_rooms",
+                    {
+                        "preferences": {"start_time": "22:00", "duration_hrs": 6},
+                        "duration_minutes": 120,
+                    },
+                )
+                self.assertTrue(overnight.is_error)
+            self.assertEqual(self.service.profile.preferences(), before)
+        self.assertEqual(self.backend.reads.direct.await_count, 2)
+        for call in self.backend.reads.direct.await_args_list:
+            config = call.args[1]
+            self.assertEqual((config.start_time, config.end_time), ("10:00", "16:00"))
+            self.assertEqual(config.floors, ("Level 2",))
+
     async def test_default_filter_planning_preserves_saved_scope_without_an_options_lookup_or_mutation(
         self,
     ):
@@ -353,6 +478,15 @@ class PlanningWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(config.buildings, ("Li Ka Shing Library",))
                 self.assertEqual(config.equipment, ("Projector",))
                 self.assertEqual(config.floors, ("Level 5",))
+                scope = job.result["effective_scope"]
+                self.assertEqual(scope["floors"], ["Level 5"])
+                self.assertEqual(scope["filter_sources"]["floors"], "saved_preferences")
+                self.assertIn("floors", scope["inherited_filters"])
+                self.assertIn("Level 5", scope["notice"])
+                self.assertEqual(
+                    scope["completeness_applies_to"],
+                    "these_dates_windows_and_filters_only",
+                )
                 response = await client.call_tool(
                     "plan_rooms",
                     {"config": CONFIG, "preferences": {}, "duration_minutes": 120},
