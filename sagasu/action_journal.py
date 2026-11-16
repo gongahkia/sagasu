@@ -309,6 +309,25 @@ class ActionJournal:
             )
         return {**data, "observed_at": now}
 
+    def unresolved_count(self):
+        """Count unresolved writes without exporting any action metadata."""
+        with self._db() as db:
+            rows = db.execute(
+                "SELECT r.evidence FROM actions a LEFT JOIN reconciliations r "
+                "ON r.operation_id=a.operation_id WHERE a.status='outcome_unknown'"
+            ).fetchall()
+            try:
+                return sum(
+                    not (json.loads(row[0]) if row[0] else {}).get(
+                        "action_outcome_verified", False
+                    )
+                    for row in rows
+                )
+            except (ValueError, AttributeError, TypeError):
+                raise JournalError(
+                    "Action-history evidence could not be read safely."
+                ) from None
+
     def history(self, offset=0, limit=20):
         if (
             isinstance(offset, bool)

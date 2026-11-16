@@ -118,7 +118,12 @@ class AmendmentChangesInput(BaseModel):
 
 
 def create_server(
-    service, *, lifespan=None, allow_agent_submission=False, configuration_provider=None
+    service,
+    *,
+    lifespan=None,
+    allow_agent_submission=False,
+    configuration_provider=None,
+    host_controller=None,
 ):
     def configuration():
         return (
@@ -1061,7 +1066,7 @@ def create_server(
     return server
 
 
-async def serve(settings, *, startup_checks=()):
+async def serve(settings, *, startup_checks=(), host_controller=None):
     """One MCP lifespan owns the private browser and local agent preferences."""
     from .mcp_runtime import MCPRuntime
 
@@ -1098,6 +1103,7 @@ async def serve(settings, *, startup_checks=()):
         server = create_server(
             service,
             configuration_provider=runtime.status,
+            host_controller=host_controller,
             lifespan=lifespan,
             allow_agent_submission=settings.values.get(
                 "SAGASU_MCP_CONFIRMATION", "agent"

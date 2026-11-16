@@ -1569,6 +1569,8 @@ class AgentService:
 
     def _review(self, kind, payload, summary):
         self.prune()
+        if self.closed:
+            raise AgentError("Server is shutting down.")
         if len(self.reviews) >= self.limit:
             raise AgentError(
                 "Too many pending reviews; wait for expiry or discard one."

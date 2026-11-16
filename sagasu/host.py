@@ -13,6 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 import anyio
 from mcp import types
@@ -45,9 +46,8 @@ def socket_path(settings):
     return root / (key + ".sock")
 
 
-def fingerprint(settings):
-    sources = sorted((Path(__file__).parent).glob("*.py"))
-    digest = hashlib.sha256()
+def identity_parts(settings):
+    """Private handshake digests. Return only comparisons, never these values, to MCP."""
     effective = settings.public()
     effective["configuration_issues"] = [
         (issue.name, issue.blocks_startup) for issue in settings.issues()
@@ -59,11 +59,59 @@ def fingerprint(settings):
         "SAGASU_AUTH_ARTIFACT_DIR": "",
     }.items():
         effective[key] = settings.values.get(key, default)
-    digest.update(json.dumps(effective, sort_keys=True).encode())
-    digest.update(sys.executable.encode())
-    for path in sources:
-        digest.update(path.read_bytes())
-    return digest.hexdigest()
+    code = hashlib.sha256()
+    for path in sorted((Path(__file__).parent).glob("*.py")):
+        code.update(path.name.encode())
+        code.update(path.read_bytes())
+    return {
+        "configuration": hashlib.sha256(
+            json.dumps(effective, sort_keys=True).encode()
+        ).hexdigest(),
+        "python": hashlib.sha256(sys.executable.encode()).hexdigest(),
+        "code": code.hexdigest(),
+    }
+
+
+def _fingerprint(parts):
+    return hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()
+
+
+def fingerprint(settings):
+    return _fingerprint(identity_parts(settings))
+
+
+def recovery_state(service):
+    from .action_journal import JournalError
+
+    # Preserve evidence of unresolved writes even when normal TTL pruning could
+    # evict their in-memory copy in favour of the durable journal.
+    unresolved = sum(
+        job.status == "outcome_unknown"
+        and not (job.reconciliation or {}).get("action_outcome_verified")
+        for job in service.jobs.values()
+    )
+    journal_healthy = not service.journal_failed
+    if service.journal is not None:
+        try:
+            unresolved = max(unresolved, service.journal.unresolved_count())
+        except (JournalError, OSError):
+            journal_healthy = False
+    service.prune()
+    active = sum(not job.terminal for job in service.jobs.values())
+    return {
+        "active_operations": active,
+        "retained_operations": len(service.jobs),
+        "pending_reviews": len(service.reviews),
+        "unresolved_outcomes": unresolved,
+        "journal_healthy": journal_healthy,
+        "can_recover": not (
+            active
+            or service.jobs
+            or service.reviews
+            or unresolved
+            or not journal_healthy
+        ),
+    }
 
 
 @asynccontextmanager
@@ -108,18 +156,27 @@ async def transport(reader, writer):
         await writer.wait_closed()
 
 
-async def connect(settings, *, action="mcp", start=True):
+async def connect(settings, *, action="mcp", start=True, options=None):
     path = socket_path(settings)
     process = None
+    recovered = False
     deadline = asyncio.get_running_loop().time() + 30
     while asyncio.get_running_loop().time() < deadline:
         try:
+            parts = identity_parts(settings)
             reader, writer = await asyncio.open_unix_connection(
                 str(path), limit=8 * 1024 * 1024
             )
             writer.write(
                 (
-                    json.dumps({"fingerprint": fingerprint(settings), "action": action})
+                    json.dumps(
+                        {
+                            "fingerprint": _fingerprint(parts),
+                            "identity": parts,
+                            "action": action,
+                            **(options or {}),
+                        }
+                    )
                     + "\n"
                 ).encode()
             )
@@ -147,8 +204,29 @@ async def connect(settings, *, action="mcp", start=True):
             if not reply.get("ok"):
                 writer.close()
                 await writer.wait_closed()
+                if (
+                    action == "mcp"
+                    and start
+                    and not recovered
+                    and reply.get("protocol_version", 0) >= 2
+                    and reply.get("mismatch") == ["code"]
+                    and reply.get("can_recover")
+                    and not settings.issues()
+                ):
+                    # A bounded upgrade, before forwarding any MCP packet.
+                    # The host rechecks identity and protected work atomically.
+                    recovered = True
+                    retired = await control(
+                        settings, "recover", expected_pid=reply["pid"], automatic=True
+                    )
+                    if (
+                        retired.get("shutdown_complete")
+                        or not retired.get("running")
+                        or "host_changed" in retired.get("blockers", [])
+                    ):
+                        continue
                 raise HostError(
-                    "The shared host uses different code or configuration. Run sagasu host stop, then reconnect after active operations finish.",
+                    "The shared host uses different code or configuration. Read host_status, then recover_host for guarded recovery. Active work and retained evidence are protected.",
                     "host_configuration_changed",
                 )
             return reader, writer, reply
@@ -223,8 +301,15 @@ async def bridge_stdio(settings):
             "host_start_failed": "The shared host exited before it became ready; an older process may own its profile.",
             "host_start_timeout": "The shared host did not become ready before the startup deadline.",
         }
+        from .host_recovery import HostRecovery
+
         await serve(
             settings,
+            host_controller=HostRecovery(
+                settings,
+                diagnostic_frontend=True,
+                startup_reason=getattr(error, "reason", "host_unavailable"),
+            ),
             startup_checks=[
                 Check(
                     "runtime.host",
@@ -233,7 +318,7 @@ async def bridge_stdio(settings):
                         getattr(error, "reason", None),
                         "The shared host could not start or attach safely.",
                     ),
-                    "Run sagasu host status. When no operations are active, run sagasu host stop and reconnect. If an older direct client owns the profile, close it first. Run sagasu doctor to inspect local configuration.",
+                    "Read host_status for the live host, mismatch categories and recovery blockers. Use recover_host only when its guard permits, then reconnect this MCP client. Never delete locks or replay operations. Older hosts require the exact local commands returned by host_status.",
                     True,
                 )
             ],
@@ -307,19 +392,19 @@ async def run_operation(settings, tool, arguments=None, *, notify=None, progress
     return output
 
 
-async def control(settings, action):
+async def control(settings, action, **options):
     path = socket_path(settings)
     try:
         listener_id = path.stat().st_ino
     except FileNotFoundError:
         listener_id = None
-    connection = await connect(settings, action=action, start=False)
+    connection = await connect(settings, action=action, start=False, options=options)
     if connection is None:
         return {"running": False}
     _, writer, reply = connection
     writer.close()
     await writer.wait_closed()
-    if action == "stop" and reply.get("stopping"):
+    if action in {"stop", "recover"} and reply.get("stopping"):
         # A successful stop is followed by reconnect in the setup workflow.
         # Wait for cleanup, rather than racing the closing listener/profile.
         deadline = asyncio.get_running_loop().time() + 5
@@ -342,9 +427,12 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
     from .mcp_server import create_server
     from .mcp_runtime import MCPRuntime
     from .fbs_client import close_shared_browser
+    from .host_recovery import HostRecovery
 
     path = socket_path(settings)
-    identity = fingerprint(settings)
+    parts = identity_parts(settings)
+    identity = _fingerprint(parts)
+    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     runtime = MCPRuntime(settings, service=service)
     stopped = asyncio.Event()
     clients = set()
@@ -366,27 +454,62 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                 return
             hello = json.loads(line)
             action = hello.get("action")
-            busy = any(not job.terminal for job in service.jobs.values())
+            state = recovery_state(service)
+            busy = bool(state["active_operations"])
+            supplied_parts = hello.get("identity") or {}
+            mismatch = [key for key in parts if supplied_parts.get(key) != parts[key]]
+            compatible = hello.get("fingerprint") == identity
             # Stop/status remain available after an environment/code change.
-            ok = hello.get("fingerprint") == identity or action in {"status", "stop"}
+            ok = compatible or action in {"status", "stop", "recover"}
             reply = {
                 "ok": ok,
                 "running": True,
                 "pid": os.getpid(),
                 "clients": len(clients) - 1,
                 "busy": busy,
+                "protocol_version": 2,
+                "compatible": compatible,
+                "mismatch": mismatch,
+                "started_at": started_at,
+                "python_executable": sys.executable,
+                "runtime_mode": runtime.status()["mode"],
+                **state,
             }
             if action == "stop":
                 reply["stopping"] = not busy
+            elif action == "recover":
+                blockers = []
+                if hello.get("expected_pid") != os.getpid():
+                    blockers.append("host_changed")
+                if busy:
+                    blockers.append("active_operations")
+                if state["pending_reviews"]:
+                    blockers.append("pending_reviews")
+                if state["unresolved_outcomes"]:
+                    blockers.append("unresolved_outcomes")
+                if not state["journal_healthy"]:
+                    blockers.append("journal_unhealthy")
+                if state["retained_operations"] and not hello.get(
+                    "discard_completed_results", False
+                ):
+                    blockers.append("retained_operations")
+                if hello.get("automatic") and mismatch != ["code"]:
+                    blockers.append("not_code_only")
+                reply["blockers"] = blockers
+                reply["stopping"] = not blockers
+            if reply.get("stopping"):
+                # Close the submission gate before yielding, so another client
+                # cannot enqueue work between the idle check and shutdown.
+                service.closed = True
+                stopped.set()
             writer.write((json.dumps(reply) + "\n").encode())
             await writer.drain()
-            if action == "stop" and not busy:
-                stopped.set()
             if not ok or action != "mcp":
                 return
             server = create_server(
                 service,
                 configuration_provider=runtime.status,
+                host_controller=HostRecovery(settings, owner_pid=os.getpid()),
                 allow_agent_submission=settings.values.get(
                     "SAGASU_MCP_CONFIRMATION", "agent"
                 )

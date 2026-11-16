@@ -131,6 +131,98 @@ class SharedHostTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await control(changed, "stop"))["stopping"])
         await asyncio.wait_for(self.host, 5)
 
+    async def test_status_explains_mismatch_without_exposing_secrets_or_digests(self):
+        from dataclasses import replace
+        from sagasu.host import identity_parts
+
+        changed = replace(
+            self.settings,
+            values={
+                "SMU_LOGIN_PASSWORD": "PRIVATE_PASSWORD",
+                "SMU_LOGIN_EMAIL": "PRIVATE_EMAIL",
+            },
+        )
+        status = await control(changed, "status")
+        self.assertFalse(status["compatible"])
+        self.assertEqual(status["mismatch"], ["configuration"])
+        self.assertTrue(status["can_recover"])
+        serialized = json.dumps(status)
+        for private in [
+            "PRIVATE_PASSWORD",
+            "PRIVATE_EMAIL",
+            *identity_parts(changed).values(),
+        ]:
+            self.assertNotIn(private, serialized)
+
+    async def test_recovery_refuses_replacement_host_and_pending_review(self):
+        status = await control(self.settings, "recover", expected_pid=-1)
+        self.assertEqual(status["blockers"], ["host_changed"])
+        self.assertFalse(status["stopping"])
+        self.service._review("book", {}, {"room": "PRIVATE_ROOM"})
+        status = await control(self.settings, "recover", expected_pid=os.getpid())
+        self.assertIn("pending_reviews", status["blockers"])
+        self.assertFalse(status["stopping"])
+        self.assertNotIn("PRIVATE_ROOM", json.dumps(status))
+        self.assertFalse(self.host.done())
+
+    async def test_recovery_refuses_active_work_even_when_discard_is_requested(self):
+        self.backend.gate = asyncio.Event()
+        async with client_session(self.settings) as client:
+            job = await self.call(client, "login")
+            status = await control(
+                self.settings,
+                "recover",
+                expected_pid=os.getpid(),
+                discard_completed_results=True,
+            )
+            self.assertIn("active_operations", status["blockers"])
+            self.assertFalse(status["stopping"])
+            self.backend.gate.set()
+            self.assertEqual(
+                (
+                    await self.call(
+                        client, "wait_operation", {"operation_id": job["operation_id"]}
+                    )
+                )["status"],
+                "succeeded",
+            )
+
+    async def test_recovery_preserves_finished_results_unless_explicitly_discarded(
+        self,
+    ):
+        async with client_session(self.settings) as client:
+            job = await self.call(client, "login")
+            await self.call(
+                client, "wait_operation", {"operation_id": job["operation_id"]}
+            )
+        result = await control(self.settings, "recover", expected_pid=os.getpid())
+        self.assertEqual(result["blockers"], ["retained_operations"])
+        result = await control(
+            self.settings,
+            "recover",
+            expected_pid=os.getpid(),
+            discard_completed_results=True,
+        )
+        self.assertTrue(result["stopping"])
+        self.assertTrue(result["shutdown_complete"])
+        self.assertTrue(self.service.closed)
+        from sagasu.mcp_service import AgentError
+
+        with self.assertRaises(AgentError):
+            self.service.start("login")
+        with self.assertRaises(AgentError):
+            self.service._review("book", {}, {})
+
+    async def test_automatic_recovery_never_switches_configuration(self):
+        from dataclasses import replace
+
+        changed = replace(self.settings, values={"SAGASU_HEADLESS": "true"})
+        result = await control(
+            changed, "recover", expected_pid=os.getpid(), automatic=True
+        )
+        self.assertEqual(result["blockers"], ["not_code_only"])
+        self.assertFalse(result["stopping"])
+
     async def test_stop_releases_profile_while_an_idle_mcp_client_remains_connected(
         self,
     ):
@@ -148,6 +240,55 @@ class SharedHostTests(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipIf(os.name == "nt", "Unix host")
 class HostLauncherTests(unittest.IsolatedAsyncioTestCase):
+    async def test_concurrent_clients_upgrade_idle_code_only_host_once(self):
+        from sagasu.host import identity_parts
+
+        with tempfile.TemporaryDirectory() as directory:
+            env = Path(directory) / ".env"
+            env.write_text(
+                "SAGASU_BROWSER_PROFILE=browser\nSAGASU_PREFERENCES_PATH=personal.sqlite3\nSAGASU_JOURNAL_PATH=actions.sqlite3\n"
+            )
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if not key.startswith(("SAGASU_", "SMU_"))
+            }
+            with patch.dict(os.environ, environment, clear=True):
+                settings = Settings.load(env)
+                old_parts = {**identity_parts(settings), "code": "previous_code"}
+                with patch("sagasu.host.identity_parts", return_value=old_parts):
+                    host = asyncio.create_task(
+                        serve_host(
+                            settings, service=AgentService(backend=FakeBackend())
+                        )
+                    )
+                    for _ in range(300):
+                        if socket_path(settings).exists():
+                            break
+                        await asyncio.sleep(0.01)
+                    self.assertFalse(host.done())
+                ready = asyncio.Event()
+                pids = []
+
+                async def attach():
+                    async with client_session(settings) as client:
+                        response = await client.call_tool("server_status", {})
+                        self.assertTrue(response.structured_content["operational"])
+                        pids.append(response.structured_content["host_pid"])
+                        if len(pids) == 2:
+                            ready.set()
+                        await ready.wait()
+
+                try:
+                    await asyncio.wait_for(asyncio.gather(attach(), attach()), 60)
+                    self.assertEqual(len(set(pids)), 1)
+                    self.assertNotEqual(pids[0], os.getpid())
+                    self.assertTrue(host.done())
+                finally:
+                    await control(settings, "stop")
+                    host.cancel()
+                    await asyncio.gather(host, return_exceptions=True)
+
     async def test_simultaneous_stdio_clients_launch_only_one_host(self):
         import sys
         from mcp import Client, StdioServerParameters
@@ -220,3 +361,38 @@ class HostHandshakeTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result, {"running": False})
             self.assertEqual(connect.await_count, 2)
             writer.close.assert_called_once()
+
+
+class RecoveryEvidenceTests(unittest.TestCase):
+    def test_durable_unresolved_write_blocks_recovery_after_memory_expiry(self):
+        from sagasu.action_journal import ActionJournal
+        from sagasu.host import recovery_state
+        from sagasu.mcp_service import Job
+
+        with tempfile.TemporaryDirectory() as directory:
+            journal = ActionJournal(Path(directory) / "actions.sqlite3")
+            job = Job("unknown", "book", 1, updated_at=1, status="outcome_unknown")
+            journal.reserve(job, "review", {})
+            journal.update(job)
+            service = AgentService(journal=journal, clock=lambda: 4000)
+            service.jobs[job.id] = job
+            for _ in range(2):
+                state = recovery_state(service)
+                self.assertEqual(state["retained_operations"], 0)
+                self.assertEqual(state["unresolved_outcomes"], 1)
+                self.assertFalse(state["can_recover"])
+            journal.record_reconciliation(
+                job.id, {"state": "confirmed", "action_outcome_verified": True}, 4001
+            )
+            self.assertTrue(recovery_state(service)["can_recover"])
+
+    def test_unreadable_journal_blocks_recovery_without_leaking_error_text(self):
+        from sagasu.action_journal import JournalError
+        from sagasu.host import recovery_state
+
+        journal = Mock()
+        journal.unresolved_count.side_effect = JournalError("PRIVATE_DIAGNOSTIC")
+        state = recovery_state(AgentService(journal=journal))
+        self.assertFalse(state["journal_healthy"])
+        self.assertFalse(state["can_recover"])
+        self.assertNotIn("PRIVATE_DIAGNOSTIC", json.dumps(state))
