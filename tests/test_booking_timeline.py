@@ -119,6 +119,9 @@ class BookingTimelineProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["bookings"][0]["reference_number"], "ongoing")
             self.assertEqual(result["timeline"]["next_upcoming_reference"], "next")
             self.assertEqual(result["pagination"]["next_offset"], 1)
+            self.assertEqual(result["pagination"]["returned_count"], 1)
+            self.assertEqual(result["pagination"]["retained_total"], 2)
+            self.assertEqual(result["pagination"]["source_total"], 2)
             # Selection uses the request-time clock, while FBS status remains
             # from this listing. No second FBS read or action is triggered.
             clock[0] = NOW.replace(hour=15, minute=10).timestamp()
