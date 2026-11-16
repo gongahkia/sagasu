@@ -740,6 +740,14 @@ class AgentService:
             current = job.result
         if current is not None:
             result = copy.deepcopy(current)
+            if job.kind == "bookings":
+                from datetime import datetime
+                from .booking_timeline import annotate_booking_timeline
+                from .fbs_client import FBS_TIMEZONE
+
+                result = annotate_booking_timeline(
+                    result, now=datetime.fromtimestamp(self.clock(), FBS_TIMEZONE)
+                )
             for key in ("rooms", "bookings", "tasks", "candidates", "members"):
                 if isinstance(result.get(key), list):
                     rows = result[key]

@@ -193,6 +193,7 @@ def create_server(
             "On outcome_unknown inspect My Bookings; never blindly repeat a write. "
             "Credentials stay on the host. When awaiting_mfa, read authentication_status and relay the prompt to the user. "
             "list_bookings returns summaries. Use booking_details for each requested reference when the user asks for purpose, booker, participants, confirmation history or additional metadata. "
+            "For next upcoming use list_bookings.timeline.next_upcoming_reference only when timeline.complete; report ongoing bookings separately. A complete-detail answer includes exposed creation/last-modified timestamps, cancellation permission and additional metadata as well as people and purpose. "
             "Do not infer a confirmer from Confirmed status, a checked participant box, or Last Modified By. Inspect field_status and collection coverage; report unavailable history explicitly. Workflow comments are excluded. "
             "For failed operations follow error.next_action and next_tool; fix setup before retrying, and never infer empty availability from a failure. "
             "For failed browser operations inspect failure_screenshot_available and use operation_receipt(failure=true) for the automatic image captured before cleanup. support_bundle returns redacted operation traces and setup-check statuses without booking text, images or secrets. Images/traces expire with the operation. Manual browser_screenshot captures only the current page. "
@@ -649,7 +650,7 @@ def create_server(
 
     @server.tool(annotations=read)
     async def list_bookings() -> dict[str, Any]:
-        """Start reading paginated My Bookings summaries: reference, room, date/time, actual FBS status and cancellation permission. Poll the operation ID. For purpose, booker, participants and confirmation details, call booking_details with each requested reference_number. Does not change bookings."""
+        """Start reading paginated My Bookings summaries with FBS status, cancellation permission, SGT starts_at/ends_at and temporal_status. Poll. timeline evaluates the full retained listing before pagination: next_upcoming_reference is the earliest non-cancelled future start; ongoing_references are separate. Only claim a definitive next/none when timeline.complete=true; partial/unreadable/unknown-status listings return next_upcoming_status=unknown. Do not choose the first row or call an ongoing booking upcoming. For complete metadata call booking_details with the selected exact reference. Does not change bookings."""
         return safe(service.start, "bookings")
 
     @server.tool(annotations=read)
@@ -698,7 +699,7 @@ def create_server(
         source: Literal["auto", "bookings", "tasks"] = "auto",
         include_additional: bool = True,
     ) -> dict[str, Any]:
-        """Start a read-only, exact-reference booking detail lookup. auto checks My Bookings then Task List; select a source when known. Poll with wait_operation. Returns purpose, visible creator and creation time, co-booker names/emails when exposed, explicit confirmation/approval actors and workflow actions/timestamps when FBS exposes history. Additional metadata includes the explicitly labelled Booked For person, credits deducted, usage classifications and last-modified audit; set include_additional=false to omit it. Creator, Booked For and co-bookers are distinct roles. Does not infer missing identities or confirmation from status, checkboxes or last modifier. Inspect field_status, co_bookers_coverage and approval_history.complete; absent fields remain null. Workflow comments and hidden/internal identifiers are excluded. Uses the shared browser queue in the configured headless mode. Never approves, cancels, edits or books."""
+        """Start a read-only, exact-reference booking detail lookup. auto checks My Bookings then Task List; select a source when known. Poll with wait_operation. Returns purpose, visible creator and created_at, co-bookers, and explicit confirmation/approval actors/history where exposed. Additional metadata includes the labelled Booked For person, credits, classifications and modified_by/modified_at; set include_additional=false to omit it. For complete details report exposed creation/last-modified timestamps and cancellation permission alongside people, location, times and purpose. Creator, Booked For and co-bookers are distinct roles. Never infer confirmation from status, checkboxes or last modifier. Inspect field_status, co_bookers_coverage and approval_history.complete; absent fields remain null. Workflow comments and hidden/internal identifiers are excluded. Uses the shared browser queue in the configured headless mode. Never approves, cancels, edits or books."""
         return safe(
             service.booking_details, reference_number, source, include_additional
         )
@@ -1098,6 +1099,7 @@ def create_server(
                     "bookings": [
                         "list_bookings",
                         "wait_operation",
+                        "For next upcoming use timeline.next_upcoming_reference when timeline.complete; report ongoing_references separately and do not infer next/none from partial coverage",
                         "booking_details for each requested reference_number when full metadata is needed",
                         "wait_operation",
                     ],

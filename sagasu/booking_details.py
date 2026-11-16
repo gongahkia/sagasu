@@ -233,6 +233,11 @@ def parse_booking_details(snapshot, record, *, include_additional=False):
         "field_status": {
             **statuses,
             "booked_by": statuses["created_by"],
+            "created_at": (
+                "available"
+                if created_at
+                else "unreadable" if booked_by else statuses["created_by"]
+            ),
             "co_bookers": coverage["status"],
             "approval_history": "not_exposed",
         },
@@ -258,6 +263,11 @@ def parse_booking_details(snapshot, record, *, include_additional=False):
             "modified_at": modified_at,
         }
         result["field_status"]["booked_for"] = "not_exposed"
+        result["field_status"]["modified_at"] = (
+            "available"
+            if modified_at
+            else "unreadable" if modified else result["field_status"]["modified_by"]
+        )
     return result
 
 

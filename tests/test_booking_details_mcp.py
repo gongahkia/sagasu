@@ -66,6 +66,9 @@ class BookingDetailProtocolTests(unittest.IsolatedAsyncioTestCase):
             result = finished["result"]
             self.assertTrue(result["reference_verified"])
             self.assertEqual(result["booked_by"]["name"], "Original Booker")
+            self.assertEqual(result["created_at"], "2026-11-12T10:30:00+08:00")
+            self.assertEqual(result["field_status"]["created_at"], "available")
+            self.assertEqual(result["field_status"]["modified_at"], "available")
             self.assertEqual(result["additional_details"]["credits_deducted"], "12.00")
             self.assertEqual(result["field_status"]["confirmed_by"], "not_exposed")
             self.assertFalse(result["workflow_comments_included"])
