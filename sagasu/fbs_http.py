@@ -159,6 +159,81 @@ def _actions(row, suffix):
     ]
 
 
+# Neutral values observed on the native My Bookings default view. These are
+# temporary page filters, separate from Sagasu's saved search preferences.
+BOOKING_FILTER_DEFAULTS = {
+    "ViewBooking_Search_SimpleSearch_c1": {""},
+    "StartDateTime_c1_textDate": {""},
+    "EndDateTime_c1_textDate": {""},
+    "CreatedDateTime_c1_textDate": {""},
+    "Purpose_c1": {""},
+    "Day_c1": {""},
+    "Status_c1": {""},
+    "UseType_c1": {""},
+    "TypeofTransactions_c1": {"1"},
+    "TypeOfBooking_c1": {"1"},
+    **{
+        name + "_c1_textValue": {"", "0"}
+        for name in (
+            "Building",
+            "Floor",
+            "FacilityType",
+            "Facility",
+            "BookedBy",
+            "BookedFor",
+            "CourseCode",
+        )
+    },
+}
+
+
+def account_filters_clear(kind, values):
+    defaults = BOOKING_FILTER_DEFAULTS if kind == "bookings" else {"txtSearch_c1": {""}}
+    return all(
+        str(value).strip() in defaults[key]
+        for key, value in values.items()
+        if key in defaults
+    )
+
+
+def account_filter_values(kind, document):
+    identifiers = (
+        BOOKING_FILTER_DEFAULTS if kind == "bookings" else {"txtSearch_c1": {""}}
+    )
+    values = {}
+    for node in document.root.nodes():
+        identifier = node.attrs.get("id")
+        if identifier not in identifiers:
+            continue
+        if identifier in values:
+            raise HTTPReadUnavailable("unreadable_account_filters")
+        if node.tag == "input":
+            values[identifier] = node.attrs.get("value", "")
+        elif node.tag == "select":
+            options = [item for item in node.nodes() if item.tag == "option"]
+            selected = [item for item in options if "selected" in item.attrs]
+            if not options or len(selected) > 1:
+                raise HTTPReadUnavailable("unreadable_account_filters")
+            values[identifier] = (selected or options)[0].attrs.get("value", "")
+        else:
+            raise HTTPReadUnavailable("unreadable_account_filters")
+    return values
+
+
+def booking_listing_scope(values):
+    return {
+        "view": "native_default_my_bookings",
+        "search_filters_clear": True,
+        "transaction_view": (
+            "Upcoming Bookings" if values.get("TypeofTransactions_c1") == "1" else None
+        ),
+        "booking_view": (
+            "General Bookings" if values.get("TypeOfBooking_c1") == "1" else None
+        ),
+        "historical_coverage_established": False,
+    }
+
+
 def parse_account_document(kind, html):
     """Normalize only fully rendered, complete account grids; otherwise reject.
 
@@ -170,6 +245,9 @@ def parse_account_document(kind, html):
     if len(html.encode("utf-8")) > MAX_DOCUMENT_BYTES:
         raise HTTPReadUnavailable("document_limit")
     document = _Document(html)
+    filters = account_filter_values(kind, document)
+    if not account_filters_clear(kind, filters):
+        raise HTTPReadUnavailable("filtered_account_listing")
     grid_id = "GridViewBooking" if kind == "bookings" else "GridViewTask"
     grid, content = document.by_id(grid_id), document.by_id(grid_id + "_content")
     # The observed FBS shell initially hides the entire server-rendered form;
@@ -265,6 +343,7 @@ def parse_account_document(kind, html):
             "bookings": bookings,
             "total": total,
             "complete": len(bookings) == total,
+            "listing_scope": booking_listing_scope(filters),
         }
     refs = [r["reference_number"] for r in result[kind]]
     if len(set(refs)) != len(refs) or not result["complete"]:

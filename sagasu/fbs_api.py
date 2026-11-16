@@ -157,13 +157,27 @@ class FBSReadAPI:
         if kind not in ACCOUNT_PATHS:
             raise HTTPReadUnavailable("unsupported_operation")
         await self.progress("reading FBS account directly over HTTP")
-        html = await self.document(urljoin(FBS_URL, ACCOUNT_PATHS[kind]))
-        if (
-            kind == "tasks"
-            and _Document(html).by_id("txtSearch_c1").attrs.get("value", "").strip()
-        ):
-            raise HTTPReadUnavailable("filtered_account_listing")
-        return parse_account_document(kind, html)
+        for attempt in range(2):
+            html = await self.document(urljoin(FBS_URL, ACCOUNT_PATHS[kind]))
+            # Keep the known Task List control as part of its page contract.
+            if kind == "tasks":
+                _Document(html).by_id("txtSearch_c1")
+            try:
+                result = parse_account_document(kind, html)
+            except HTTPReadUnavailable as error:
+                if (
+                    kind == "bookings"
+                    and error.code == "filtered_account_listing"
+                    and attempt == 0
+                ):
+                    # Browser forms can carry a one-shot keyword into this GET.
+                    # Re-read once, but never accept persistent filtered data.
+                    await self.progress("refreshing an inherited My Bookings filter")
+                    continue
+                raise
+            if attempt:
+                result["account_filter_recovered"] = True
+            return result
 
     async def search(self, config):
         async with asyncio.timeout(120):

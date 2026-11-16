@@ -11,6 +11,28 @@ from sagasu.fbs_paging import collect_pages
 
 
 class AccountPagingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_browser_bookings_reset_inherited_filters_before_asserting_coverage(
+        self,
+    ):
+        from sagasu.fbs_account import read_bookings
+
+        await self.page.set_content(
+            """<input id="ViewBooking_Search_SimpleSearch_c1" value="PRIVATE_FILTER">
+        <a id="ViewBooking_Search_buttonReset" onclick="document.getElementById('ViewBooking_Search_SimpleSearch_c1').value='';render()">Reset</a>
+        <button id="confirm" onclick="writes++">CONFIRM</button><div id="GridViewBooking"></div>
+        <script>window.writes=0;function render(){let filtered=document.getElementById('ViewBooking_Search_SimpleSearch_c1').value;
+        document.getElementById('GridViewBooking').innerHTML='<table id="GridViewBooking_content"><tr class="row">'+(filtered?'<td>No items</td>':'<td></td><td>BK-ONE</td><td>23-Nov-2026 10:00 - 12:00</td><td>LKS</td><td>Room A</td><td></td><td></td><td></td><td>Confirmed</td>')+'</tr></table>'+(filtered?'0':'1')+' ITEM(S) TOTAL';}render();</script>"""
+        )
+        self.client.ensure_authenticated = AsyncMock()
+        with patch(
+            "sagasu.fbs_account.open_account_tab", AsyncMock(return_value=self.page)
+        ):
+            result = await read_bookings(self.client)
+        self.assertEqual(result["total"], 1)
+        self.assertTrue(result["complete"])
+        self.assertTrue(result["listing_scope"]["search_filters_clear"])
+        self.assertEqual(await self.page.evaluate("writes"), 0)
+
     async def test_real_task_reader_collects_capabilities_and_targets_later_page(self):
         from sagasu.fbs_account import read_task_list
         from tests.test_fbs_account import HEADERS

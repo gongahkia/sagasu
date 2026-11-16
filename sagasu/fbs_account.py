@@ -306,13 +306,40 @@ async def read_bookings(client, *, reference=None):
     await client.ensure_authenticated()
     frame = await open_account_tab(client, "MyBookingsTab", "#GridViewBooking_content")
     from .fbs_paging import collect_pages
+    from .fbs_http import (
+        BOOKING_FILTER_DEFAULTS,
+        account_filters_clear,
+        booking_listing_scope,
+    )
+
+    async def filters():
+        return await frame.evaluate(
+            """ids => Object.fromEntries(ids.flatMap(id => {
+                const element = document.getElementById(id);
+                return element ? [[id, element.value]] : [];
+            }))""",
+            list(BOOKING_FILTER_DEFAULTS),
+        )
+
+    values = await filters()
+    if not account_filters_clear("bookings", values):
+        reset = frame.locator("a#ViewBooking_Search_buttonReset")
+        if await reset.count() != 1:
+            raise LayoutChanged("My Bookings search filters could not be reset safely")
+        await reset.click()
+        await client._wait_for_idle(frame)
+        values = await filters()
+        if not account_filters_clear("bookings", values):
+            raise LayoutChanged("My Bookings search filters could not be cleared")
 
     async def read_page():
         return await read_booking_page(frame)
 
-    return await collect_pages(
+    result = await collect_pages(
         client, frame, "GridViewBooking", "bookings", read_page, reference=reference
     )
+    result["listing_scope"] = booking_listing_scope(values)
+    return result
 
 
 async def read_booking_page(frame):

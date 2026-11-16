@@ -127,6 +127,33 @@ class DocumentTests(unittest.TestCase):
         with self.assertRaises(HTTPReadUnavailable):
             parse_account_document("bookings", html.replace("No items", ""))
 
+    def test_filtered_bookings_never_claim_complete_empty_or_partial_results(self):
+        empty = '<div id="GridViewBooking"><table id="GridViewBooking_content"><tr class="row"><td>No items</td></tr></table>0 ITEM(S) TOTAL</div>'
+        for body in (empty, bookings_html()):
+            for field in (
+                "ViewBooking_Search_SimpleSearch_c1",
+                "Purpose_c1",
+                "Facility_c1_textValue",
+            ):
+                html = body + f'<input id="{field}" value="PRIVATE_FILTER">'
+                with (
+                    self.subTest(field=field),
+                    self.assertRaises(HTTPReadUnavailable) as caught,
+                ):
+                    parse_account_document("bookings", html)
+                self.assertEqual(caught.exception.code, "filtered_account_listing")
+                self.assertNotIn("PRIVATE_FILTER", str(caught.exception))
+        neutral = (
+            bookings_html()
+            + '<input id="Facility_c1_textValue" value="0"><select id="TypeofTransactions_c1"><option value="1" selected>Upcoming Bookings</option></select>'
+        )
+        result = parse_account_document("bookings", neutral)
+        self.assertEqual(result["total"], 1)
+        self.assertEqual(
+            result["listing_scope"]["transaction_view"], "Upcoming Bookings"
+        )
+        self.assertFalse(result["listing_scope"]["historical_coverage_established"])
+
     def test_parity_includes_status_permissions_reference_and_coverage(self):
         result = parse_account_document("bookings", bookings_html())
         self.assertTrue(equivalent_listing("bookings", result, result))

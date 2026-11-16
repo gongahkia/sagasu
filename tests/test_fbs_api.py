@@ -59,7 +59,27 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
                         '<iframe id="frameContent" src="/modules/BigSpace/BookingCalendar/Calendar.aspx?TYPE=fixture"></iframe>',
                     )
                 elif path.endswith("mybookingstab.aspx"):
-                    self.send(200, bookings_html())
+                    state["booking_reads"] = state.get("booking_reads", 0) + 1
+                    keyword = state.get("booking_filter", "")
+                    empty = (
+                        state.get("bookings_empty")
+                        or keyword
+                        and state.get("filter_empty")
+                    )
+                    body = (
+                        '<div id="GridViewBooking"><table id="GridViewBooking_content"><tr class="row"><td>No items</td></tr></table>0 ITEM(S) TOTAL</div>'
+                        if empty
+                        else bookings_html()
+                    )
+                    if keyword and state.get("one_shot_filter"):
+                        state["booking_filter"] = ""
+                    self.send(
+                        200,
+                        body
+                        + '<input id="ViewBooking_Search_SimpleSearch_c1" value="'
+                        + keyword
+                        + '">',
+                    )
                 elif path.endswith("tasklist.aspx"):
                     self.send(
                         200,
@@ -352,6 +372,32 @@ class APIProtocolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPReadUnavailable) as caught:
             await self.api.account("tasks")
         self.assertEqual(caught.exception.code, "filtered_account_listing")
+
+    async def test_post_form_one_shot_filter_is_retried_without_false_empty_or_postbacks(
+        self,
+    ):
+        self.state.update(
+            booking_filter="PRIVATE_KEYWORD", one_shot_filter=True, filter_empty=True
+        )
+        result = await self.api.account("bookings")
+        self.assertEqual(result["total"], 1)
+        self.assertTrue(result["complete"])
+        self.assertTrue(result["account_filter_recovered"])
+        self.assertEqual(self.state["booking_reads"], 2)
+        self.assertEqual(self.state["posts"], [])
+        self.assertNotIn("PRIVATE_KEYWORD", json.dumps(result))
+
+    async def test_persistent_filter_fails_closed_and_genuine_empty_still_works(self):
+        self.state.update(booking_filter="PRIVATE_KEYWORD", filter_empty=True)
+        with self.assertRaises(HTTPReadUnavailable) as caught:
+            await self.api.account("bookings")
+        self.assertEqual(caught.exception.code, "filtered_account_listing")
+        self.assertEqual(self.state["booking_reads"], 2)
+        self.state.update(booking_filter="", bookings_empty=True)
+        result = await self.api.account("bookings")
+        self.assertEqual(result["bookings"], [])
+        self.assertTrue(result["complete"])
+        self.assertNotIn("account_filter_recovered", result)
 
     async def test_transport_rejects_writes_even_if_a_caller_bypasses_form_builder(
         self,
