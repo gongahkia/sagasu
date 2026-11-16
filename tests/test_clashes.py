@@ -24,6 +24,38 @@ def listing(*statuses):
 
 
 class ClashTests(unittest.TestCase):
+    def test_outer_window_reports_no_two_hour_continuous_gap(self):
+        source = listing("Confirmed")
+        source["bookings"][0]["date_time"] = "01-Nov-2099 (Sun) 10:30 - 14:30 (4hrs)"
+        result = check_clashes(
+            source, [{**WINDOW, "start_time": "10:00", "end_time": "16:00"}]
+        )["windows"][0]
+        self.assertTrue(result["complete"])
+        self.assertEqual(
+            result["clear_intervals"],
+            [
+                {"start_time": "10:00", "end_time": "10:30", "duration_minutes": 30},
+                {"start_time": "14:30", "end_time": "16:00", "duration_minutes": 90},
+            ],
+        )
+        self.assertEqual(result["longest_clear_minutes"], 90)
+
+    def test_clear_intervals_merge_overlaps_clip_bounds_and_include_unpaged_rows(self):
+        source = listing(*["Confirmed"] * 51)
+        for row in source["bookings"]:
+            row["date_time"] = "01-Nov-2099 (Sun) 13:30 - 14:30 (1hr)"
+        source["bookings"][-1]["date_time"] = "01-Nov-2099 (Sun) 14:30 - 16:30 (2hrs)"
+        result = check_clashes(source, [WINDOW])["windows"][0]
+        self.assertTrue(result["overlaps_truncated"])
+        self.assertEqual(result["clear_intervals"], [])
+        self.assertEqual(result["longest_clear_minutes"], 0)
+        source["bookings"] = source["bookings"][:1]
+        source["total"] = 1
+        source["bookings"][0]["date_time"] = "01-Nov-2099 (Sun) 15:30 - 16:30 (1hr)"
+        self.assertEqual(
+            check_clashes(source, [WINDOW])["windows"][0]["longest_clear_minutes"], 90
+        )
+
     def test_confirmed_pending_and_cancelled_rows_have_distinct_meanings(self):
         result = check_clashes(
             listing(
@@ -70,6 +102,8 @@ class ClashTests(unittest.TestCase):
                 result = check_clashes(source, [WINDOW])
                 self.assertFalse(result["complete"])
                 self.assertIsNone(result["windows"][0]["clear_of_existing_bookings"])
+                self.assertIsNone(result["windows"][0]["clear_intervals"])
+                self.assertIsNone(result["windows"][0]["longest_clear_minutes"])
         cancelled = listing("Cancelled")
         cancelled["bookings"][0]["date_time"] = "Unknown date/time"
         self.assertTrue(
@@ -82,6 +116,7 @@ class ClashTests(unittest.TestCase):
         result = check_clashes(listing("Unknown native status"), [WINDOW])
         self.assertFalse(result["complete"])
         self.assertIsNone(result["windows"][0]["clear_of_existing_bookings"])
+        self.assertIsNone(result["windows"][0]["clear_intervals"])
         self.assertEqual(result["windows"][0]["overlap_count"], 1)
         self.assertEqual(
             result["windows"][0]["overlaps"][0]["classification"], "unknown_status"

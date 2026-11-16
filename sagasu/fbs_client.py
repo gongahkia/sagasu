@@ -115,6 +115,18 @@ def resolve_facility_types(
         raise FBSError(
             "The requested facility types do not match the current FBS options.",
             reason="search_filter_unavailable",
+            details={
+                "requested_facility_types": [
+                    value
+                    for value in requested
+                    if value in SCRAPE_PARAM_CHOICES["facility_type"]
+                ],
+                "available_facility_types": [
+                    value
+                    for value in SCRAPE_PARAM_CHOICES["facility_type"]
+                    if value in available
+                ],
+            },
         )
     return matched
 

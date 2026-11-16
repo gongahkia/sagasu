@@ -209,6 +209,7 @@ def parse_booking_details(snapshot, record, *, include_additional=False):
         "facility_type": values["facility_type"],
         "on_behalf_of": values["on_behalf_of"],
         "booked_by": booked_by,
+        "created_by": booked_by,
         "booked_by_source": next(
             (
                 item.get("scope", "booking_form")

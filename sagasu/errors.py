@@ -1,5 +1,7 @@
 """Allowlisted recovery instructions; browser exception text never leaves the host."""
 
+from .personal_options import SCRAPE_PARAM_CHOICES
+
 REASONS = {
     "amendment_unavailable": (
         "The native FBS amendment could not be prepared. No CONFIRM action was attempted.",
@@ -23,7 +25,7 @@ REASONS = {
     ),
     "search_filter_unavailable": (
         "FBS could not match the requested facility types to its current search options. Availability was not determined.",
-        "Read search_options and revise the facility types or building/floor scope before searching again.",
+        "Inspect details.available_facility_types for the current building/floor scope; search_options lists the global vocabulary, not combinations supported everywhere. Revise only the requested constraints the user permits, then retry. Do not treat this failure as no available rooms or silently broaden the scope.",
         "search_options",
     ),
     "booking_details_unavailable": (
@@ -110,7 +112,7 @@ def public_failure(error):
         return {}
     message, action, tool = REASONS[reason]
     details = getattr(error, "details", {})
-    # Only small counts/flags cross the failure boundary. Never echo page text.
+    # Only small counts/flags and known catalogue labels cross the boundary.
     safe = {
         key: value
         for key, value in details.items()
@@ -118,6 +120,15 @@ def public_failure(error):
         and type(value) in {int, bool}
         and (type(value) is bool or 0 <= value <= 10000)
     }
+    if reason == "search_filter_unavailable":
+        for key in ("requested_facility_types", "available_facility_types"):
+            labels = details.get(key)
+            if isinstance(labels, (list, tuple)):
+                safe[key] = [
+                    label
+                    for label in SCRAPE_PARAM_CHOICES["facility_type"]
+                    if label in labels
+                ]
     return {
         "reason": reason,
         "message": message,

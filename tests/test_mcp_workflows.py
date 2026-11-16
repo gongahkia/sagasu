@@ -144,7 +144,17 @@ class WorkflowProtocolTests(ServiceCase):
         from sagasu.fbs_client import FBSError
 
         self.backend.error = FBSError(
-            "PRIVATE PAGE TEXT", reason="search_filter_unavailable"
+            "PRIVATE PAGE TEXT",
+            reason="search_filter_unavailable",
+            details={
+                "requested_facility_types": ["Group Study Room", "PRIVATE INPUT"],
+                "available_facility_types": [
+                    "Project Room",
+                    "Project Room (Level 5)",
+                    "PRIVATE PAGE TEXT",
+                ],
+                "raw_url": "PRIVATE URL",
+            },
         )
         async with Client(create_server(self.service)) as client:
             operation = await self.call(client, "search_rooms", config=CONFIG)
@@ -155,6 +165,15 @@ class WorkflowProtocolTests(ServiceCase):
             self.assertEqual(status["error"]["reason"], "search_filter_unavailable")
             self.assertEqual(status["next_tool"], "search_options")
             self.assertIn("Availability was not determined", status["error"]["message"])
+            self.assertEqual(
+                status["error"]["details"]["requested_facility_types"],
+                ["Group Study Room"],
+            )
+            self.assertEqual(
+                status["error"]["details"]["available_facility_types"],
+                ["Project Room", "Project Room (Level 5)"],
+            )
+            self.assertIn("global vocabulary", status["error"]["next_action"])
             self.assertNotIn("PRIVATE", json.dumps(status))
             self.assertNotIn("result", status)
 

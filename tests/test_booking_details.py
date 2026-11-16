@@ -62,6 +62,7 @@ class BookingMetadataTests(unittest.TestCase):
             result["additional_details"]["booked_for_source"], "my_bookings_summary"
         )
         self.assertEqual(result["booked_by"]["name"], "Original Booker")
+        self.assertEqual(result["created_by"], result["booked_by"])
         self.assertEqual(result["co_bookers"][0]["name"], "Co Booker")
         self.assertEqual(result["field_status"]["booked_for"], "available")
 

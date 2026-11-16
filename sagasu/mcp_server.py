@@ -239,6 +239,7 @@ def create_server(
             "For one option per date read plan_rooms.date_options; a first candidate page may contain only earlier dates. Different rooms across dates use mode=any, not allow_split. Enable allow_split only when the user permits room changes WITHIN a session. "
             "server_status.default_search shows current search defaults. Use plan_rooms(preferences=...) to patch their date/window without rediscovering unchanged filter labels; preferences.duration_hrs sets the outer window, duration_minutes the required slot. "
             "Planning results expose effective_scope and filter_sources: report inherited floor/type restrictions and scope completeness claims to the checked filters. [] removes a filter restriction; omitted filters inherit saved/default values. Exact facility labels do not automatically cover separately named variants. "
+            "When a flexible plan must avoid existing bookings, check_booking_clashes over each full outer window; use complete clear_intervals and longest_clear_minutes to assess whether the required continuous duration can fit. A room candidate is not a clash-free recommendation until checked. "
             "When only one option is requested, wait_operation(limit=1) returns a compact candidate page; inspect completeness and per-date failures before drawing conclusions. "
             "All dates and times are SGT. Search results are snapshots; "
             "Read booking_horizon in search/availability results: it reports explicit FBS restrictions across checked rooms. "
@@ -733,14 +734,14 @@ def create_server(
     async def check_booking_clashes(
         windows: list[BookingWindowInput],
     ) -> dict[str, Any]:
-        """Check 1–31 proposed future SGT windows with one My Bookings read. Includes confirmed/pending overlaps and compares proposed windows with each other; adjacent intervals do not clash. Cancelled/withdrawn/rejected records are excluded. Unknown status, unreadable dates or partial coverage cannot produce an all-clear. Reports My Bookings overlaps, not who created a booking or final FBS eligibility. Never submits. Poll wait_operation."""
+        """Check 1–31 future SGT windows with one My Bookings read. For flexible planning, check the entire outer window: clear_intervals and longest_clear_minutes show whether the required continuous duration can fit around existing bookings. These fields are null if coverage is uncertain; they establish neither room availability nor final FBS eligibility. Includes confirmed/pending overlaps, excludes cancelled/withdrawn/rejected records and compares proposals with each other. Adjacent intervals do not clash. Never submits. Poll wait_operation."""
         return safe(
             service.check_booking_clashes, [window.model_dump() for window in windows]
         )
 
     @server.tool(annotations=read)
     async def room_details(room: str, include_image: bool = False) -> dict[str, Any]:
-        """Read FBS facility details for an exact room name without requiring a free interval. Returns verified building/type/capacity, displayed description, period-specific operating hours and equipment text where exposed. Missing inventory/accessibility remains unknown; operating hours do not establish booking eligibility. include_image captures the native facility-details page for operation_receipt; its FBS image may illustrate a room type. Poll wait_operation. Does not book or select a co-booker."""
+        """Read FBS facility details for an exact room name without requiring a free interval. Returns verified building/type/capacity, displayed description, period-specific hours and equipment text where exposed. Missing inventory/accessibility remains unknown; hours do not establish booking eligibility. include_image captures the details page: retrieve operation_receipt when receipt_available=true even if photo_available=false. A page screenshot is not a verified room photo; scrolling panels may be cropped and FBS photos may illustrate the type. Poll wait_operation. Does not book or select co-bookers."""
         return safe(service.room_details, room, include_image)
 
     @server.tool(annotations=read)
@@ -775,7 +776,7 @@ def create_server(
         source: Literal["auto", "bookings", "tasks"] = "auto",
         include_additional: bool = True,
     ) -> dict[str, Any]:
-        """Start a read-only, exact-reference booking detail lookup. auto checks My Bookings then Task List; select a source when known. Poll with wait_operation. Returns purpose, visible creator and created_at, co-bookers, and explicit confirmation/approval actors/history where exposed. Additional metadata includes the labelled Booked For person, credits, classifications and modified_by/modified_at; set include_additional=false to omit it. For complete details report exposed creation/last-modified timestamps and cancellation permission alongside people, location, times and purpose. Creator, Booked For and co-bookers are distinct roles. Never infer confirmation from status, checkboxes or last modifier. Inspect field_status, co_bookers_coverage and approval_history.complete; absent fields remain null. Workflow comments and hidden/internal identifiers are excluded. Uses the shared browser queue in the configured headless mode. Never approves, cancels, edits or books."""
+        """Start a read-only, exact-reference detail lookup. auto checks My Bookings then Task List; select a source when known. Poll wait_operation. Returns purpose, creator (created_by and compatibility alias booked_by), created_at, co-bookers and explicit confirmation/approval actors/history where exposed. Additional metadata includes Booked For, credits, use_type, booking_usage and modified_by/modified_at; include_additional=false omits it. For complete details report exposed classifications, audit timestamps and cancellation permission alongside people, location, times and purpose. Creator, Booked For and co-bookers are distinct roles. Never infer confirmation from status, checkboxes or last modifier. Inspect field_status, co_bookers_coverage and approval_history.complete; missing fields remain null. Workflow comments and hidden identifiers are excluded. Uses the shared browser queue and configured headless mode. Never approves, cancels, edits or books."""
         return safe(
             service.booking_details, reference_number, source, include_additional
         )

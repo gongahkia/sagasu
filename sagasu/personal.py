@@ -47,7 +47,9 @@ def validate_preferences(patch):
                 or item not in SCRAPE_PARAM_CHOICES[FILTERS[key]]
                 for item in value
             ):
-                raise PersonalDataError("Choose filter values from search_options.")
+                raise PersonalDataError(
+                    f"Invalid {key} filter. Choose exact labels from search_options.{FILTERS[key]}; [] removes this restriction, while omission inherits saved/default filters."
+                )
             result[key] = list(dict.fromkeys(value))
         elif key == "date_raw":
             try:

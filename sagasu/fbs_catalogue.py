@@ -188,6 +188,10 @@ async def read_room_details(client, room, *, include_image=False):
             mask_color="#000000",
         )
         result["receipt_kind"] = "facility_details"
+        result["receipt_scope"] = "native_facility_details_page"
+        result["receipt_note"] = (
+            "Retrieve with operation_receipt even when photo_available=false: this is a details-page screenshot, not a verified room photograph. Content inside scrolling panels may be cropped. FBS-supplied photos may depict the facility type rather than this exact room."
+        )
     return result
 
 

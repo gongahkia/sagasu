@@ -9,6 +9,7 @@ from .fbs_client import (
     SearchConfig,
     require_future_booking,
     time_to_minutes,
+    minutes_to_time,
 )
 from .repeat import normalize_date
 
@@ -46,6 +47,31 @@ def overlap(a, b):
         and time_to_minutes(a["start_time"]) < time_to_minutes(b["end_time"])
         and time_to_minutes(b["start_time"]) < time_to_minutes(a["end_time"])
     )
+
+
+def clear_intervals(window, matches):
+    """Subtract the union of known bookings from a completely read window."""
+    cursor = time_to_minutes(window["start_time"])
+    end = time_to_minutes(window["end_time"])
+    intervals = []
+    for start, stop in sorted(
+        (time_to_minutes(row["start_time"]), time_to_minutes(row["end_time"]))
+        for row in matches
+    ):
+        start, stop = max(cursor, start), min(end, stop)
+        if start > cursor:
+            intervals.append((cursor, start))
+        cursor = max(cursor, stop)
+    if cursor < end:
+        intervals.append((cursor, end))
+    return [
+        {
+            "start_time": minutes_to_time(start),
+            "end_time": minutes_to_time(stop),
+            "duration_minutes": stop - start,
+        }
+        for start, stop in intervals
+    ]
 
 
 def check_clashes(listing, windows):
@@ -99,6 +125,7 @@ def check_clashes(listing, windows):
         uncertain = any(row["classification"] == "unknown_status" for row in matches)
         known = any(row["classification"] != "unknown_status" for row in matches)
         complete = coverage_complete and not unreadable and not uncertain
+        clear = clear_intervals(window, matches) if complete else None
         checks.append(
             {
                 "window_index": index,
@@ -110,6 +137,12 @@ def check_clashes(listing, windows):
                 "overlap_count": len(matches),
                 "overlaps_truncated": len(matches) > 50,
                 "complete": complete,
+                "clear_intervals": clear,
+                "longest_clear_minutes": (
+                    max((part["duration_minutes"] for part in clear), default=0)
+                    if clear is not None
+                    else None
+                ),
             }
         )
     return {
@@ -125,7 +158,7 @@ def check_clashes(listing, windows):
         "bookings_total": total,
         "unreadable_booking_references": unreadable,
         "complete": all(check["complete"] for check in checks),
-        "scope": "Time overlaps with this account's My Bookings records, including pending requests. Cancelled/withdrawn/rejected records are excluded. Does not establish booker identity, room availability or final FBS eligibility.",
+        "scope": "Time overlaps with this account's My Bookings records, including pending requests. Clear intervals require complete coverage and subtract all overlaps, including records beyond the displayed overlap page. Cancelled/withdrawn/rejected records are excluded. Does not establish booker identity, room availability or final FBS eligibility.",
         "timezone": "Asia/Singapore",
         "checked_at": datetime.now(FBS_TIMEZONE).isoformat(),
         "read_backend": listing.get("read_backend"),

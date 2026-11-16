@@ -17,6 +17,18 @@ from sagasu.personal import PersonalDataError, PersonalStore
 
 
 class StoreTests(unittest.TestCase):
+    def test_invalid_search_filter_names_its_exact_option_source_without_input_values(
+        self,
+    ):
+        from sagasu.personal import validate_preferences
+
+        for key, source in [("floors", "floor"), ("facility_types", "facility_type")]:
+            with self.subTest(key=key), self.assertRaises(PersonalDataError) as caught:
+                validate_preferences({key: ["PRIVATE INVALID INPUT"]})
+            self.assertIn(key, str(caught.exception))
+            self.assertIn(f"search_options.{source}", str(caught.exception))
+            self.assertNotIn("PRIVATE", str(caught.exception))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

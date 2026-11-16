@@ -10,10 +10,26 @@ from sagasu.fbs_client import (
     minutes_to_time,
     parse_event_title,
     time_to_minutes,
+    resolve_facility_types,
+    FBSError,
 )
 
 
 class TimeHelpersTest(unittest.TestCase):
+    def test_unmatched_type_exposes_known_scoped_choices_without_raw_page_labels(self):
+        with self.assertRaises(FBSError) as caught:
+            resolve_facility_types(
+                ["Group Study Room"],
+                ["Project Room", "Project Room (Level 5)", "PRIVATE PAGE TEXT"],
+            )
+        self.assertEqual(
+            caught.exception.details,
+            {
+                "requested_facility_types": ["Group Study Room"],
+                "available_facility_types": ["Project Room", "Project Room (Level 5)"],
+            },
+        )
+
     def test_time_round_trip(self):
         self.assertEqual(time_to_minutes("09:30"), 570)
         self.assertEqual(minutes_to_time(570), "09:30")
