@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, Literal
@@ -30,6 +31,62 @@ from .errors import public_failure
 from .personal import PersonalDataError
 from .action_journal import JournalError
 from .personal_options import SCRAPE_PARAM_CHOICES
+
+
+PageOffset = Annotated[int, Field(ge=0)]
+PageLimit = Annotated[int, Field(ge=1, le=50)]
+WaitSeconds = Annotated[float, Field(ge=0, le=30)]
+
+
+class StrictMCPServer(MCPServer):
+    """Apply the published input contract before SDK argument normalization."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._argument_fields = None
+
+    async def list_tools(self):
+        tools = await super().list_tools()
+        self._argument_fields = {}
+        for tool in tools:
+            tool.input_schema["additionalProperties"] = False
+            self._argument_fields[tool.name] = set(
+                tool.input_schema.get("properties", {})
+            )
+        return tools
+
+    async def call_tool(self, name, arguments, context=None):
+        if self._argument_fields is None or name not in self._argument_fields:
+            await self.list_tools()
+        fields = self._argument_fields.get(name)
+        if fields is not None and (unexpected := set(arguments) - fields):
+            names = sorted(
+                {
+                    (
+                        key
+                        if isinstance(key, str)
+                        and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key)
+                        else "<invalid_field_name>"
+                    )
+                    for key in unexpected
+                }
+            )
+            raise ToolError(
+                json.dumps(
+                    {
+                        "reason": "invalid_tool_arguments",
+                        "unexpected_arguments": names,
+                        "allowed_arguments": sorted(fields),
+                        "message": (
+                            "This tool takes no arguments."
+                            if not fields
+                            else "Use only the arguments in this tool's input schema."
+                        ),
+                        "operation_started": False,
+                    }
+                )
+            )
+        return await super().call_tool(name, arguments, context)
 
 
 class SearchInput(BaseModel):
@@ -168,7 +225,7 @@ def create_server(
         if allow_agent_submission
         else "confirm_review requires a human elicitation response; never fabricate approval. "
     )
-    server = MCPServer(
+    server = StrictMCPServer(
         "Sagasu",
         version=__version__,
         instructions=(
@@ -286,7 +343,9 @@ def create_server(
         )
 
     @server.tool(annotations=local)
-    async def list_cobookers(offset: int = 0, limit: int = 20) -> dict[str, Any]:
+    async def list_cobookers(
+        offset: PageOffset = 0, limit: PageLimit = 20
+    ) -> dict[str, Any]:
         """List the local saved co-booker IDs, names and SMU emails available across agent sessions. Use an exact ID when preparing a booking."""
         return safe(service.list_cobookers, offset, limit)
 
@@ -497,6 +556,7 @@ def create_server(
                 "operation_ttl_seconds": service.ttl,
                 "review_ttl_seconds": 600,
                 "max_wait_seconds": 30,
+                "max_page_size": 50,
             },
             "state_lifetime": "Read jobs, reviews and receipts expire on restart. Write outcomes and submission IDs persist in action_history. Nothing is replayed.",
             "durable_action_history": service.journal is not None,
@@ -522,7 +582,9 @@ def create_server(
         )
 
     @server.tool(annotations=local)
-    async def action_history(offset: int = 0, limit: int = 20) -> dict[str, Any]:
+    async def action_history(
+        offset: PageOffset = 0, limit: PageLimit = 20
+    ) -> dict[str, Any]:
         """Read private durable booking/amendment/cancellation/approval history, including interrupted outcomes, original operation/review IDs and minimal room/time/reference metadata. Amendment reconciliation uses private keyed comparisons without storing purpose text. No credentials, purpose, co-booker emails or screenshots are stored. Nothing is replayed. Reconcile outcome_unknown in FBS before creating a new review. operation_result can read recorded writes after restart."""
         return safe(service.action_history, offset, limit)
 
@@ -603,8 +665,8 @@ def create_server(
     @server.tool(annotations=local)
     async def available_rooms(
         operation_id: str,
-        offset: int = 0,
-        limit: int = 20,
+        offset: PageOffset = 0,
+        limit: PageLimit = 20,
         preferred_rooms: list[str] | None = None,
         avoided_rooms: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -640,7 +702,10 @@ def create_server(
 
     @server.tool(annotations=local)
     async def wait_operation(
-        operation_id: str, timeout: float = 20, offset: int = 0, limit: int = 20
+        operation_id: str,
+        timeout: WaitSeconds = 20,
+        offset: PageOffset = 0,
+        limit: PageLimit = 20,
     ) -> dict[str, Any]:
         """Wait up to 0–30 seconds for a job and return its status plus paginated result when ready. A timeout or disconnected caller does not cancel the job. If still active, follow poll_after_ms and wait again. Never restart a job just because a wait timed out."""
         try:
@@ -650,7 +715,7 @@ def create_server(
 
     @server.tool(annotations=read)
     async def list_bookings() -> dict[str, Any]:
-        """Start reading paginated My Bookings summaries with FBS status, cancellation permission, SGT starts_at/ends_at and temporal_status. Poll. timeline evaluates the full retained listing before pagination: next_upcoming_reference is the earliest non-cancelled future start; ongoing_references are separate. Only claim a definitive next/none when timeline.complete=true; partial/unreadable/unknown-status listings return next_upcoming_status=unknown. Do not choose the first row or call an ongoing booking upcoming. For complete metadata call booking_details with the selected exact reference. Does not change bookings."""
+        """Start a My Bookings read with NO arguments; put offset/limit on wait_operation or operation_result (limit 1–50). Returns summaries with FBS status, cancellation permission, SGT starts_at/ends_at and temporal_status. listing_scope identifies the native default view; historical coverage is not established. timeline evaluates the full retained listing before pagination: next_upcoming_reference is the earliest non-cancelled future start; ongoing_references are separate. Only claim a definitive next/none when timeline.complete=true. Do not choose the first row or call an ongoing booking upcoming. For complete metadata call booking_details with the selected exact reference. Does not change bookings."""
         return safe(service.start, "bookings")
 
     @server.tool(annotations=read)
@@ -751,7 +816,7 @@ def create_server(
 
     @server.tool(annotations=local)
     async def operation_result(
-        operation_id: str, offset: int = 0, limit: int = 20
+        operation_id: str, offset: PageOffset = 0, limit: PageLimit = 20
     ) -> dict[str, Any]:
         """Read a finished operation result. Rooms/bookings/tasks/co-booker candidates are paginated (limit 1–50). Check complete/total fields for FBS coverage."""
         return safe(service.result, operation_id, offset, limit)

@@ -755,6 +755,9 @@ class AgentService:
                     result["pagination"] = {
                         "offset": offset,
                         "limit": limit,
+                        "returned_count": len(result[key]),
+                        "retained_total": len(rows),
+                        # Backwards-compatible alias for the retained count.
                         "returned_total": len(rows),
                         "source_total": result.get("total", len(rows)),
                         "source_complete": result.get("complete", True),
