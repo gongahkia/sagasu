@@ -126,11 +126,26 @@ def create_server(
     host_controller=None,
 ):
     def configuration():
-        return (
+        report = (
             configuration_provider()
             if configuration_provider
             else inspect_configuration(Settings.load(diagnostic=True))
         )
+        if host_controller is not None:
+            report = {
+                **report,
+                "host_status_tool": "host_status",
+                "host_recovery_tool": "recover_host",
+            }
+            if any(
+                check["name"] == "runtime.host" and check["status"] == "fail"
+                for check in report["checks"]
+            ):
+                report["next_tool"] = "host_status"
+                report["next_action"] = (
+                    "Read host_status for the live host, mismatch categories, protected work and exact local commands. Use recover_host when safe, then reconnect this MCP client. FBS authentication is a separate session_status check."
+                )
+        return report
 
     submission_instruction = (
         "submit_review submits the exact review on the user's booking/amendment/cancellation/approval request, without an extra confirmation form. "
@@ -143,6 +158,7 @@ def create_server(
         version=__version__,
         instructions=(
             "Personal SMU FBS assistant. Start with server_status. Read configuration_status for setup checks and exact local fixes. "
+            "If runtime.host fails, use host_status then recover_host for guarded local recovery; follow reconnect_required. Never delete locks or replay operations. "
             "In diagnostic mode explain the failing checks; FBS operations are blocked until setup is corrected and the MCP client reconnects. "
             "Missing autofill credentials do not prove the saved session is expired; use session_status before requesting login. "
             "Never collect passwords in chat or rewrite configuration automatically. "
@@ -195,6 +211,37 @@ def create_server(
     async def configuration_status() -> dict[str, Any]:
         """Inspect redacted local setup checks shared with sagasu doctor. Available in diagnostic mode. Never launches Chromium, contacts FBS, submits credentials, starts MFA, changes files or repairs configuration. Shows exact variable names/fixes and affected capabilities. Configuration is loaded at startup; apply fixes privately and reconnect. Missing credentials do not invalidate an existing saved session."""
         return configuration()
+
+    @server.tool(annotations=local)
+    async def host_status() -> dict[str, Any]:
+        """Diagnose the local shared host, including in diagnostic mode: live PID, code/configuration/Python mismatch, active work, retained results, pending reviews and unresolved writes. Returns exact interpreter-based CLI commands, never credentials or fingerprint digests. Does not contact FBS, start a host, sign in, stop work or replay operations. Direct connections report unsupported. Authentication is separate: use session_status."""
+        if host_controller is None:
+            return {
+                "supported": False,
+                "reason": "direct_connection",
+                "next_tool": "configuration_status",
+            }
+        return await host_controller.status()
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False,
+            destructive_hint=True,
+            idempotent_hint=True,
+            open_world_hint=False,
+        )
+    )
+    async def recover_host(discard_completed_results: bool = False) -> dict[str, Any]:
+        """Repair a missing or incompatible shared host after host_status. Refuses active/MFA work, pending reviews, unresolved writes and unhealthy history. Preserves finished snapshots/receipts unless discard_completed_results=true is explicitly authorized by the user. Never changes configuration, deletes locks, signs in or retries FBS actions. Older hosts return manual commands. Follow reconnect_required; this cannot reload an initialized MCP client. Safe code-only upgrades without protected state also happen automatically on new connections."""
+        if host_controller is None:
+            return {
+                "recovered": False,
+                "reason": "direct_connection",
+                "next_tool": "configuration_status",
+            }
+        return await host_controller.recover(
+            discard_completed_results=discard_completed_results
+        )
 
     @server.tool(annotations=local)
     async def search_options() -> dict[str, Any]:
@@ -391,6 +438,8 @@ def create_server(
             "operational": operational,
             "default_search": default_search,
             "configuration_status_tool": "configuration_status",
+            "host_status_tool": "host_status" if host_controller else None,
+            "host_recovery_tool": "recover_host" if host_controller else None,
             "configuration": setup,
             "backends": (
                 service.backend.capabilities()
@@ -954,6 +1003,7 @@ def create_server(
                 "setup": [
                     "server_status: inspect operational/diagnostic mode and capabilities",
                     "configuration_status: read redacted local checks and exact setup fixes; uses the same checks as sagasu doctor",
+                    "For runtime.host failures call host_status, then recover_host when its guard permits; follow reconnect_required. These tools never contact FBS or replay operations",
                     "Apply fixes privately on the host, then stop the idle shared host and reconnect; configuration is loaded at startup",
                     "Never request passwords in chat; missing credentials alone do not invalidate a saved session",
                 ],
@@ -1016,6 +1066,7 @@ def create_server(
                     "wait_operation",
                 ],
                 "recovery": {
+                    "host_mismatch": "host_status distinguishes code/configuration/Python mismatches and protected state without credentials or digests. New connections automatically replace code-only stale hosts with no protected state. Otherwise recover_host can repair an idle incompatible host; configuration/Python changes are never applied automatically. Active work, reviews, unresolved writes and unhealthy history block recovery. Completed results/receipts are retained unless their loss is explicitly authorized. Diagnostic frontends still require reconnecting; older hosts return exact interpreter-based commands. Never delete locks, kill processes, or replay FBS operations.",
                     "configuration_required": "Call configuration_status, explain the failing checks and local fixes, then reconnect after the host configuration is corrected. Never collect credentials in chat or repeat a failed job to diagnose setup.",
                     "missing_email_or_password": "Inspect configuration_status. Configure the named variable privately, then restart the idle host and reconnect to load the change. A saved session may already support reads without autofill.",
                     "session": "Use session_status to verify cached authentication without entering credentials. CLI login and MCP clients share the local host on macOS/Linux.",

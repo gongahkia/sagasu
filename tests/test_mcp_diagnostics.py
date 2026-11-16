@@ -246,7 +246,68 @@ class DiagnosticStdioTests(unittest.IsolatedAsyncioTestCase):
             response = await client.call_tool("server_status", {})
             self.assertFalse(response.is_error)
             self.assertEqual(response.structured_content["mode"], "diagnostic")
+            status = (await client.call_tool("host_status", {})).structured_content
+            self.assertEqual(status["reason"], "direct_connection")
+            recovery = (await client.call_tool("recover_host", {})).structured_content
+            self.assertFalse(recovery["recovered"])
         self.assertFalse((self.root / "browser").exists())
+
+    async def test_mismatched_frontend_can_diagnose_and_recover_then_reconnect(self):
+        self.env.write_text(self.base)
+        self.addAsyncCleanup(self.stop_host)
+        async with Client(self.parameters()) as initial:
+            initial_status = (
+                await initial.call_tool("server_status", {})
+            ).structured_content
+            self.assertTrue(initial_status["operational"])
+        self.env.write_text(self.base + "SAGASU_HEADLESS=true\n")
+        async with Client(self.parameters()) as diagnostic:
+            setup = (
+                await diagnostic.call_tool("configuration_status", {})
+            ).structured_content
+            self.assertFalse(setup["operational"])
+            self.assertEqual(setup["next_tool"], "host_status")
+            tools = {tool.name: tool for tool in (await diagnostic.list_tools()).tools}
+            self.assertTrue(tools["host_status"].annotations.read_only_hint)
+            self.assertFalse(tools["recover_host"].annotations.read_only_hint)
+            self.assertFalse(tools["recover_host"].annotations.open_world_hint)
+            status = (await diagnostic.call_tool("host_status", {})).structured_content
+            self.assertEqual(status["mismatch"], ["configuration"])
+            self.assertFalse(status["automatic_code_recovery"])
+            self.assertEqual(status["pid"], initial_status["host_pid"])
+            repaired = (
+                await diagnostic.call_tool("recover_host", {})
+            ).structured_content
+            self.assertTrue(repaired["recovered"], repaired)
+            self.assertTrue(repaired["reconnect_required"])
+            self.assertFalse(repaired["operations_replayed"])
+            self.assertNotEqual(repaired["host_pid"], initial_status["host_pid"])
+            # Repairing the daemon cannot replace an initialized MCP session.
+            still_diagnostic = (
+                await diagnostic.call_tool("server_status", {})
+            ).structured_content
+            self.assertEqual(still_diagnostic["mode"], "diagnostic")
+            repeated = (
+                await diagnostic.call_tool("recover_host", {})
+            ).structured_content
+            self.assertEqual(repeated["reason"], "already_compatible")
+            self.assertTrue(repeated["reconnect_required"])
+            self.assertIsNone(repeated["next_tool"])
+        async with Client(self.parameters()) as reconnected:
+            status = (
+                await reconnected.call_tool("server_status", {})
+            ).structured_content
+            self.assertTrue(status["operational"])
+            self.assertTrue(status["authentication_configuration"]["headless"])
+            self.assertEqual(status["host_pid"], repaired["host_pid"])
+            history = (
+                await reconnected.call_tool("action_history", {})
+            ).structured_content
+            self.assertEqual(history["total"], 0)
+        self.assertEqual(
+            {path.name for path in (self.root / "browser").iterdir()},
+            {".sagasu-sagasu.lock"},
+        )
 
     async def test_shared_host_does_not_activate_fallback_browser_or_timeout(self):
         self.addAsyncCleanup(self.stop_host)

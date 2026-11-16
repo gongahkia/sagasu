@@ -84,15 +84,23 @@ class HostRecovery:
             current_python_executable=sys.executable,
             configuration_loaded_at_startup=True,
             guarded_recovery_supported=supported,
-            can_recover=bool(report.get("can_recover")) and not same_process,
+            can_recover=(bool(report.get("can_recover")) or not report.get("running"))
+            and not same_process
+            and not self.settings.issues(),
             automatic_code_recovery=bool(report.get("can_recover"))
             and report.get("mismatch") == ["code"],
             reconnect_required=self.diagnostic_frontend
             or (same_process and reason == "host_mismatch"),
             next_tool=(
-                "recover_host"
-                if not same_process and (supported or not report.get("running"))
-                else None
+                "session_status"
+                if reason == "compatible" and not self.diagnostic_frontend
+                else (
+                    "recover_host"
+                    if reason != "compatible"
+                    and not same_process
+                    and (supported or not report.get("running"))
+                    else None
+                )
             ),
             commands=self.commands(),
             next_action=(
@@ -118,7 +126,7 @@ class HostRecovery:
                 "recovered": False,
                 "reconnect_required": self.diagnostic_frontend,
                 "operations_replayed": False,
-                "configuration_changed": False,
+                "configuration_files_changed": False,
                 "next_tool": "host_status",
             }
             if self.settings.issues():
@@ -135,6 +143,14 @@ class HostRecovery:
                         **base,
                         "reason": "already_compatible",
                         "runtime_mode": report.get("runtime_mode"),
+                        "next_tool": (
+                            None if self.diagnostic_frontend else "server_status"
+                        ),
+                        "next_action": (
+                            "Reconnect this diagnostic MCP client; the shared host is ready."
+                            if self.diagnostic_frontend
+                            else "The host already matches. Use session_status to check authentication separately."
+                        ),
                     }
                 if not report.get("guarded_recovery_supported"):
                     return {
@@ -162,6 +178,7 @@ class HostRecovery:
                         **base,
                         "reason": "recovery_blocked",
                         "blockers": retired.get("blockers", ["host_changed"]),
+                        "next_action": "Clear the reported blockers through the original connection: finish active/MFA work, inspect retained results and reviews, and reconcile unresolved writes. Nothing was stopped or replayed.",
                     }
                 if not retired.get("shutdown_complete"):
                     return {
