@@ -700,8 +700,10 @@ class RuntimeTests(unittest.IsolatedAsyncioTestCase):
                 lifespan,
                 allow_agent_submission=False,
                 configuration_provider=None,
+                host_controller=None,
             ):
                 self.assertTrue(allow_agent_submission)
+                self.assertIsNone(host_controller)
 
                 async def run():
                     async with lifespan(None):
