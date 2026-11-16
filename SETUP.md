@@ -2,7 +2,7 @@
 
 Sagasu is a local MCP server for SMU FBS. Install it once on the computer where
 your MCP client runs, then register its stdio launch command with that client.
-The same server can serve different local agents; there is no cross-laptop sync.
+The same server can serve different local agents.
 
 ## Give this to your agent
 
@@ -25,7 +25,7 @@ as a setup test. Report what succeeded and any remaining manual step.
 If your agent only retrieves the repository overview, point it directly to
 [this guide](https://github.com/gongahkia/sagasu/blob/main/SETUP.md). Reading a
 document does not grant an agent access to your computer. A sandboxed chat can
-prepare the commands/configuration; a local agent or you must apply them.
+prepare the commands/configuration but ultimately a a local agent or you (a human) must apply them.
 
 ## Before installing
 
@@ -34,7 +34,7 @@ prepare the commands/configuration; a local agent or you must apply them.
   agent/MCP client installed. On macOS with Homebrew, install uv with
   `brew install uv` if needed.
 - Sagasu requires Python 3.11+. The commands below select Python 3.12, also used
-  by this repository's CI; uv can download it if needed.
+  by this repository's CI, uv can download it if needed.
 - Your client needs local stdio MCP support, either built in or through a
   supported adapter. A local terminal alone does not establish MCP support.
 - If Sagasu or an entry named `sagasu` already exists, inspect and reuse it.
@@ -42,13 +42,12 @@ prepare the commands/configuration; a local agent or you must apply them.
   data, or replace a working client entry as part of a fresh-install recipe.
 
 The Ubuntu VM installer under `deploy/linux/` is a separate deployment path.
-It is not needed for an ordinary personal desktop installation. Windows has a
-single-client `mcp --direct` fallback; native Windows setup is outside this guide.
+It is not needed for an ordinary personal desktop installation.
 
 ## Install on the local computer
 
 Run this **new-install** block in a local terminal. Change `SAGASU_DIR` first if
-you want another location. The subshell stops at the first failure; if the clone
+you want another location. The subshell stops at the first failure. If the clone
 already exists, use the existing-install guidance above instead of rerunning it.
 
 ```sh
@@ -107,7 +106,7 @@ also works and avoids depending on shell activation or a GUI application's PATH:
 
 Configure your client to launch that process, rather than leaving it running in
 an unrelated terminal. A manually started stdio server waits for MCP protocol
-input; silence alone is not a startup failure.
+input.
 
 | Setting | Value |
 | --- | --- |
@@ -125,7 +124,7 @@ remote-MCP OAuth login command.
 The examples below follow client documentation checked on 16 November 2026 and
 are alternatives for registering the same launch command. Verify the actual
 connection afterward. Use your installed client's supported syntax. Keep its
-version, model and unrelated settings unchanged. Back up configuration locally before editing it;
+version, model and unrelated settings unchanged. Back up configuration locally before editing it and
 merge only the Sagasu entry and preserve every existing server.
 
 ### Pi
@@ -140,7 +139,7 @@ pi mcp list
 
 Use `/reload` in an existing session after external configuration changes, then
 inspect `/mcp`. Older Pi versions or an installed MCP replacement extension may
-have different configuration; use that version's adapter instructions instead
+have different configuration so use that version's adapter instructions instead
 of assuming the built-in commands exist. See [Pi's MCP guide](https://docs.pi.dev/latest/mcp).
 
 ### OpenCode
@@ -154,7 +153,7 @@ opencode mcp list
 ```
 
 Inspect `/mcps` in OpenCode. Its current V2 file format places entries under
-`mcp.servers`; earlier formats differ. Prefer the installed CLI's supported
+`mcp.servers` and note that earlier formats differ. Prefer the installed CLI's supported
 registration flow rather than copying a configuration from another version.
 See [OpenCode's MCP guide](https://opencode.ai/docs/mcp-servers).
 
@@ -174,7 +173,7 @@ inspect `/mcp`. See [Codex's MCP guide](https://learn.chatgpt.com/docs/extend/mc
 
 Merge this entry into `mcp_servers` in your Hermes profile's `config.yaml`
 (`~/.hermes/config.yaml` by default). Replace **both** `/absolute/path/to/sagasu`
-placeholders with your actual checkout path; these are not shell variables.
+placeholders with your actual checkout path, note that these are not shell variables.
 
 ```yaml
 mcp_servers:
@@ -202,7 +201,7 @@ Inspect `/mcp` in Claude Code. See [Claude Code's MCP guide](https://code.claude
 On macOS, Claude Desktop's manual configuration file is
 `~/Library/Application Support/Claude/claude_desktop_config.json`. Its Developer
 settings provide an Edit Config route. Merge the following entry into the
-existing `mcpServers` object; do not replace the entire file. Other clients may
+existing `mcpServers` object and do not replace the entire file. Other clients may
 use the same JSON shape in a different location.
 
 Replace **both** `/absolute/path/to/sagasu` placeholders with the actual absolute
@@ -237,7 +236,7 @@ mechanism. If it takes a command array, place the executable first followed by
 each argument. If it takes separate `command` and `args`, keep them separate.
 Do not assume every client uses an `mcpServers` key or expands environment
 variables in JSON. If that client/version lacks MCP support, identify its
-supported adapter or report the limitation; do not invent a native endpoint.
+supported adapter or report the limitation and do not invent a native endpoint.
 
 ## Verify through the client
 
@@ -248,7 +247,7 @@ Verify Sagasu setup without booking or changing any saved data.
 Call server_status with {}, then configuration_status with {}.
 If operational, check host_status with {} when advertised and verify the saved
 session using session_status with {}. Poll that same operation with
-wait_operation until terminal; use the advertised limits and do not restart
+wait_operation until terminal and use the advertised limits and do not restart
 work merely because a poll times out.
 Report current SGT time, host/configuration readiness, configured headless
 mode, saved-session validity and any blockers. Keep credentials redacted.
@@ -258,20 +257,20 @@ Do not renew authentication, restart the host or perform writes automatically.
 Installation is verified only when this client's MCP connection is operational
 and a fresh session check succeeds. A CLI registration command succeeding or
 `doctor` passing does not independently establish those results. An optional
-user-requested room search can demonstrate a read; no booking is required.
+user-requested room search can demonstrate a read and note that no booking is required.
 
 ## If setup is blocked
 
 | Symptom | Next step |
 | --- | --- |
-| Agent only has a remote sandbox | Use the local Terminal/client-config steps; report the manual handoff clearly. |
-| Executable or module not found | Check the absolute virtual-environment Python path and installation; do not rely on shell activation in GUI clients. |
-| Configuration fails | Read `configuration_status`; correct only the reported local setting. Do not collect `.env` contents in chat. |
-| Host/code/configuration mismatch | Read `host_status` and [host recovery guidance](docs/host-recovery.md). Preserve retained evidence; obtain authorization before stopping a host or discarding results. |
-| Missing autofill credentials | Check the saved session separately; configure autofill privately only if needed. |
-| Saved session expired | Report the authentication blocker and request login/MFA renewal; do not infer expiry from missing credentials. |
-| Tools absent after configuration | Inspect that client's connection errors and refresh/reopen the client; registration alone is not a successful connection test. |
-| Human confirmation unavailable | Report the client capability limitation; do not silently change submission policy or synthesize approval. |
+| Agent only has a remote sandbox | Use the local Terminal/client-config steps, report the manual handoff clearly. |
+| Executable or module not found | Check the absolute virtual-environment Python path and installation, do not rely on shell activation in GUI clients. |
+| Configuration fails | Read `configuration_status`, correct only the reported local setting. Do not collect `.env` contents in chat. |
+| Host/code/configuration mismatch | Read `host_status` and [host recovery guidance](docs/host-recovery.md). Preserve retained evidence, obtain authorization before stopping a host or discarding results. |
+| Missing autofill credentials | Check the saved session separately, configure autofill privately only if needed. |
+| Saved session expired | Report the authentication blocker and request login/MFA renewal, do not infer expiry from missing credentials. |
+| Tools absent after configuration | Inspect that client's connection errors and refresh/reopen the client, registration alone is not a successful connection test. |
+| Human confirmation unavailable | Report the client capability limitation, do not silently change submission policy or synthesize approval. |
 
 For failed FBS operations, retain the operation ID and collect `support_bundle`
 before its TTL/retention expiry. Avoid sharing unrelated private booking data.
