@@ -15,6 +15,7 @@ from .fbs_client import (
     SearchConfig,
     require_future_booking,
     time_to_minutes,
+    stops_remote_job,
     _noop_progress,
 )
 from .personal import validate_preferences
@@ -183,6 +184,8 @@ async def refresh_shortlist(payload, search, progress=_noop_progress, *, now=Non
             KeyError,
             TypeError,
         ) as error:
+            if stops_remote_job(error):
+                raise
             probes.append(
                 {
                     "date": date,

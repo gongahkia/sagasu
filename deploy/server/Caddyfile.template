@@ -1,0 +1,32 @@
+# Publishes only Sagasu's MCP endpoint, with an automatic TLS certificate.
+{
+	servers {
+		# Slow or stalled clients are cut off instead of holding connections.
+		timeouts {
+			read_header 10s
+			read_body 30s
+			write 2m
+			idle 2m
+		}
+	}
+}
+
+@PUBLIC_HOST@ {
+	@mcp path /mcp
+	handle @mcp {
+		request_body {
+			max_size 4MB
+		}
+		reverse_proxy 127.0.0.1:8765 {
+			flush_interval -1
+		}
+	}
+	handle {
+		respond "Not found" 404
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
+}

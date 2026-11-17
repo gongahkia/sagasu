@@ -3,6 +3,10 @@
 The Unix socket is private to the current OS user. Every MCP connection has its
 own protocol session/elicitation context; operations and reviews share one queue.
 Disconnecting a client never restarts or replays an operation.
+
+With SAGASU_HTTP_PORT set the host is a long-lived service: it never exits when
+idle, is started only by a service manager, and also serves a key-protected,
+restricted MCP endpoint on loopback for a TLS reverse proxy (see remote.py).
 """
 
 import asyncio
@@ -10,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -22,6 +27,11 @@ from mcp.client.session import ClientSession
 
 from .config import ConfigError
 from .runtime import AlreadyRunning, InstanceLock
+
+
+# How long a command waits for a supervised service to come (back) up before
+# reporting it stopped. A service manager restarts it; a command never does.
+SERVICE_WAIT_SECONDS = 10
 
 
 class HostError(ConfigError):
@@ -59,6 +69,15 @@ def identity_parts(settings):
         "SAGASU_AUTH_ARTIFACT_DIR": "",
     }.items():
         effective[key] = settings.values.get(key, default)
+    # Settings added later join the digest only when they are used. An
+    # unchanged configuration then keeps the digest that a host started by an
+    # earlier version computed, and a code-only upgrade still replaces it.
+    if effective["session_cookies"] == "all":
+        del effective["session_cookies"]
+    if not settings.remote_listener_requested:
+        del effective["remote_listener"]
+    if settings.values.get("SAGASU_HTTP_KEYS"):
+        effective["SAGASU_HTTP_KEYS"] = settings.values["SAGASU_HTTP_KEYS"]
     code = hashlib.sha256()
     for path in sorted((Path(__file__).parent).glob("*.py")):
         code.update(path.name.encode())
@@ -160,6 +179,7 @@ async def connect(settings, *, action="mcp", start=True, options=None):
     path = socket_path(settings)
     process = None
     recovered = False
+    service_absent = None
     deadline = asyncio.get_running_loop().time() + 30
     while asyncio.get_running_loop().time() < deadline:
         try:
@@ -221,9 +241,12 @@ async def connect(settings, *, action="mcp", start=True, options=None):
                     )
                     if (
                         retired.get("shutdown_complete")
+                        or retired.get("stopping")
                         or not retired.get("running")
                         or "host_changed" in retired.get("blockers", [])
                     ):
+                        # A host that agreed to stop but is still finishing is
+                        # on its way out: keep trying until the deadline.
                         continue
                 raise HostError(
                     "The shared host uses different code or configuration. Read host_status, then recover_host for guarded recovery. Active work and retained evidence are protected.",
@@ -233,6 +256,16 @@ async def connect(settings, *, action="mcp", start=True, options=None):
         except (FileNotFoundError, ConnectionRefusedError):
             if not start:
                 return None
+            if settings.remote_listener_requested:
+                # A service manager owns this host. Starting one here would run
+                # a second remote listener outside its supervision.
+                now = asyncio.get_running_loop().time()
+                if service_absent is None:
+                    service_absent = now
+                if now - service_absent >= SERVICE_WAIT_SECONDS:
+                    break
+                await asyncio.sleep(0.1)
+                continue
             if process is not None and process.poll() is not None:
                 raise HostError(
                     "The shared host could not start. Check for an older direct Sagasu process holding the profile and run sagasu doctor.",
@@ -278,6 +311,11 @@ async def connect(settings, *, action="mcp", start=True, options=None):
             except AlreadyRunning:
                 pass
             await asyncio.sleep(0.1)
+    if service_absent is not None:
+        raise HostError(
+            "The Sagasu service is not running. Start it with the host's service manager (for example: sudo systemctl start sagasu), then retry. No operation was submitted.",
+            "host_service_stopped",
+        )
     raise HostError(
         "The shared host did not become ready before the startup deadline. No operation was submitted.",
         "host_start_timeout",
@@ -300,6 +338,7 @@ async def bridge_stdio(settings):
             "host_handshake_timeout": "The shared host did not respond to its connection handshake before the deadline.",
             "host_start_failed": "The shared host exited before it became ready; an older process may own its profile.",
             "host_start_timeout": "The shared host did not become ready before the startup deadline.",
+            "host_service_stopped": "The Sagasu service is not running; its service manager starts it.",
         }
         from .host_recovery import HostRecovery
 
@@ -438,6 +477,10 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
     clients = set()
     connections = set()
     last_used = asyncio.get_running_loop().time()
+    # A requested remote listener makes this a supervised, long-lived service,
+    # even while a configuration problem keeps the listener itself off.
+    service_mode = settings.remote_listener_requested
+    remote_http = None
 
     async def accept(reader, writer):
         nonlocal last_used
@@ -473,6 +516,8 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                 "started_at": started_at,
                 "python_executable": sys.executable,
                 "runtime_mode": runtime.status()["mode"],
+                "service_mode": service_mode,
+                "remote_listener": remote_http is not None,
                 **state,
             }
             if action == "stop":
@@ -560,14 +605,55 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
         )
         listener_id = path.stat().st_ino
         path.chmod(0o600)
-        watcher = asyncio.create_task(idle())
+        watcher = None if service_mode else asyncio.create_task(idle())
+        signals = []
+
+        def request_stop():
+            # Same gate as a local stop: refuse new work, then shut down in order.
+            service.closed = True
+            stopped.set()
+
         try:
+            if service_mode:
+                loop = asyncio.get_running_loop()
+                for number in (signal.SIGTERM, signal.SIGINT):
+                    try:
+                        loop.add_signal_handler(number, request_stop)
+                        signals.append(number)
+                    except (NotImplementedError, RuntimeError, ValueError):
+                        pass
+                listener = settings.http
+                if listener is not None and runtime.status()["operational"]:
+                    from .mcp_server import RemoteAccess
+                    from .remote import RemoteHTTP, key_label
+
+                    remote_http = RemoteHTTP(
+                        listener,
+                        create_server(
+                            service,
+                            configuration_provider=runtime.status,
+                            allow_agent_submission=listener.writes,
+                            remote=RemoteAccess(
+                                writes=listener.writes,
+                                caller=lambda headers: key_label(
+                                    listener.keys, headers
+                                ),
+                            ),
+                        ),
+                    )
+                    await remote_http.start()
             # The server context manager waits for all accepted transports on
             # exit, so perform shutdown explicitly in the required order below.
             await stopped.wait()
         finally:
+            for number in signals:
+                asyncio.get_running_loop().remove_signal_handler(number)
             server.close()
-            watcher.cancel()
+            if remote_http is not None:
+                # Remote callers go first, before local clients and the browser.
+                await remote_http.stop()
+            if watcher is not None:
+                watcher.cancel()
             # Closing the sockets also wakes SDK receive loops whose cleanup
             # shields cancellation while waiting for an incoming message.
             for writer in list(connections):
@@ -578,7 +664,11 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
             # Python waits for accepted transports as well as the listener.
             # Close the idle MCP connections before waiting for the server;
             # otherwise a connected client can hold the profile lock forever.
-            await asyncio.gather(watcher, *handlers, return_exceptions=True)
+            await asyncio.gather(
+                *([watcher] if watcher is not None else []),
+                *handlers,
+                return_exceptions=True,
+            )
             await server.wait_closed()
             await service.close()
             await close_shared_browser()

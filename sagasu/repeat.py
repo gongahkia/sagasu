@@ -4,7 +4,7 @@ from playwright.async_api import Error as PlaywrightError
 from datetime import datetime
 
 from .errors import public_failure
-from .fbs_client import FBSError, SearchConfig
+from .fbs_client import FBSError, SearchConfig, stops_remote_job
 from .booking_details import booking_window
 from .personal import SMU_EMAIL_RE
 
@@ -84,6 +84,8 @@ async def repeat_plan(client, payload):
                 slot["booking_co_bookers"] = participants
             slots.append(slot)
         except (FBSError, PlaywrightError, TimeoutError, ValueError) as error:
+            if stops_remote_job(error):
+                raise
             slots.append(
                 {
                     "source": source,

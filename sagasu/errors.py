@@ -73,6 +73,16 @@ REASONS = {
         "Run login and complete Microsoft sign-in and MFA.",
         "login",
     ),
+    "sign_in_required_on_host": (
+        "SMU sign-in is needed on the Sagasu server. A remote connection cannot sign in or approve MFA.",
+        "Tell the user that the server's SMU sign-in has lapsed and that they must sign in on the server themselves. Do not retry until they confirm; further remote FBS requests are refused for a few minutes after this failure.",
+        None,
+    ),
+    "session_renewal_pending": (
+        "The saved FBS session had expired and did not renew itself in time. Nothing was read or changed.",
+        "Retry the same request once. If it fails again, tell the user that SMU sign-in may be needed on the server; a remote connection cannot sign in.",
+        None,
+    ),
     "sign_in_rejected": (
         "Microsoft did not accept sign-in.",
         "Check the account privately on the host before trying again.",

@@ -22,6 +22,7 @@ from typing import Awaitable, Callable, Iterable
 from urllib.parse import parse_qs, urlparse
 
 from .observability import event, observed_operation, observed_step, step
+from .origin import is_remote
 from .action_journal import checkpoint_verified
 from .personal_options import SCRAPE_PARAM_CHOICES
 from .personal import SMU_EMAIL_RE
@@ -44,6 +45,25 @@ except ImportError:
     from config import DEFAULT_ARTIFACTS, DEFAULT_PROFILE
 
 FBS_URL = "https://fbs.intranet.smu.edu.sg/home"
+FBS_HOST = "fbs.intranet.smu.edu.sg"
+# How long a remote read waits for Microsoft's own single sign-on redirect.
+SILENT_RENEWAL_SECONDS = 25
+# Microsoft pages that wait for a person. Anything else is a redirect in
+# progress or an error page, and says nothing about whether sign-in is needed.
+SIGN_IN_PROMPTS = frozenset(
+    {
+        "email",
+        "password",
+        "password_choice",
+        "method_picker",
+        "authenticator",
+        "stay_signed_in",
+        "account",
+        "webauthn",
+        "manual",
+        "failed",
+    }
+)
 PROFILE_PATH = DEFAULT_PROFILE
 AUTH_TIMEOUT_MS = 600000
 
@@ -99,6 +119,16 @@ class LayoutChanged(FBSError):
     """The live FBS DOM no longer matches the expected structure."""
 
     default_reason = "layout_changed"
+
+
+def stops_remote_job(error) -> bool:
+    """True when a remote caller met a sign-in problem only the owner can fix.
+
+    A loop that records a failed date and moves on must re-raise instead, or
+    every remaining date reloads Microsoft's sign-in page and the job still
+    reports success.
+    """
+    return is_remote() and isinstance(error, AuthenticationRequired)
 
 
 def resolve_facility_types(
@@ -492,7 +522,10 @@ class FBSClient:
         keep_alive: bool = True,
         profile_path: Path | None = None,
     ) -> None:
-        self.interactive = interactive
+        # A remote caller holds only an API key: it may wait for the existing
+        # Microsoft session to renew FBS, never start or steer a sign-in.
+        self.silent_renewal = is_remote()
+        self.interactive = interactive and not self.silent_renewal
         self.headless = (
             os.getenv("SAGASU_HEADLESS", "false").lower() in {"1", "true", "yes"}
             if headless is None
@@ -626,10 +659,16 @@ class FBSClient:
                 delete=False,
             ) as stream:
                 temporary = Path(stream.name)
-                json.dump(
-                    [cookie for cookie in cookies if cookie.get("expires") == -1],
-                    stream,
-                )
+                saved = [cookie for cookie in cookies if cookie.get("expires") == -1]
+                if os.getenv("SAGASU_SESSION_COOKIES", "all").lower() == "fbs":
+                    # Keep only what FBS itself receives; Microsoft's sign-in
+                    # session then lives in the running browser, not this file.
+                    saved = [
+                        cookie
+                        for cookie in saved
+                        if self._sent_to_fbs(cookie.get("domain"))
+                    ]
+                json.dump(saved, stream)
             temporary.replace(self.session_path)
         except Exception:
             raise FBSError(
@@ -638,6 +677,14 @@ class FBSClient:
         finally:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
+
+    @staticmethod
+    def _sent_to_fbs(domain) -> bool:
+        """True for a cookie domain a browser would send to the FBS host."""
+        name = str(domain or "").lstrip(".").lower()
+        return name.endswith("smu.edu.sg") and (
+            name == FBS_HOST or FBS_HOST.endswith("." + name)
+        )
 
     async def __aexit__(self, exc_type, exc, traceback) -> None:
         try:
@@ -685,27 +732,29 @@ class FBSClient:
                 raise AuthenticationRequired("Microsoft sign-in required")
         except Exception as error:
             if not self.interactive:
-                raise AuthenticationRequired(
-                    "FBS session expired; run an interactive login first"
-                ) from error
-            try:
-                await self._complete_interactive_authentication()
-            except Exception as auth_error:
-                if isinstance(auth_error, AuthenticationRequired):
-                    raise
-                if self.page.is_closed() is True:
+                if not (self.silent_renewal and await self._await_silent_renewal()):
                     raise AuthenticationRequired(
-                        "The sign-in browser closed before authentication completed.",
-                        reason="authentication_interrupted",
-                    ) from None
-                raise AuthenticationRequired(
-                    "Microsoft sign-in could not complete.",
-                    reason=(
-                        "authentication_timeout"
-                        if isinstance(auth_error, PlaywrightTimeoutError)
-                        else "authentication_failed"
-                    ),
-                ) from auth_error
+                        "FBS session expired; run an interactive login first"
+                    ) from error
+            else:
+                try:
+                    await self._complete_interactive_authentication()
+                except Exception as auth_error:
+                    if isinstance(auth_error, AuthenticationRequired):
+                        raise
+                    if self.page.is_closed() is True:
+                        raise AuthenticationRequired(
+                            "The sign-in browser closed before authentication completed.",
+                            reason="authentication_interrupted",
+                        ) from None
+                    raise AuthenticationRequired(
+                        "Microsoft sign-in could not complete.",
+                        reason=(
+                            "authentication_timeout"
+                            if isinstance(auth_error, PlaywrightTimeoutError)
+                            else "authentication_failed"
+                        ),
+                    ) from auth_error
 
         frame = await self._wait_for_frame("frameContent")
         await frame.wait_for_selector(
@@ -713,6 +762,64 @@ class FBSClient:
         )
         await self._save_session()
         return self.page, frame
+
+    async def _await_silent_renewal(self) -> bool:
+        """Let Microsoft's single sign-on redirect finish. Never types or clicks.
+
+        With a live Microsoft session the redirect returns to FBS unaided within
+        seconds. A page that asks a person for anything means the owner must
+        sign in on the host; a remote caller is told so and nothing is entered.
+        Returns False when the redirect simply did not finish in time.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + SILENT_RENEWAL_SECONDS
+        previous, repeats = None, 0
+        while loop.time() < deadline:
+            reading = None  # None: still redirecting or loading
+            try:
+                if await self.page.locator("iframe#frameBottom").count():
+                    event("auth.silent_renewal", outcome="renewed")
+                    return True
+                url = self.page.url
+                if self._trusted_login_url(url):
+                    state, _ = await self._classify_auth_state()
+                    if state in SIGN_IN_PROMPTS:
+                        reading = ("prompt", state)
+                    elif state in {"provider_error", "invalid_context"}:
+                        reading = ("stalled", state)
+                elif not url.startswith(("https://", "http://")):
+                    # The browser's own error page: FBS or the network failed.
+                    reading = ("stalled", "browser_error_page")
+                elif not url.startswith("https://fbs.intranet.smu.edu.sg/"):
+                    reading = ("prompt", "unsupported_origin")
+            except PlaywrightError:
+                # A redirect replaced the document while it was being read.
+                reading = None
+            repeats = repeats + 1 if reading and reading == previous else 1
+            previous = reading
+            # Consecutive identical readings, so a page in mid-redirect is not
+            # mistaken for one that has settled. A redirect chain may pass
+            # through an unfamiliar origin, so that must persist for longer.
+            if reading and repeats >= (8 if reading[1] == "unsupported_origin" else 2):
+                kind, state = reading
+                if kind == "prompt":
+                    event(
+                        "auth.silent_renewal", outcome="sign_in_required", state=state
+                    )
+                    raise AuthenticationRequired(
+                        "SMU sign-in is required on the host.",
+                        reason="sign_in_required_on_host",
+                    )
+                # An error page proves nothing about sign-in: report that the
+                # session did not renew, and do not pause other requests.
+                event("auth.silent_renewal", outcome="stalled", state=state)
+                return False
+            try:
+                await self.page.wait_for_timeout(750)
+            except PlaywrightError:
+                break
+        event("auth.silent_renewal", outcome="timeout")
+        return False
 
     @staticmethod
     def _trusted_login_url(url: str) -> bool:

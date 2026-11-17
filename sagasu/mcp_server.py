@@ -1,11 +1,12 @@
-"""Optional stdio MCP adapter. Importing Sagasu's regular CLI needs no MCP SDK."""
+"""Optional MCP adapter (stdio, or the host's remote listener). Importing Sagasu's regular CLI needs no MCP SDK."""
 
 import json
 import os
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from contextlib import asynccontextmanager
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Callable, Literal
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver import (
@@ -24,6 +25,7 @@ from . import __version__
 from .fbs_client import FBS_TIMEZONE, close_shared_browser
 from .mcp_service import AgentError
 from .observability import event
+from .origin import CALL_ORIGIN
 from .runtime import AlreadyRunning
 from .config import ConfigurationRequired, Settings
 from .diagnostics import Check, configuration_status as inspect_configuration
@@ -37,13 +39,80 @@ PageOffset = Annotated[int, Field(ge=0)]
 PageLimit = Annotated[int, Field(ge=1, le=50)]
 WaitSeconds = Annotated[float, Field(ge=0, le=30)]
 
+# Never offered to a remote API key. Sign-in, MFA prompts and host control stay
+# with the person at the host; a key cannot stand in for a human confirmation;
+# approving other people's requests and multi-action batches are too much reach
+# for a bearer secret.
+REMOTE_HIDDEN_TOOLS = frozenset(
+    {
+        "login",
+        "authentication_status",
+        "host_status",
+        "recover_host",
+        "browser_screenshot",
+        "probe_read_backends",
+        "smoke_check",
+        "confirm_review",
+        "task_approval_review",
+        "batch_review",
+    }
+)
+# Offered remotely only when the host owner sets SAGASU_HTTP_WRITES=on: anything
+# that changes FBS, saved data or the action history, opens an unsent FBS form,
+# or searches the SMU people directory.
+REMOTE_WRITE_TOOLS = frozenset(
+    {
+        "submit_review",
+        "reconcile_operation",
+        "booking_review",
+        "planned_booking_review",
+        "repeat_booking_review",
+        "cancellation_review",
+        "amendment_options",
+        "amendment_review",
+        "validate_booking",
+        "get_review",
+        "discard_review",
+        "booking_options",
+        "search_cobookers",
+        "save_cobooker",
+        "delete_cobooker",
+        "set_cobooker_aliases",
+        "set_search_preferences",
+        "reset_search_preferences",
+        "set_room_preferences",
+        "save_room_plan",
+        "delete_saved_plan",
+        "save_booking_template",
+        "delete_booking_template",
+    }
+)
+
+
+@dataclass(frozen=True)
+class RemoteAccess:
+    """Policy for a server instance reached through the host's remote listener."""
+
+    writes: bool = False
+    caller: Callable | None = None  # request headers -> API key label, for the log
+
+    def label(self, context):
+        try:
+            headers = context.headers if context is not None else None
+            return (self.caller(headers) if self.caller and headers else None) or (
+                "unknown"
+            )
+        except Exception:
+            return "unknown"
+
 
 class StrictMCPServer(MCPServer):
     """Apply the published input contract before SDK argument normalization."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, remote=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._argument_fields = None
+        self._remote = remote
 
     async def list_tools(self):
         tools = await super().list_tools()
@@ -56,6 +125,25 @@ class StrictMCPServer(MCPServer):
         return tools
 
     async def call_tool(self, name, arguments, context=None):
+        if self._remote is None:
+            return await self._call_checked(name, arguments, context)
+        # Jobs started by this call inherit the origin through their task context.
+        token = CALL_ORIGIN.set("remote")
+        outcome = "rejected"
+        try:
+            result = await self._call_checked(name, arguments, context)
+            outcome = "error" if getattr(result, "is_error", False) else "ok"
+            return result
+        finally:
+            CALL_ORIGIN.reset(token)
+            event(
+                "remote.tool_call",
+                tool=name if name in (self._argument_fields or {}) else "unknown",
+                key=self._remote.label(context),
+                outcome=outcome,
+            )
+
+    async def _call_checked(self, name, arguments, context=None):
         if self._argument_fields is None or name not in self._argument_fields:
             await self.list_tools()
         fields = self._argument_fields.get(name)
@@ -196,7 +284,14 @@ def create_server(
     allow_agent_submission=False,
     configuration_provider=None,
     host_controller=None,
+    remote=None,
 ):
+    hidden = set()
+    if remote is not None:
+        hidden = set(REMOTE_HIDDEN_TOOLS)
+        if not remote.writes:
+            hidden |= REMOTE_WRITE_TOOLS
+
     def configuration():
         report = (
             configuration_provider()
@@ -225,11 +320,27 @@ def create_server(
         if allow_agent_submission
         else "confirm_review requires a human elicitation response; never fabricate approval. "
     )
+    remote_instruction = (
+        ""
+        if remote is None
+        else (
+            "REMOTE CONNECTION: you reach a private server over HTTPS with an API key; it stays signed in to one person's FBS account. "
+            "Tools named below that are missing from your tool list are switched off for remote use. "
+            "You cannot sign in or approve MFA from here. If an operation fails with sign_in_required_on_host, tell the user to sign in on the server and stop retrying; on session_renewal_pending retry once. "
+            + (
+                ""
+                if remote.writes
+                else "This connection is READ-ONLY: search rooms and read bookings, but booking, amending, cancelling, approving and changing saved data are switched off on the server. Say so plainly; do not look for another way. "
+            )
+        )
+    )
     server = StrictMCPServer(
         "Sagasu",
         version=__version__,
+        remote=remote,
         instructions=(
-            "Personal SMU FBS assistant. Start with server_status. Read configuration_status for setup checks and exact local fixes. "
+            remote_instruction
+            + "Personal SMU FBS assistant. Start with server_status. Read configuration_status for setup checks and exact local fixes. "
             "If runtime.host fails, use host_status then recover_host for guarded local recovery; follow reconnect_required. Never delete locks or replay operations. "
             "In diagnostic mode explain the failing checks; FBS operations are blocked until setup is corrected and the MCP client reconnects. "
             "Missing autofill credentials do not prove the saved session is expired; use session_status before requesting login. "
@@ -508,9 +619,9 @@ def create_server(
             except (PersonalDataError, ValueError, OSError):
                 # setup diagnostics must remain readable when saved defaults are invalid.
                 pass
-        return {
+        status = {
             "version": __version__,
-            "transport": "stdio",
+            "transport": "stdio" if remote is None else "streamable-http",
             "single_user": True,
             "host_pid": os.getpid(),
             "mode": setup["mode"],
@@ -563,9 +674,30 @@ def create_server(
             "state_lifetime": "Read jobs, reviews and receipts expire on restart. Write outcomes and submission IDs persist in action_history. Nothing is replayed.",
             "durable_action_history": service.journal is not None,
             "write_history_healthy": operational and not service.journal_failed,
-            "pending_reviews": [service.review(key) for key in list(service.reviews)],
-            "operations": [job.public() for job in service.jobs.values()],
+            "pending_reviews": service.visible_reviews(),
+            "operations": [job.public() for job in service.visible_jobs()],
         }
+        if remote is not None:
+            status["authentication_prompts"] = None
+            status["remote_access"] = {
+                "read_only": not remote.writes,
+                "sign_in": (
+                    "required_on_host"
+                    if service.host_sign_in_required
+                    else "not_known_to_be_required"
+                ),
+                "sign_in_policy": "Only the owner can sign in, on the server itself. session_status verifies the saved session without credentials.",
+                "unavailable_tools": sorted(hidden),
+            }
+            if not remote.writes:
+                status.update(
+                    confirmation="This remote connection is read-only. Booking, amendment, cancellation, approval and saved-data changes are switched off on the server.",
+                    submission_mode="disabled",
+                    agent_submission_enabled=False,
+                    can_submit=False,
+                    submission_tool=None,
+                )
+        return status
 
     @server.tool(annotations=read)
     async def search_rooms(
@@ -1090,113 +1222,129 @@ def create_server(
     )
     async def workflow() -> str:
         setup = configuration()
-        return json.dumps(
-            {
-                "timezone": "Asia/Singapore",
-                "mode": setup["mode"],
-                "operational": setup["operational"],
-                "setup": [
-                    "server_status: inspect operational/diagnostic mode and capabilities",
-                    "configuration_status: read redacted local checks and exact setup fixes; uses the same checks as sagasu doctor",
-                    "For runtime.host failures call host_status, then recover_host when its guard permits; follow reconnect_required. These tools never contact FBS or replay operations",
-                    "Apply fixes privately on the host, then stop the idle shared host and reconnect; configuration is loaded at startup",
-                    "Never request passwords in chat; missing credentials alone do not invalidate a saved session",
-                ],
-                "submission_mode": (
-                    "disabled"
-                    if not setup["operational"]
-                    else "agent" if allow_agent_submission else "human"
-                ),
-                "submission_tool": (
-                    None
-                    if not setup["operational"]
-                    else "submit_review" if allow_agent_submission else "confirm_review"
-                ),
-                "booking": [
-                    "server_status: inspect client capabilities and submission mode",
-                    "get_search_preferences and search_options if needed; list_cobookers for saved contacts",
-                    "search_rooms: partial preferences are one-off; use ISO dates and half-hour times",
-                    "wait_operation: reuse the operation ID until terminal; never start duplicate jobs to poll",
-                    "available_rooms: choose only a room free for the full interval",
-                    "For unsaved/partial names, search_cobookers directly (room/search context is optional); inspect coverage and let the user distinguish matches before using exact emails. Saving is optional and only on request.",
-                    "booking_options reads native usage labels and estimated credits for a free room when needed",
-                    "booking_review: exact room, purpose, resolved co-booker(s), and requested usage_type/booking_usage; defaults are AdHoc/Meeting",
-                    "Optional validate_booking, then wait_operation; validation does not submit",
-                    "Submit using the advertised submission_tool only when the user requested the action",
-                    "wait_operation, inspect actual fbs_status, and operation_receipt when available",
-                ],
-                "room_planning": [
-                    "Use this path directly for flexible-time, multi-date, common, recurring or split-room requests; the exact-window booking path is for a specified interval",
-                    "plan_rooms: broad window, fixed duration, explicit dates OR bounded weekday recurrence; preserves FBS filters",
-                    "Inspect complete, ranking_complete and every date probe; failures are not unavailability",
-                    "planned_booking_review selects one candidate/date/leg; split/common/recurring plans never submit implicitly",
-                ],
-                "repeat_booking": [
-                    "Read list_bookings/wait_operation for source references, or list_booking_templates for saved snapshots",
-                    "repeat_bookings: explicit future date and up to eight reference/template IDs",
-                    "wait_operation: inspect every slot, including missing fields, unavailable rooms and partial failures",
-                    "repeat_booking_review: one chosen slot; supply missing fields and review the exact room/time/co-booker",
-                    "Use the advertised submission_tool only on the user's request; each slot has an independent outcome",
-                    "Save or delete templates only when requested; changing a template never rewrites an existing review",
-                ],
-                "alternatives": [
-                    "available_rooms: provide explicit preferred room order; inspect booking_horizon and suggested_action",
-                    "A shared horizon restriction means retry closer to the date; do not repeatedly query the same window",
-                    "search_alternatives: only explicitly permitted time/location flexibility; duration/date and other filters are preserved",
-                    "wait_operation: inspect up to six independent probes and report failures separately from unavailable rooms",
-                    "Run search_rooms with the chosen configuration before preparing a review; alternatives never authorize a booking or changed timing",
-                ],
-                "cancellation": [
+        document = {
+            "timezone": "Asia/Singapore",
+            "mode": setup["mode"],
+            "operational": setup["operational"],
+            "setup": [
+                "server_status: inspect operational/diagnostic mode and capabilities",
+                "configuration_status: read redacted local checks and exact setup fixes; uses the same checks as sagasu doctor",
+                "For runtime.host failures call host_status, then recover_host when its guard permits; follow reconnect_required. These tools never contact FBS or replay operations",
+                "Apply fixes privately on the host, then stop the idle shared host and reconnect; configuration is loaded at startup",
+                "Never request passwords in chat; missing credentials alone do not invalidate a saved session",
+            ],
+            "submission_mode": (
+                "disabled"
+                if not setup["operational"]
+                else "agent" if allow_agent_submission else "human"
+            ),
+            "submission_tool": (
+                None
+                if not setup["operational"]
+                else "submit_review" if allow_agent_submission else "confirm_review"
+            ),
+            "booking": [
+                "server_status: inspect client capabilities and submission mode",
+                "get_search_preferences and search_options if needed; list_cobookers for saved contacts",
+                "search_rooms: partial preferences are one-off; use ISO dates and half-hour times",
+                "wait_operation: reuse the operation ID until terminal; never start duplicate jobs to poll",
+                "available_rooms: choose only a room free for the full interval",
+                "For unsaved/partial names, search_cobookers directly (room/search context is optional); inspect coverage and let the user distinguish matches before using exact emails. Saving is optional and only on request.",
+                "booking_options reads native usage labels and estimated credits for a free room when needed",
+                "booking_review: exact room, purpose, resolved co-booker(s), and requested usage_type/booking_usage; defaults are AdHoc/Meeting",
+                "Optional validate_booking, then wait_operation; validation does not submit",
+                "Submit using the advertised submission_tool only when the user requested the action",
+                "wait_operation, inspect actual fbs_status, and operation_receipt when available",
+            ],
+            "room_planning": [
+                "Use this path directly for flexible-time, multi-date, common, recurring or split-room requests; the exact-window booking path is for a specified interval",
+                "plan_rooms: broad window, fixed duration, explicit dates OR bounded weekday recurrence; preserves FBS filters",
+                "Inspect complete, ranking_complete and every date probe; failures are not unavailability",
+                "planned_booking_review selects one candidate/date/leg; split/common/recurring plans never submit implicitly",
+            ],
+            "repeat_booking": [
+                "Read list_bookings/wait_operation for source references, or list_booking_templates for saved snapshots",
+                "repeat_bookings: explicit future date and up to eight reference/template IDs",
+                "wait_operation: inspect every slot, including missing fields, unavailable rooms and partial failures",
+                "repeat_booking_review: one chosen slot; supply missing fields and review the exact room/time/co-booker",
+                "Use the advertised submission_tool only on the user's request; each slot has an independent outcome",
+                "Save or delete templates only when requested; changing a template never rewrites an existing review",
+            ],
+            "alternatives": [
+                "available_rooms: provide explicit preferred room order; inspect booking_horizon and suggested_action",
+                "A shared horizon restriction means retry closer to the date; do not repeatedly query the same window",
+                "search_alternatives: only explicitly permitted time/location flexibility; duration/date and other filters are preserved",
+                "wait_operation: inspect up to six independent probes and report failures separately from unavailable rooms",
+                "Run search_rooms with the chosen configuration before preparing a review; alternatives never authorize a booking or changed timing",
+            ],
+            "cancellation": [
+                "list_bookings",
+                "wait_operation",
+                "cancellation_review",
+                "submission_tool",
+                "wait_operation",
+            ],
+            "task_approval": [
+                "list_tasks",
+                "wait_operation",
+                "task_approval_review",
+                "submission_tool",
+                "wait_operation",
+            ],
+            "recovery": {
+                "host_mismatch": "host_status distinguishes code/configuration/Python mismatches and protected state without credentials or digests. New connections automatically replace code-only stale hosts with no protected state. Otherwise recover_host can repair an idle incompatible host; configuration/Python changes are never applied automatically. Active work, reviews, unresolved writes and unhealthy history block recovery. Completed results/receipts are retained unless their loss is explicitly authorized. Diagnostic frontends still require reconnecting; older hosts return exact interpreter-based commands. Never delete locks, kill processes, or replay FBS operations.",
+                "configuration_required": "Call configuration_status, explain the failing checks and local fixes, then reconnect after the host configuration is corrected. Never collect credentials in chat or repeat a failed job to diagnose setup.",
+                "missing_email_or_password": "Inspect configuration_status. Configure the named variable privately, then restart the idle host and reconnect to load the change. A saved session may already support reads without autofill.",
+                "session": "Use session_status to verify cached authentication without entering credentials. CLI login and MCP clients share the local host on macOS/Linux.",
+                "partial_listing": "Inspect source_complete/complete and coverage_reason. MCP result pagination does not imply the whole FBS listing was available.",
+                "awaiting_mfa": "Call authentication_status, relay the current prompt/number, and wait for the user to approve Microsoft sign-in. Never request passwords in chat.",
+                "outcome_unknown": "Use reconcile_operation, then wait_operation to inspect current FBS evidence. Never infer success or safe retry from a missing row; unresolved matching actions block new submissions.",
+                "expired_operation": "Read jobs expire. Inspect action_history and operation_result for durable write outcomes, then reconcile uncertain writes in FBS before preparing another review.",
+                "pending_confirmation": "A submitted booking may still require other FBS participants to approve.",
+            },
+            "read_only": {
+                "verify_session": ["session_status", "wait_operation"],
+                "bookings": [
                     "list_bookings",
                     "wait_operation",
-                    "cancellation_review",
-                    "submission_tool",
+                    "For next upcoming use timeline.next_upcoming_reference when timeline.complete; report ongoing_references separately and do not infer next/none from partial coverage",
+                    "booking_details for each requested reference_number when full metadata is needed",
                     "wait_operation",
                 ],
-                "task_approval": [
-                    "list_tasks",
-                    "wait_operation",
-                    "task_approval_review",
-                    "submission_tool",
-                    "wait_operation",
+                "tasks": ["list_tasks", "wait_operation"],
+                "booking_details": [
+                    "Use an exact reference_number from list_bookings or list_tasks",
+                    "booking_details: source=bookings/tasks when known; auto otherwise",
+                    "wait_operation: reuse the job ID",
+                    "Report purpose, creator, participants, explicit workflow actors and approved extra metadata",
+                    "Inspect field_status and collection coverage; never infer who confirmed from status or last modifier. Workflow comments are excluded",
                 ],
-                "recovery": {
-                    "host_mismatch": "host_status distinguishes code/configuration/Python mismatches and protected state without credentials or digests. New connections automatically replace code-only stale hosts with no protected state. Otherwise recover_host can repair an idle incompatible host; configuration/Python changes are never applied automatically. Active work, reviews, unresolved writes and unhealthy history block recovery. Completed results/receipts are retained unless their loss is explicitly authorized. Diagnostic frontends still require reconnecting; older hosts return exact interpreter-based commands. Never delete locks, kill processes, or replay FBS operations.",
-                    "configuration_required": "Call configuration_status, explain the failing checks and local fixes, then reconnect after the host configuration is corrected. Never collect credentials in chat or repeat a failed job to diagnose setup.",
-                    "missing_email_or_password": "Inspect configuration_status. Configure the named variable privately, then restart the idle host and reconnect to load the change. A saved session may already support reads without autofill.",
-                    "session": "Use session_status to verify cached authentication without entering credentials. CLI login and MCP clients share the local host on macOS/Linux.",
-                    "partial_listing": "Inspect source_complete/complete and coverage_reason. MCP result pagination does not imply the whole FBS listing was available.",
-                    "awaiting_mfa": "Call authentication_status, relay the current prompt/number, and wait for the user to approve Microsoft sign-in. Never request passwords in chat.",
-                    "outcome_unknown": "Use reconcile_operation, then wait_operation to inspect current FBS evidence. Never infer success or safe retry from a missing row; unresolved matching actions block new submissions.",
-                    "expired_operation": "Read jobs expire. Inspect action_history and operation_result for durable write outcomes, then reconcile uncertain writes in FBS before preparing another review.",
-                    "pending_confirmation": "A submitted booking may still require other FBS participants to approve.",
-                },
-                "read_only": {
-                    "verify_session": ["session_status", "wait_operation"],
-                    "bookings": [
-                        "list_bookings",
-                        "wait_operation",
-                        "For next upcoming use timeline.next_upcoming_reference when timeline.complete; report ongoing_references separately and do not infer next/none from partial coverage",
-                        "booking_details for each requested reference_number when full metadata is needed",
-                        "wait_operation",
-                    ],
-                    "tasks": ["list_tasks", "wait_operation"],
-                    "booking_details": [
-                        "Use an exact reference_number from list_bookings or list_tasks",
-                        "booking_details: source=bookings/tasks when known; auto otherwise",
-                        "wait_operation: reuse the job ID",
-                        "Report purpose, creator, participants, explicit workflow actors and approved extra metadata",
-                        "Inspect field_status and collection coverage; never infer who confirmed from status or last modifier. Workflow comments are excluded",
-                    ],
-                },
-                "authentication": [
-                    "Use session_status to verify a saved session without submitting credentials or starting MFA",
-                    "Use login when renewal is needed, then wait_operation with the same operation ID",
-                    "When awaiting_mfa, call authentication_status and show the current prompt privately; the user approves on their phone",
-                    "Continue waiting on the original operation and verify authenticated=true before reporting success",
-                ],
+            },
+            "authentication": [
+                "Use session_status to verify a saved session without submitting credentials or starting MFA",
+                "Use login when renewal is needed, then wait_operation with the same operation ID",
+                "When awaiting_mfa, call authentication_status and show the current prompt privately; the user approves on their phone",
+                "Continue waiting on the original operation and verify authenticated=true before reporting success",
+            ],
+        }
+        if remote is not None:
+            document["remote_access"] = {
+                "read_only": not remote.writes,
+                "unavailable_tools": sorted(hidden),
+                "policy": "Tools missing from the tool list are switched off for remote use. Sequences below that need them do not apply to this connection.",
             }
-        )
+            document["authentication"] = [
+                "Sign-in happens on the server, by its owner. Remote connections cannot sign in or read MFA prompts",
+                "session_status verifies the saved session without credentials",
+                "sign_in_required_on_host: tell the user to sign in on the server and stop retrying until they confirm",
+                "session_renewal_pending: the session did not renew in time; retry the request once",
+            ]
+            document["recovery"]["session"] = document["authentication"][1]
+            document["recovery"]["awaiting_mfa"] = document["authentication"][0]
+            if not remote.writes:
+                document["submission_mode"] = "disabled"
+                document["submission_tool"] = None
+        return json.dumps(document)
 
     @server.prompt()
     async def book_room(request: str) -> str:
@@ -1209,6 +1357,12 @@ def create_server(
             "If the user asked to book, prepare the exact review and use the server's advertised submission_tool. "
             "Never submit on a search-only request. Report the actual FBS status and reference, and return a receipt when available."
         )
+
+    for name in sorted(hidden):
+        if name == "submit_review" and not allow_agent_submission:
+            continue  # only registered when agent submission is on
+        # A misspelt name must fail loudly here, never stay exposed.
+        server.remove_tool(name)
 
     return server
 

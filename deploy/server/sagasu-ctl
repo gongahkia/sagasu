@@ -1,0 +1,122 @@
+#!/usr/bin/python3
+"""Small admin helper for a Sagasu server. Run with sudo.
+
+  sagasu-ctl status              services, listener, key labels, write setting
+  sagasu-ctl writes on|off       let remote agents book/amend/cancel, or not
+  sagasu-ctl key-add LABEL       create an API key; it is shown once, never stored
+  sagasu-ctl key-remove LABEL    revoke an API key
+  sagasu-ctl restart             restart the service
+  sagasu-ctl logs                last 80 lines of the private host log
+"""
+
+import hashlib
+import os
+import re
+import secrets
+import subprocess
+import sys
+
+ENV_FILE = "/etc/sagasu/sagasu.env"
+LABEL = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
+
+
+def read():
+    with open(ENV_FILE, encoding="utf-8") as stream:
+        return stream.read().splitlines()
+
+
+def value(lines, name, default=""):
+    for line in lines:
+        if line.startswith(name + "="):
+            return line.split("=", 1)[1].strip()
+    return default
+
+
+def write(lines, name, new):
+    found = False
+    for index, line in enumerate(lines):
+        if line.startswith(name + "="):
+            lines[index], found = f"{name}={new}", True
+    if not found:
+        lines.append(f"{name}={new}")
+    temporary = ENV_FILE + ".new"
+    descriptor = os.open(temporary, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o640)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        stream.write("\n".join(lines) + "\n")
+    subprocess.run(["chown", "root:sagasu", temporary], check=True)
+    os.chmod(temporary, 0o640)
+    os.replace(temporary, ENV_FILE)
+
+
+def keys(lines):
+    entries = [item for item in value(lines, "SAGASU_HTTP_KEYS").split(",") if item]
+    return dict(item.split(":", 1) for item in entries)
+
+
+def save_keys(lines, current):
+    write(lines, "SAGASU_HTTP_KEYS", ",".join(f"{k}:{v}" for k, v in current.items()))
+
+
+def restart():
+    print("Restarting Sagasu (this closes the server's browser).")
+    subprocess.run(["systemctl", "restart", "sagasu"], check=True)
+    print(
+        "Done. If agents then report that sign-in is needed, sign in again"
+        " (signin.sh on your own computer, which runs sagasu-signin here)."
+    )
+
+
+def main(arguments):
+    if os.geteuid() != 0:
+        sys.exit("Run with sudo: sudo sagasu-ctl ...")
+    command = arguments[0] if arguments else ""
+    lines = read()
+    if command == "status" and len(arguments) == 1:
+        for unit in ("sagasu-xvfb", "sagasu", "caddy"):
+            state = subprocess.run(
+                ["systemctl", "is-active", unit], capture_output=True, text=True
+            ).stdout.strip()
+            print(f"{unit:13} {state}")
+        host = value(lines, "SAGASU_HTTP_ALLOWED_HOSTS").split(",")[0]
+        print(f"{'address':13} https://{host}/mcp")
+        print(f"{'remote writes':13} {value(lines, 'SAGASU_HTTP_WRITES', 'off')}")
+        print(f"{'api keys':13} {', '.join(sorted(keys(lines))) or 'none'}")
+        sys.stdout.flush()
+        subprocess.run(["/opt/sagasu/bin/sagasu-launch", "host", "status"])
+    elif command == "writes" and arguments[1:] in (["on"], ["off"]):
+        write(lines, "SAGASU_HTTP_WRITES", arguments[1])
+        print("Remote writes are now", arguments[1] + ".")
+        restart()
+    elif command == "key-add" and len(arguments) == 2:
+        label, current = arguments[1], keys(lines)
+        if not LABEL.fullmatch(label) or label in current or len(current) >= 16:
+            sys.exit(
+                "Use a new label: lowercase letters, digits, - or _ (at most 16 keys)."
+            )
+        key = "sgs_" + secrets.token_urlsafe(32)
+        current[label] = hashlib.sha256(key.encode()).hexdigest()
+        save_keys(lines, current)
+        print(
+            f"API key '{label}' (shown once; keep it in a password manager):\n\n  {key}\n"
+        )
+        restart()
+    elif command == "key-remove" and len(arguments) == 2:
+        current = keys(lines)
+        if arguments[1] not in current:
+            sys.exit("No key has that label.")
+        if len(current) == 1:
+            sys.exit("This is the only key. Add its replacement first with key-add.")
+        del current[arguments[1]]
+        save_keys(lines, current)
+        print(f"API key '{arguments[1]}' no longer works.")
+        restart()
+    elif command == "restart" and len(arguments) == 1:
+        restart()
+    elif command == "logs" and len(arguments) == 1:
+        subprocess.run(["tail", "-n", "80", "/var/lib/sagasu/host.log"])
+    else:
+        sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

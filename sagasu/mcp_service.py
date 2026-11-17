@@ -39,12 +39,17 @@ from .fbs_account import (
     read_task_list,
 )
 from .observability import event, observed_operation
+from .origin import is_remote
 from .errors import public_failure
 from .config import ConfigurationRequired
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
 from .read_backends import HybridReads, READ_FAILURES
 
 WRITE_KINDS = {"book", "cancel", "approve_task", "amend"}
+# After a remote request finds that a person must sign in on the host, further
+# remote FBS requests fail fast for this long instead of reloading Microsoft's
+# sign-in page. A successful operation (the owner's login) lifts it at once.
+SIGN_IN_RETRY_SECONDS = 900
 
 
 class AgentError(ValueError):
@@ -296,6 +301,9 @@ class Job:
     diagnostic_events: list = field(default_factory=list, repr=False)
     diagnostic_dropped: int = 0
     failure_screenshot: dict | None = field(default=None, repr=False)
+    # Started by a call through the remote listener. A remote caller can see,
+    # read and cancel only these; the owner at the host sees everything.
+    remote: bool = False
 
     @property
     def terminal(self):
@@ -357,6 +365,7 @@ class AgentService:
         self.journal = journal
         self.journal_failed = False
         self._comparison_key = None
+        self.sign_in_retry_at = 0.0
 
     def personal_profile(self):
         if self.profile is None:
@@ -393,6 +402,27 @@ class AgentService:
             "affects_existing_reviews": False,
         }
 
+    @property
+    def host_sign_in_required(self):
+        """A remote request recently found that only a person can renew sign-in."""
+        return self.clock() < self.sign_in_retry_at
+
+    def visible_jobs(self):
+        """Retained jobs the current caller may know about."""
+        self.prune()
+        remote = is_remote()
+        return [job for job in self.jobs.values() if job.remote or not remote]
+
+    def visible_reviews(self):
+        """Pending reviews the current caller may know about."""
+        self.prune()
+        remote = is_remote()
+        return [
+            self.review(key)
+            for key, review in list(self.reviews.items())
+            if review["remote"] or not remote
+        ]
+
     def prune(self):
         now = self.clock()
         for key, job in list(self.jobs.items()):
@@ -417,6 +447,15 @@ class AgentService:
 
     def get(self, operation_id):
         self.prune()
+        if (
+            operation_id in self.jobs
+            and is_remote()
+            and not self.jobs[operation_id].remote
+        ):
+            # The same answer as for an ID that never existed.
+            raise AgentError(
+                "Unknown or expired operation. Read operations expire on restart; inspect action_history and FBS before repeating a write."
+            )
         if operation_id not in self.jobs:
             saved = self.journal.get(operation_id) if self.journal else None
             if saved and saved["status"] in {
@@ -507,6 +546,7 @@ class AgentService:
             self.clock(),
             updated_at=self.clock(),
             summary=summary,
+            remote=is_remote(),
         )
         if kind in WRITE_KINDS and self.journal:
             self.journal.reserve(job, review_id, summary)
@@ -533,6 +573,12 @@ class AgentService:
         if not original.summary:
             raise AgentError(
                 "This action has no verifiable history metadata; inspect FBS manually."
+            )
+        if is_remote() and (original.reconciliation or {}).get(
+            "action_outcome_verified"
+        ):
+            raise AgentError(
+                "This action's outcome is already verified. A remote connection cannot replace verified evidence."
             )
         reference = (original.result or {}).get(
             "reference_number"
@@ -602,6 +648,7 @@ class AgentService:
             job.auth_event.set()
 
         backend_started = False
+        remote = is_remote()
         from .operation_diagnostics import diagnostic_scope
 
         scope = diagnostic_scope()
@@ -617,8 +664,14 @@ class AgentService:
                 job.updated_at = self.clock()
                 if self.journal and job.kind in WRITE_KINDS:
                     self.journal.update(job)
+                if remote and self.host_sign_in_required:
+                    raise AuthenticationRequired(
+                        "SMU sign-in is required on the host.",
+                        reason="sign_in_required_on_host",
+                    )
                 backend_started = True
                 result = await self.backend.run(job.kind, payload, progress, notify)
+                self.sign_in_retry_at = 0.0
                 result = copy.deepcopy(result)
                 if job.kind == "reconcile":
                     observed = (
@@ -653,6 +706,19 @@ class AgentService:
                 else "Stopped"
             )
         except Exception as error:
+            if remote and isinstance(error, AuthenticationRequired):
+                # A remote caller cannot run login. Say who must act, and stop
+                # further remote requests from reloading the sign-in page.
+                if error.reason == "sign_in_required_on_host":
+                    if backend_started:
+                        # A real detection. A request refused by the pause
+                        # itself must not extend it.
+                        self.sign_in_retry_at = self.clock() + SIGN_IN_RETRY_SECONDS
+                else:
+                    error = AuthenticationRequired(
+                        "The saved FBS session did not renew itself.",
+                        reason="session_renewal_pending",
+                    )
             unknown = isinstance(
                 error,
                 (
@@ -685,7 +751,11 @@ class AgentService:
                     reconcile + "; do not repeat the action automatically."
                     if unknown
                     else (
-                        "Run login, complete SMU sign-in/MFA, then retry the read."
+                        (
+                            "Tell the user that SMU sign-in may be needed on the server; a remote connection cannot sign in."
+                            if remote
+                            else "Run login, complete SMU sign-in/MFA, then retry the read."
+                        )
                         if isinstance(error, AuthenticationRequired)
                         else "Read support_bundle for this operation and inspect an available automatic failure image. Check configuration_status if setup is unclear; an unreadable search is not empty availability."
                     )
@@ -693,6 +763,9 @@ class AgentService:
             }
             if not unknown:
                 job.error.update(public_failure(error))
+                if job.error.get("reason") == "sign_in_required_on_host":
+                    # Only a person at the host can change this outcome.
+                    job.error["retry_safe"] = False
             event(
                 "agent.operation_failed",
                 level=40,
@@ -1611,13 +1684,18 @@ class AgentService:
             "summary": summary,
             "expires_at": self.clock() + 600,
             "payload": payload,
+            "remote": is_remote(),
         }
         self.reviews[review["review_id"]] = review
         return self.review(review["review_id"])
 
     def review(self, review_id):
         self.prune()
-        if review_id not in self.reviews:
+        if review_id not in self.reviews or (
+            # A remote caller acts only on reviews a remote call prepared.
+            is_remote()
+            and not self.reviews[review_id]["remote"]
+        ):
             raise AgentError(
                 "Review expired, consumed, or unknown. Prepare a new review."
             )
@@ -1625,7 +1703,7 @@ class AgentService:
             {
                 key: value
                 for key, value in self.reviews[review_id].items()
-                if key != "payload"
+                if key not in {"payload", "remote"}
             }
         )
 
@@ -1739,6 +1817,10 @@ class AgentService:
     def confirm(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
+        if is_remote() and review["kind"] in {"approve_task", "batch"}:
+            raise AgentError(
+                "Task approvals and batches cannot be submitted over a remote connection."
+            )
         if review["kind"] == "amend":
             from .amendments import require_target
 
