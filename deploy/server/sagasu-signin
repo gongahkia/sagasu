@@ -19,7 +19,11 @@ if pgrep -u sagasu -x x11vnc >/dev/null; then
 fi
 
 RUN=/run/sagasu-signin
-MINUTES=15
+# The host decides how long a sign-in may take; say and wait for the same time.
+MS=$(sed -n 's/^SAGASU_AUTH_TIMEOUT_MS=\([0-9][0-9]*\)[[:space:]]*$/\1/p' /etc/sagasu/sagasu.env | tail -n 1)
+MINUTES=$(( ${MS:-600000} / 60000 ))
+(( MINUTES >= 1 )) || MINUTES=1
+(( MINUTES <= 30 )) || MINUTES=30
 install -d -o sagasu -g sagasu -m 0700 "$RUN"
 cleanup() {
     pkill -u sagasu -x x11vnc 2>/dev/null || true
@@ -30,7 +34,7 @@ trap cleanup EXIT
 
 # A one-time password for the view. VNC passwords are at most 8 characters, so
 # the view also listens on this machine only and needs your SSH key to reach.
-PASSWORD=$(python3 -c "import secrets; print(''.join(secrets.choice('abcdefghjkmnpqrstuvwxyz23456789') for _ in range(8)))")
+PASSWORD=$(python3 -I -c "import secrets; print(''.join(secrets.choice('abcdefghjkmnpqrstuvwxyz23456789') for _ in range(8)))")
 runuser -u sagasu -- x11vnc -storepasswd "$PASSWORD" "$RUN/passwd" >/dev/null 2>&1
 runuser -u sagasu -- x11vnc -display :99 -auth /var/lib/sagasu/.Xauthority \
     -localhost -rfbport 5900 -rfbauth "$RUN/passwd" \

@@ -198,6 +198,10 @@ class RemoteHTTP:
 
         for name in ("uvicorn", "mcp"):
             logging.getLogger(name).setLevel(logging.WARNING)
+        # Everything the web server logs about a request before the key is
+        # checked is a warning. None of it is needed, and a caller without a
+        # key must not be able to write to the private log at all.
+        logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
         throttle_third_party_logs()
         app = self.mcp_server.streamable_http_app(
             streamable_http_path=MCP_PATH,

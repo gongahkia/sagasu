@@ -25,24 +25,37 @@ def read():
         return stream.read().splitlines()
 
 
+ASSIGNMENT = re.compile(r"\s*(?:export\s+)?'?([A-Za-z_][A-Za-z0-9_]*)'?\s*=(.*)")
+PLAIN = re.compile(r"[A-Za-z0-9_.:,/@-]*")
+KEY_ENTRY = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}:[0-9a-f]{64}")
+
+
 def value(lines, name, default=""):
+    """The value the service will use: the last assignment, in plain form only."""
+    found = default
     for line in lines:
-        if line.startswith(name + "="):
-            return line.split("=", 1)[1].strip()
-    return default
+        match = ASSIGNMENT.fullmatch(line)
+        if match and match.group(1) == name:
+            if not line.startswith(name + "=") or not PLAIN.fullmatch(match.group(2)):
+                sys.exit(
+                    f"{ENV_FILE}: write the {name} line as plain {name}=value "
+                    "(no quotes, spaces, export or trailing comment), then run this again."
+                )
+            found = match.group(2)
+    return found
 
 
 def write(lines, name, new):
-    found = False
-    for index, line in enumerate(lines):
-        if line.startswith(name + "="):
-            lines[index], found = f"{name}={new}", True
-    if not found:
-        lines.append(f"{name}={new}")
+    value(lines, name)  # refuse a line this tool cannot edit safely
+    kept = [line for line in lines if not line.startswith(name + "=")]
+    position = next(
+        (i for i, line in enumerate(lines) if line.startswith(name + "=")), len(kept)
+    )
+    kept.insert(min(position, len(kept)), f"{name}={new}")
     temporary = ENV_FILE + ".new"
     descriptor = os.open(temporary, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o640)
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-        stream.write("\n".join(lines) + "\n")
+        stream.write("\n".join(kept) + "\n")
     subprocess.run(["chown", "root:sagasu", temporary], check=True)
     os.chmod(temporary, 0o640)
     os.replace(temporary, ENV_FILE)
@@ -50,6 +63,11 @@ def write(lines, name, new):
 
 def keys(lines):
     entries = [item for item in value(lines, "SAGASU_HTTP_KEYS").split(",") if item]
+    if not all(KEY_ENTRY.fullmatch(item) for item in entries):
+        sys.exit(
+            f"{ENV_FILE}: SAGASU_HTTP_KEYS is not a list of label:sha256hex entries. "
+            "Correct it by hand first."
+        )
     return dict(item.split(":", 1) for item in entries)
 
 

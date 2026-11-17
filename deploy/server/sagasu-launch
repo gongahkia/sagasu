@@ -12,8 +12,15 @@ if [[ $(id -un) != sagasu ]]; then
 fi
 
 ENV_FILE=/etc/sagasu/sagasu.env
-if [[ -n ${SMU_LOGIN_PASSWORD:-} ]] ||
-    grep -Eq '^[[:space:]]*(export[[:space:]]+)?SMU_LOGIN_PASSWORD[[:space:]]*=[[:space:]]*[^[:space:]#]' "$ENV_FILE"; then
+# Ask the same parser the service uses whether a password is stored.
+stored=0
+/opt/sagasu/venv/bin/python -I -c '
+import sys
+from dotenv import dotenv_values
+values = dotenv_values(sys.argv[1], interpolate=False)
+sys.exit(3 if values.get("SMU_LOGIN_PASSWORD") else 0)
+' "$ENV_FILE" || stored=$?
+if [[ -n ${SMU_LOGIN_PASSWORD:-} || $stored -eq 3 ]]; then
     printf '%s\n' \
         'Refusing to start: an SMU password must not be stored on this server.' \
         'Remove SMU_LOGIN_PASSWORD and sign in with: sudo sagasu-signin' >&2
@@ -23,12 +30,15 @@ fi
 cd /var/lib/sagasu
 # env -i: nothing from the caller's shell can change what the host sees.
 # TZ: FBS pages compute dates in the browser, so it keeps Singapore time.
+# PYTHONSAFEPATH: the working directory is writable by the service, so it
+# must never be searched for code ahead of the root-owned installation.
 exec env -i \
     HOME=/var/lib/sagasu \
     PATH=/opt/sagasu/venv/bin:/usr/local/bin:/usr/bin:/bin \
     LANG=C.UTF-8 \
     TZ=Asia/Singapore \
     PYTHONUNBUFFERED=1 \
+    PYTHONSAFEPATH=1 \
     DISPLAY=:99 \
     XAUTHORITY=/var/lib/sagasu/.Xauthority \
     PLAYWRIGHT_BROWSERS_PATH=/opt/sagasu/browsers \

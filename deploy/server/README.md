@@ -46,10 +46,16 @@ python3 -c "import secrets; print('sgs_' + secrets.token_urlsafe(32), end='')" >
 printf 'owner:%s\n' "$(shasum -a 256 < api-key | cut -d' ' -f1)"
 ```
 
-Copy the source tree to the server, then run the installer with the public host name and the `label:digest` printed above:
+Copy the source tree to the server without your local `.env`, `.sagasu/` and `artifacts/`. They can hold your SMU password, browser session and sign-in screenshots.
 
 ```bash
-sudo bash deploy/server/install.sh --host booking.example.org --key owner:<digest>
+rsync -a --exclude .git --exclude .venv --exclude .env --exclude .sagasu --exclude artifacts ./ ubuntu@SERVER:sagasu-src/
+```
+
+Then, on the server, run the installer with the public host name and the `label:digest` printed above:
+
+```bash
+sudo bash sagasu-src/deploy/server/install.sh --host booking.example.org --key owner:<digest>
 ```
 
 The host name must already resolve to the server. Without a domain, `A-B-C-D.sslip.io` resolves to the address `A.B.C.D`.
@@ -85,8 +91,10 @@ sudo sagasu-ctl writes on|off     # allow or stop remote booking, amending, canc
 sudo sagasu-ctl key-add laptop    # new API key, printed once
 sudo sagasu-ctl key-remove laptop # revoke a key
 sudo sagasu-ctl logs              # private host log: one line per remote tool call
-sudo bash deploy/server/install.sh --update   # after copying new code
+sudo bash sagasu-src/deploy/server/install.sh --update   # after copying new code
 ```
+
+`--update` keeps keys, settings and saved state. It refreshes a proxy configuration this kit wrote, and it leaves a service you had disabled stopped and disabled. If a step fails, it starts Sagasu again with what is installed.
 
 Changing a setting restarts the service, which closes the browser. If agents then report `sign_in_required_on_host`, run `sudo sagasu-signin` again.
 
@@ -109,14 +117,16 @@ All in `/etc/sagasu/sagasu.env`. See `sagasu.env.example`.
 
 | Setting | Meaning |
 | --- | --- |
-| `SAGASU_HTTP_PORT` | Turns the listener on and makes the host a long-lived service. 1024–65535. |
-| `SAGASU_HTTP_BIND` | Loopback address only. Default `127.0.0.1`. |
-| `SAGASU_HTTP_ALLOWED_HOSTS` | Public host name(s) agents use, comma-separated. |
+| `SAGASU_HTTP_PORT` | Turns the listener on and makes the host a long-lived service. 1024–65535. Caddy forwards to `127.0.0.1:8765`; change `reverse_proxy` in `/etc/caddy/Caddyfile` to match. |
+| `SAGASU_HTTP_BIND` | Loopback address only. Default `127.0.0.1`. Change `reverse_proxy` to match. |
+| `SAGASU_HTTP_ALLOWED_HOSTS` | Public host name(s) agents use, comma-separated. Each name also needs to be a site address in `/etc/caddy/Caddyfile`. |
 | `SAGASU_HTTP_KEYS` | `label:sha256hex`, comma-separated, 1–16 entries. |
 | `SAGASU_HTTP_WRITES` | `off` (default) or `on`. `on` needs `SAGASU_MCP_CONFIRMATION=agent`. |
 | `SAGASU_SESSION_COOKIES` | `all` (default) or `fbs`: keep only cookies FBS receives in the saved session file. |
 
-An invalid listener setting keeps the listener off and puts the host in diagnostic mode; `sagasu-ctl status` and `sagasu doctor` show the reason.
+An invalid listener setting keeps the listener off and puts the host in diagnostic mode. `sudo sagasu-ctl status` then shows `"runtime_mode": "diagnostic"` and `"remote_listener": false`, and `sudo /opt/sagasu/bin/sagasu-launch doctor --offline` prints the reason.
+
+Write each setting as plain `NAME=value`. `sagasu-ctl` refuses to edit a line that has quotes, spaces, `export` or a trailing comment.
 
 ## What this does not protect against
 
