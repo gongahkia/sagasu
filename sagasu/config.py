@@ -52,8 +52,12 @@ SAGASU_READ_BACKEND=auto
 # SAGASU_HTTP_ALLOWED_HOSTS=booking.example.org
 # SAGASU_HTTP_KEYS=laptop:<sha256 of the API key, hex>
 # SAGASU_HTTP_WRITES=off
+# SAGASU_HTTP_OAUTH=off
 """
 
+# Apps whose OAuth redirect may receive a sign-in code. Loopback serves desktop
+# and command-line clients on the same computer as the person signing in.
+DEFAULT_OAUTH_REDIRECT_HOSTS = "chatgpt.com,claude.ai,claude.com,localhost,127.0.0.1"
 KEY_LABEL = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
 KEY_DIGEST = re.compile(r"[0-9a-f]{64}")
 HOST_NAME = re.compile(
@@ -88,6 +92,10 @@ class RemoteListener:
     allowed_hosts: tuple[str, ...]
     keys: dict = field(repr=False)  # SHA-256 hex digest -> label; never the key
     writes: bool = False
+    # OAuth sign-in for apps that cannot send a key header: the person enters
+    # an API key once on this server's page. Redirects go only to these hosts.
+    oauth: bool = False
+    oauth_redirect_hosts: tuple[str, ...] = ()
 
 
 def parse_remote_listener(values):
@@ -157,9 +165,39 @@ def parse_remote_listener(values):
         problems.append(
             "SMU_LOGIN_PASSWORD must not be configured together with the remote listener; sign in on the host instead."
         )
+    oauth = (values.get("SAGASU_HTTP_OAUTH") or "off").strip().lower()
+    if oauth not in {"on", "off"}:
+        problems.append("SAGASU_HTTP_OAUTH must be on or off.")
+    redirect_hosts = tuple(
+        dict.fromkeys(
+            item.strip().lower()
+            for item in (
+                values.get("SAGASU_OAUTH_REDIRECT_HOSTS")
+                or DEFAULT_OAUTH_REDIRECT_HOSTS
+            ).split(",")
+            if item.strip()
+        )
+    )
+    if not redirect_hosts or not all(
+        HOST_NAME.fullmatch(host) for host in redirect_hosts
+    ):
+        problems.append(
+            "SAGASU_OAUTH_REDIRECT_HOSTS must list host names, without scheme, port or path."
+        )
     if problems:
         return None, problems
-    return RemoteListener(bind, port, hosts, keys, writes == "on"), []
+    return (
+        RemoteListener(
+            bind,
+            port,
+            hosts,
+            keys,
+            writes == "on",
+            oauth == "on",
+            redirect_hosts,
+        ),
+        [],
+    )
 
 
 @dataclass(frozen=True)
@@ -448,6 +486,8 @@ class Settings:
                     "allowed_hosts": list(http.allowed_hosts),
                     "key_labels": sorted(http.keys.values()),
                     "writes": http.writes,
+                    "oauth": http.oauth,
+                    "oauth_redirect_hosts": list(http.oauth_redirect_hosts),
                 }
                 if (http := self.http) is not None
                 else {

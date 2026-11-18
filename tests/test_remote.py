@@ -1008,8 +1008,12 @@ class RemoteListenerTests(unittest.IsolatedAsyncioTestCase):
             payload=packet, key=None, headers={"X-API-Key": "Bearer " + KEY}
         )
         self.assertEqual(status, 200)
-        # Never both: one credential, in one header.
+        # Without OAuth: one credential, in one header.
         status, _, _ = await self.http(payload=packet, headers={"X-API-Key": KEY})
+        self.assertEqual(status, 401)
+        status, _, _ = await self.http(
+            payload=packet, headers={"X-API-Key": "wrong-key-" + "w" * 40}
+        )
         self.assertEqual(status, 401)
         body = json.dumps(packet).encode()
         reader, _ = await self.raw(

@@ -625,7 +625,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                 listener = settings.http
                 if listener is not None and runtime.status()["operational"]:
                     from .mcp_server import RemoteAccess
-                    from .remote import RemoteHTTP, key_label
+                    from .remote import LABEL_HEADER, RemoteHTTP
 
                     remote_http = RemoteHTTP(
                         listener,
@@ -635,11 +635,12 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                             allow_agent_submission=listener.writes,
                             remote=RemoteAccess(
                                 writes=listener.writes,
-                                caller=lambda headers: key_label(
-                                    listener.keys, headers
-                                ),
+                                # The gate in front of /mcp names the key it
+                                # accepted, whether sent directly or as a token.
+                                caller=lambda headers: headers.get(LABEL_HEADER),
                             ),
                         ),
+                        oauth_store=settings.preferences.with_name("oauth.sqlite3"),
                     )
                     await remote_http.start()
             # The server context manager waits for all accepted transports on

@@ -2,7 +2,9 @@
 
 A TLS reverse proxy on the same machine publishes it. Every request must carry
 an API key; only SHA-256 digests of keys are configured, so the host's
-configuration never contains a usable key. Sign-in stays with the person at the
+configuration never contains a usable key. With SAGASU_HTTP_OAUTH=on an app may
+instead present an OAuth access token, obtained by typing a key once on this
+server's sign-in page (see oauth.py). SMU sign-in stays with the person at the
 host: see RemoteAccess in mcp_server and CALL_ORIGIN in origin.
 
 Requests are independent POSTs answered with JSON. There are no sessions to
@@ -18,8 +20,10 @@ import json
 import logging
 import socket
 import time
+from pathlib import Path
 
 from .config import ConfigError
+from .oauth import CLIENT_ADDRESS, PUBLIC_PATHS
 from .observability import event
 
 MCP_PATH = "/mcp"
@@ -31,6 +35,10 @@ MAX_IN_FLIGHT = 32
 # Some agent platforms reserve Authorization for their own use and only allow
 # custom headers. They may send the key, on its own, in this header instead.
 ALTERNATIVE_KEY_HEADER = "x-api-key"
+# Set by the gate for the MCP server's per-call log line. A client's own copy of
+# this header is always removed first.
+LABEL_HEADER = "x-sagasu-key-label"
+TOKEN_REASONS = frozenset({"unknown_token", "expired_token", "key_removed"})
 
 
 def check_key(keys, headers):
@@ -73,31 +81,91 @@ def key_label(keys, headers):
 
 
 class KeyGate:
-    """ASGI wrapper: nothing behind it runs without a configured API key."""
+    """ASGI wrapper: nothing behind it runs without a configured API key.
 
-    def __init__(self, app, keys):
+    With OAuth on, an access token from the sign-in flow counts as the key it
+    was issued for, and the OAuth paths themselves are served without one.
+    """
+
+    def __init__(self, app, keys, oauth=None, allowed_hosts=()):
         self.app = app
         self.keys = dict(keys)
+        self.oauth = oauth
+        self.allowed_hosts = frozenset(allowed_hosts)
         self.active = 0
         self.rejected = {}
         self.reported_at = 0.0
+
+    def credentials(self, headers):
+        """Return (label, None) or (None, reason) for a request's headers."""
+        bearer = [value for name, value in headers if name == b"authorization"]
+        alternative = [
+            value for name, value in headers if name == ALTERNATIVE_KEY_HEADER.encode()
+        ]
+        if len(bearer) > 1 or len(alternative) > 1:
+            return None, "several_key_headers"
+        labels = []
+        if bearer:
+            value = bearer[0].decode("latin-1")
+            label, reason = check_key(self.keys, {"authorization": value})
+            if label is None and reason == "unknown_key" and self.oauth is not None:
+                label, reason = self.oauth.verify(
+                    value.strip().partition(" ")[2].strip()
+                )
+            if label is None:
+                return None, reason
+            labels.append(label)
+        if alternative:
+            label, reason = check_key(
+                self.keys, {ALTERNATIVE_KEY_HEADER: alternative[0].decode("latin-1")}
+            )
+            if label is None:
+                return None, reason
+            labels.append(label)
+        if not labels:
+            return None, "no_key_header"
+        if len(labels) > 1 and self.oauth is None:
+            return None, "several_key_headers"
+        # With OAuth an app may send its token alongside a key header, but only
+        # when both name the same key, so the log is never ambiguous.
+        if len(set(labels)) > 1:
+            return None, "keys_disagree"
+        return labels[0], None
+
+    def host_allowed(self, headers):
+        host = next((value for name, value in headers if name == b"host"), b"")
+        name = host.decode("latin-1").lower().rsplit(":", 1)[0] if host else ""
+        return name in self.allowed_hosts
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        supplied = [
-            (name.lower().decode("latin-1"), value.decode("latin-1"))
-            for name, value in scope.get("headers") or ()
-            if name.lower() in (b"authorization", ALTERNATIVE_KEY_HEADER.encode())
-        ]
-        # Exactly one credential in exactly one header, so the check here and
-        # the label in the log can never be about different values.
-        label, reason = (
-            check_key(self.keys, dict(supplied))
-            if len(supplied) <= 1
-            else (None, "several_key_headers")
-        )
+        headers = [(name.lower(), value) for name, value in scope.get("headers") or ()]
+        if self.oauth is not None and scope.get("path") in PUBLIC_PATHS:
+            if not self.host_allowed(headers):
+                await self.reply(
+                    send,
+                    421,
+                    "misdirected",
+                    "Unknown host.",
+                    (b"cache-control", b"no-store"),
+                )
+                return
+            forwarded = next(
+                (value for name, value in headers if name == b"x-forwarded-for"), b""
+            )
+            # Caddy replaces X-Forwarded-For with the address it saw.
+            address = forwarded.decode("latin-1").split(",")[0].strip()
+            token = CLIENT_ADDRESS.set(
+                address or (scope.get("client") or ("unknown",))[0]
+            )
+            try:
+                await self.app(scope, receive, send)
+            finally:
+                CLIENT_ADDRESS.reset(token)
+            return
+        label, reason = self.credentials(headers)
         if label is None:
             self.rejected[reason] = self.rejected.get(reason, 0) + 1
             now = time.monotonic()
@@ -111,12 +179,17 @@ class KeyGate:
                     reasons=dict(self.rejected),
                 )
                 self.reported_at, self.rejected = now, {}
+            challenge = 'Bearer realm="sagasu"'
+            if self.oauth is not None:
+                challenge += f', resource_metadata="{self.oauth.resource_metadata_url}"'
+                if reason in TOKEN_REASONS:
+                    challenge += ', error="invalid_token"'
             await self.reply(
                 send,
                 401,
                 "unauthorized",
                 "Send one valid API key: Authorization: Bearer <key>, or X-API-Key: <key>.",
-                (b"www-authenticate", b'Bearer realm="sagasu"'),
+                (b"www-authenticate", challenge.encode()),
             )
         elif scope.get("method") != "POST":
             # No event stream to open and no session to end. The MCP transport
@@ -138,6 +211,15 @@ class KeyGate:
                 (b"retry-after", b"1"),
             )
         else:
+            scope = dict(
+                scope,
+                headers=[
+                    (name, value)
+                    for name, value in scope.get("headers") or ()
+                    if name.lower() != LABEL_HEADER.encode()
+                ]
+                + [(LABEL_HEADER.encode(), label.encode())],
+            )
             self.active += 1
             try:
                 await self.app(scope, receive, send)
@@ -211,9 +293,11 @@ def bind_loopback(host, port):
 class RemoteHTTP:
     """Serve one remote MCP server inside the host's event loop."""
 
-    def __init__(self, listener, server):
+    def __init__(self, listener, server, oauth_store=None):
         self.listener = listener
         self.mcp_server = server
+        self.oauth_store = oauth_store
+        self.oauth = None
         self.server = None
         self.task = None
 
@@ -234,6 +318,29 @@ class RemoteHTTP:
         # key must not be able to write to the private log at all.
         logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
         throttle_third_party_logs()
+        if (
+            not self.listener.oauth
+            and self.oauth_store
+            and Path(self.oauth_store).exists()
+        ):
+            # Turning OAuth off signs every app out, so turning it on later
+            # does not bring old sign-ins back.
+            from .oauth import OAuthStore
+
+            store = OAuthStore(self.oauth_store)
+            store.clear()
+            store.close()
+        if self.listener.oauth:
+            from .oauth import SagasuOAuth
+
+            self.oauth = SagasuOAuth(
+                self.oauth_store,
+                self.listener.keys,
+                self.listener.allowed_hosts[0],
+                self.listener.oauth_redirect_hosts,
+            )
+            # The SDK serves extra routes from this list alongside /mcp.
+            self.mcp_server._custom_starlette_routes.extend(self.oauth.routes())
         app = self.mcp_server.streamable_http_app(
             streamable_http_path=MCP_PATH,
             json_response=True,
@@ -253,7 +360,12 @@ class RemoteHTTP:
         bound = bind_loopback(self.listener.bind, self.listener.port)
         self.server = Server(
             uvicorn.Config(
-                KeyGate(app, self.listener.keys),
+                KeyGate(
+                    app,
+                    self.listener.keys,
+                    oauth=self.oauth,
+                    allowed_hosts=self.listener.allowed_hosts,
+                ),
                 log_config=None,
                 access_log=False,
                 lifespan="on",
@@ -270,6 +382,8 @@ class RemoteHTTP:
             if self.task.done():
                 bound.close()
                 await asyncio.gather(self.task, return_exceptions=True)
+                if self.oauth is not None:
+                    self.oauth.close()
                 raise ConfigError("The remote listener could not start.")
             await asyncio.sleep(0.02)
         event(
@@ -277,6 +391,7 @@ class RemoteHTTP:
             port=self.listener.port,
             writes=self.listener.writes,
             keys=len(self.listener.keys),
+            oauth=self.oauth is not None,
         )
 
     async def stop(self):
@@ -290,4 +405,7 @@ class RemoteHTTP:
             await asyncio.gather(self.task, return_exceptions=True)
         finally:
             self.task = None
+            if self.oauth is not None:
+                self.oauth.close()
+                self.oauth = None
         event("remote.stopped")

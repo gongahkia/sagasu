@@ -88,6 +88,8 @@ If Microsoft shows a block page, an error, or a step you do not normally see, do
 ```bash
 sudo sagasu-ctl status            # services, address, key labels, write setting
 sudo sagasu-ctl writes on|off     # allow or stop remote booking, amending, cancelling
+sudo sagasu-ctl oauth on|off      # allow or stop apps signing in through OAuth
+sudo sagasu-ctl connections       # apps signed in through OAuth, per key
 sudo sagasu-ctl key-add laptop    # new API key, printed once
 sudo sagasu-ctl key-remove laptop # revoke a key
 sudo sagasu-ctl logs              # private host log: one line per remote tool call
@@ -102,7 +104,26 @@ Changing a setting restarts the service, which closes the browser. If agents the
 
 - URL: `https://HOST/mcp` (streamable HTTP)
 - Header: `Authorization: Bearer <key>`
-- Or, for an agent platform that reserves `Authorization` for itself: `X-API-Key: <key>` (the key alone). Send one of the two, never both.
+- Or, for an agent platform that reserves `Authorization` for itself: `X-API-Key: <key>` (the key alone). Both headers may be sent only if they carry the same key.
+
+### Apps that only support OAuth
+
+With `SAGASU_HTTP_OAUTH=on` (`sudo sagasu-ctl oauth on`), apps such as ChatGPT and Claude can connect with their OAuth sign-in instead of a header:
+
+1. In the app, add the URL `https://HOST/mcp` and choose OAuth. If it asks how to register, choose dynamic or automatic registration (DCR).
+2. The app opens this server's sign-in page. Paste the API key there once.
+3. The app receives tokens that count as that key: same access, same label in the log.
+
+How it is limited:
+
+- Codes are sent back only to redirect URIs on `SAGASU_OAUTH_REDIRECT_HOSTS` (by default chatgpt.com, claude.ai, claude.com and loopback). Registering any other redirect is refused.
+- PKCE is required. Access tokens last 1 hour; refresh tokens rotate and last 30 days; after 90 days the key must be entered again.
+- Removing or replacing a key ends every token issued for it at once.
+- The server stores only SHA-256 digests of tokens, in `/var/lib/sagasu/oauth.sqlite3`. Presenting an already-used refresh token ends that whole sign-in.
+- Wrong keys on the sign-in page are limited to 10 per address and 50 overall in 10 minutes, and 5 per sign-in.
+- `sudo sagasu-ctl connections` lists the apps signed in, per key.
+
+Only enter a key on the sign-in page when you started the connection from the app yourself.
 
 | Answer | Meaning |
 | --- | --- |
@@ -122,6 +143,8 @@ All in `/etc/sagasu/sagasu.env`. See `sagasu.env.example`.
 | `SAGASU_HTTP_BIND` | Loopback address only. Default `127.0.0.1`. Change `reverse_proxy` to match. |
 | `SAGASU_HTTP_ALLOWED_HOSTS` | Public host name(s) agents use, comma-separated. Each name also needs to be a site address in `/etc/caddy/Caddyfile`. |
 | `SAGASU_HTTP_KEYS` | `label:sha256hex`, comma-separated, 1–16 entries. |
+| `SAGASU_HTTP_OAUTH` | `off` (default) or `on`: serve the OAuth sign-in for apps that cannot send a key header. |
+| `SAGASU_OAUTH_REDIRECT_HOSTS` | Hosts an OAuth app's redirect may use, comma-separated. Default `chatgpt.com,claude.ai,claude.com,localhost,127.0.0.1`. |
 | `SAGASU_HTTP_WRITES` | `off` (default) or `on`. `on` needs `SAGASU_MCP_CONFIRMATION=agent`. |
 | `SAGASU_SESSION_COOKIES` | `all` (default) or `fbs`: keep only cookies FBS receives in the saved session file. |
 
