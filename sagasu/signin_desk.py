@@ -78,8 +78,14 @@ STEPS = {
     "authenticator": "Approve the sign-in in Microsoft Authenticator on your phone. If the picture shows a number, enter it in the app.",
     "stay_signed_in": "Tap Yes to stay signed in for longer, or No.",
     "manual": "Follow the steps in the picture.",
-    "failed": "Microsoft did not accept that. Follow the steps in the picture.",
+    "failed": (
+        "Microsoft did not accept that. If it says the password is incorrect, "
+        "type it again carefully in the box and press Send."
+    ),
 }
+# The kind of box to type into at each step. A password box hides what is
+# typed, and phone keyboards do not autocorrect or capitalise it.
+FIELDS = {"email": "email", "password": "password", "failed": "password"}
 FAILURES = {
     "authentication_timeout": "Sign-in took too long and was stopped.",
     "sign_in_rejected": "Microsoft did not accept the sign-in.",
@@ -268,14 +274,19 @@ class SignInDesk:
                 retry=True,
             )
         elif live:
+            # The page itself is the best guide; an approval wait only says
+            # more when the step is not otherwise known.
+            message = STEPS.get(state) or (
+                STEPS["authenticator"]
+                if job.status == "awaiting_mfa"
+                else "Follow the steps in the picture."
+            )
             status.update(
                 phase="signing_in",
                 picture=True,
-                message=STEPS.get(state, "Follow the steps in the picture."),
-                field={"password": "password", "email": "email"}.get(state, "text"),
+                message=message,
+                field=FIELDS.get(state, "text"),
             )
-            if job.status == "awaiting_mfa":
-                status["message"] = STEPS["authenticator"]
         elif job.status == "queued":
             # Running jobs hold the queue; this one has not reached it yet.
             if self.service.queue.locked():
@@ -413,7 +424,7 @@ class SignInDesk:
                 or not text.isprintable()
             ):
                 return JSONResponse({"error": "bad_request"}, 400, headers=NO_STORE)
-            action = page.keyboard.type(text, delay=10)
+            action = type_into(page, text)
         elif kind == "key" and data.get("key") in KEYS:
             action = page.keyboard.press(data["key"])
         else:
@@ -460,6 +471,24 @@ class SignInDesk:
         ]
 
 
+# Text goes to the box that has focus. When a tap elsewhere left none, it goes
+# to the page's one visible text box (never a guess between several).
+FOCUS_ONLY_BOX = """() => {
+  const active = document.activeElement;
+  if (active && ['INPUT', 'TEXTAREA'].includes(active.tagName)) return;
+  const boxes = [...document.querySelectorAll('input')].filter((box) =>
+    ['text', 'email', 'password', 'tel', 'number'].includes(box.type) &&
+    !box.disabled && !box.readOnly && box.offsetParent !== null &&
+    getComputedStyle(box).opacity !== '0' && getComputedStyle(box).visibility !== 'hidden');
+  if (boxes.length === 1) boxes[0].focus();
+}"""
+
+
+async def type_into(page, text):
+    await page.evaluate(FOCUS_ONLY_BOX)
+    await page.keyboard.type(text, delay=10)
+
+
 def is_desk_path(path):
     return path == DESK_PATH or path.startswith(DESK_PATH + "/")
 
@@ -482,6 +511,7 @@ VIEW_BODY = """<h1>Sign in to SMU</h1>
 <button type="submit" id="send" aria-label="Type this and press Enter">Send</button>
 <button type="button" id="erase" class="secondary small" aria-label="Delete one character">⌫</button>
 </div>
+<p id="note" class="note" aria-live="polite"></p>
 </form>
 <div id="screen" class="screen" tabindex="0" hidden aria-label="Microsoft sign-in page. Click or tap to press; on a computer you can also type here.">
 <img id="picture" alt="" draggable="false">
@@ -502,6 +532,7 @@ main { max-width: 560px; }
 .screen:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
 .screen img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-select: none; }
 .waiting { color: var(--muted); }
+.note { color: var(--muted); font-size: 15px; margin: 8px 0 0; min-height: 1.5em; }
 #message { font-weight: 600; }
 """
 
@@ -510,7 +541,9 @@ VIEW_SCRIPT = r"""'use strict';
   const $ = (id) => document.getElementById(id);
   const message = $('message'), typing = $('typing'), text = $('text'),
     screen = $('screen'), picture = $('picture'), waiting = $('waiting'),
-    retry = $('retry'), cancel = $('cancel'), erase = $('erase');
+    retry = $('retry'), cancel = $('cancel'), erase = $('erase'), note = $('note');
+  // A single-line field never holds a line break; a pasted one is dropped.
+  const clean = (value) => value.replace(/[\r\n]+/g, '').slice(0, 256);
   let polling = false, framing = false, wanted = false, finished = false;
   let chain = Promise.resolve(), pending = '', flushTimer = null, shown = null;
 
@@ -527,7 +560,11 @@ VIEW_SCRIPT = r"""'use strict';
     waiting.hidden = wanted || status.phase === 'signed_in' || status.retry;
     retry.hidden = !status.retry;
     cancel.hidden = status.phase === 'signed_in';
-    if (text.type !== status.field) text.type = status.field;
+    // Changing the box's kind while someone types can make a phone keyboard
+    // drop or repeat characters, so wait until the box is empty or left.
+    if (text.type !== status.field && (document.activeElement !== text || !text.value)) {
+      text.type = status.field;
+    }
     if (wanted && !framing) frames();
   }
 
@@ -615,15 +652,29 @@ VIEW_SCRIPT = r"""'use strict';
     }
   });
   screen.addEventListener('paste', (event) => {
-    const pasted = (event.clipboardData && event.clipboardData.getData('text')) || '';
-    if (pasted) { event.preventDefault(); flush(); send({kind: 'text', text: pasted.slice(0, 256)}); }
+    const pasted = clean((event.clipboardData && event.clipboardData.getData('text')) || '');
+    if (pasted) { event.preventDefault(); flush(); send({kind: 'text', text: pasted}); }
   });
   typing.addEventListener('submit', (event) => {
     event.preventDefault();
-    const value = text.value;
+    const value = clean(text.value);
     text.value = '';
-    if (value) send({kind: 'text', text: value.slice(0, 256)});
-    send({kind: 'key', key: 'Enter'});
+    note.textContent = 'Sending…';
+    chain = chain.then(async () => {
+      if (value) {
+        const typed = await post('/sign-in/input', {kind: 'text', text: value});
+        if (!typed.ok) {
+          // Nothing was typed, so do not submit Microsoft's form either.
+          note.textContent = 'That could not be typed into the page. Check it and try again.';
+          return;
+        }
+      }
+      await post('/sign-in/input', {kind: 'key', key: 'Enter'});
+      // The count, never the text: enough to spot a dropped or doubled letter.
+      note.textContent = value
+        ? 'Typed ' + value.length + ' character' + (value.length === 1 ? '' : 's') + ' and pressed Enter.'
+        : 'Pressed Enter.';
+    }).catch(() => { note.textContent = 'Connection problem. Try again.'; });
   });
   erase.addEventListener('click', () => send({kind: 'key', key: 'Backspace'}));
   retry.addEventListener('click', begin);

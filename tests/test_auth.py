@@ -340,6 +340,37 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
         client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
         client.auth_notify.assert_awaited_once_with("Microsoft rejected sign-in")
 
+    async def watched(self, client, body):
+        """Run the loop as the web sign-in page does, with a person watching."""
+        from sagasu.live_view import LIVE_VIEW, LiveView
+
+        client.page.locator("body").inner_text = AsyncMock(return_value=body)
+        token = LIVE_VIEW.set(LiveView())
+        try:
+            await client._complete_interactive_authentication()
+        finally:
+            LIVE_VIEW.reset(token)
+
+    async def test_a_watched_sign_in_lets_the_person_retype_a_wrong_password(self):
+        os.environ.pop("SMU_LOGIN_PASSWORD")
+        client = self.flow(
+            [
+                ("failed", "Microsoft rejected sign-in"),
+                ("failed", "Microsoft rejected sign-in"),
+                ("authenticator", "Enter number 42."),
+            ],
+            headless=False,
+        )
+        await self.watched(client, "your account or password is incorrect.")
+        client.auth_notify.assert_awaited_once_with("Enter number 42.")
+
+    async def test_a_watched_sign_in_still_stops_on_a_lockout(self):
+        client = self.flow([("failed", "Microsoft rejected sign-in")], headless=False)
+        with self.assertRaisesRegex(AuthenticationRequired, "rejected"):
+            await self.watched(
+                client, "you've tried to sign in too many times with an incorrect"
+            )
+
     async def test_credentials_never_submitted_to_untrusted_origin(self):
         client = self.flow(
             [("password", "password")],

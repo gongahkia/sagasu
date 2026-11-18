@@ -409,6 +409,15 @@ class LivePictureTests(DeskCase):
                     self.assertEqual(await send({"kind": "key", "key": "Enter"}), 204)
                     self.assertEqual(await page.title(), "sent:someone@smu.edu.sg")
 
+                    # A stray tap left nothing selected: text still reaches the
+                    # page's only box, rather than vanishing.
+                    await page.fill("#email", "")
+                    await page.evaluate("document.activeElement.blur()")
+                    self.assertEqual(
+                        await send({"kind": "text", "text": "Again1!"}), 204
+                    )
+                    self.assertEqual(await page.input_value("#email"), "Again1!")
+
                     for refused in (
                         {"kind": "key", "key": "Control+L"},
                         {"kind": "key", "key": "F12"},
@@ -424,6 +433,14 @@ class LivePictureTests(DeskCase):
 
                     view.state = "password"
                     self.assertEqual((await self.status(cookie))["field"], "password")
+                    # A wrong password: retype into a hidden box, not an
+                    # Authenticator message, even while the job awaits approval.
+                    view.state = "failed"
+                    self.desk._job().status = "awaiting_mfa"
+                    state = await self.status(cookie)
+                    self.assertEqual(state["field"], "password")
+                    self.assertIn("type it again", state["message"])
+                    self.desk._job().status = "running"
 
                     # A link that opens a tab: the tab is closed at once.
                     await page.click("#away")
@@ -441,6 +458,104 @@ class LivePictureTests(DeskCase):
                 self.assertEqual(status, 204)
             finally:
                 await browser.close()
+
+
+async def settle(page, selector, wanted, attribute=None):
+    """Wait for an element to read as wanted. The page's policy forbids the
+    evaluated scripts wait_for_function would use, so look from outside."""
+    for _ in range(250):
+        value = await (
+            page.get_attribute(selector, attribute)
+            if attribute
+            else page.text_content(selector)
+        )
+        if wanted(value or ""):
+            return value
+        await asyncio.sleep(0.02)
+    raise AssertionError(f"{selector} never settled: {value!r}")
+
+
+class PageScriptTests(DeskCase):
+    """The sign-in page's own script, in a real browser, as a person uses it."""
+
+    async def test_the_typing_box_types_reports_and_keeps_its_kind_while_used(self):
+        import uvicorn
+        from playwright.async_api import async_playwright
+
+        from tests.test_remote import free_port
+
+        port = free_port()
+        server = uvicorn.Server(
+            uvicorn.Config(self.app, host="127.0.0.1", port=port, log_level="error")
+        )
+        serving = asyncio.create_task(server.serve())
+        self.addAsyncCleanup(lambda: asyncio.gather(serving, return_exceptions=True))
+        self.addCleanup(setattr, server, "should_exit", True)
+        while not server.started:
+            await asyncio.sleep(0.02)
+        trusted = patch.object(
+            FBSClient, "_trusted_login_url", staticmethod(lambda url: True)
+        )
+        async with async_playwright() as playwright:
+            if not Path(playwright.chromium.executable_path).is_file():
+                self.skipTest("Install Playwright Chromium to run browser tests")
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=[
+                    f"--host-resolver-rules=MAP {HOST} 127.0.0.1, MAP * ~NOTFOUND",
+                    "--no-proxy-server",
+                ],
+            )
+            try:
+                microsoft = await (await browser.new_context()).new_page()
+                await microsoft.set_content(STAND_IN)
+                person = await (await browser.new_context()).new_page()
+                await person.goto(f"http://{HOST}:{port}/sign-in")
+                await person.fill("#key", KEY)
+                await person.click("button[type=submit]")
+                for _ in range(200):
+                    if self.desk.view is not None:
+                        break
+                    await asyncio.sleep(0.02)
+                await self.desk.view.attach(microsoft, None)
+                self.desk.view.state = "email"
+                with trusted:
+                    await person.wait_for_selector("#typing", state="visible")
+                    self.assertEqual(
+                        await person.get_attribute("#text", "type"), "email"
+                    )
+                    await person.fill("#text", "someone@smu.edu.sg")
+                    await person.click("#send")
+                    await settle(person, "#note", lambda t: t.startswith("Typed"))
+                    self.assertEqual(
+                        await person.text_content("#note"),
+                        "Typed 18 characters and pressed Enter.",
+                    )
+                    self.assertEqual(await microsoft.title(), "sent:someone@smu.edu.sg")
+
+                    # Mid-typing, the box keeps its kind; once empty, it changes.
+                    self.desk.view.state = "password"
+                    await person.focus("#text")
+                    await person.keyboard.type("half")
+                    await person.wait_for_timeout(2500)
+                    self.assertEqual(
+                        await person.get_attribute("#text", "type"), "email"
+                    )
+                    await person.fill("#text", "")
+                    await settle(
+                        person, "#text", lambda t: t == "password", attribute="type"
+                    )
+
+                    # Refused text: nothing typed, and Enter is not pressed.
+                    await microsoft.set_content(STAND_IN)
+                    await person.fill("#text", "bell\u0007")
+                    await person.click("#send")
+                    await settle(person, "#note", lambda t: "could not" in t)
+                    self.assertEqual(await microsoft.input_value("#email"), "")
+                    self.assertEqual(await microsoft.title(), "")
+            finally:
+                await browser.close()
+                await self.desk.view.detach()
 
 
 class PathTests(unittest.TestCase):

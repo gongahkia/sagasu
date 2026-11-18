@@ -73,6 +73,14 @@ SIGN_IN_PROMPTS = frozenset(
         "failed",
     }
 )
+# Failures that end a sign-in even with a person watching; anything else that
+# reads as "failed" (a mistyped password, a missed approval) they can retry.
+STOPPING_FAILURES = (
+    "too many times",
+    "account has been locked",
+    "sign-in was blocked",
+    "sign in was blocked",
+)
 PROFILE_PATH = DEFAULT_PROFILE
 AUTH_TIMEOUT_MS = 600000
 
@@ -979,6 +987,15 @@ class FBSClient:
                     reason="authentication_failed",
                 )
             if (
+                state == "failed"
+                and view is not None
+                and not await self._sign_in_stopped()
+            ):
+                # A person is on the web sign-in page. Microsoft lets them type
+                # the password again, or ask for another approval, right there.
+                await self.page.wait_for_timeout(750)
+                continue
+            if (
                 state in {"authenticator", "failed", "manual"}
                 and (state, prompt) not in notifications
             ):
@@ -1128,6 +1145,14 @@ class FBSClient:
         if self.auth_notify:
             await self.auth_notify(message)
         raise AuthenticationRequired(message, reason="authentication_timeout")
+
+    async def _sign_in_stopped(self) -> bool:
+        """A refusal that trying again on the same page cannot fix."""
+        try:
+            body = (await self.page.locator("body").inner_text(timeout=2000)).casefold()
+        except Exception:
+            return True
+        return any(text in body for text in STOPPING_FAILURES)
 
     async def _passkey_resume_url(self) -> str | None:
         """Read Microsoft's supplied method-picker continuation without calling its APIs."""
