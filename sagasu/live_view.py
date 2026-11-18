@@ -16,7 +16,7 @@ LIVE_VIEW = contextvars.ContextVar("sagasu_live_view", default=None)
 
 # Microsoft's sign-in pages switch to their narrow layout below about 600px,
 # which reads well both on a phone and in a desktop browser.
-VIEWPORT = {"width": 480, "height": 860}
+VIEWPORT = {"width": 480, "height": 700}
 
 
 class LiveView:
