@@ -26,13 +26,14 @@ A remote call never types or clicks on a Microsoft page. When the FBS session ha
 
 ```
 agent --HTTPS + Authorization: Bearer <key>--> Caddy :443 (TLS certificate)
-        --> 127.0.0.1:8765  Sagasu host (API-key check, restricted tools)
+        --> /run/sagasu/http.sock  Sagasu host (API-key check, restricted tools)
               --> one Chromium window on a virtual display --> FBS
 ```
 
-- `sagasu.service` runs `sagasu host-run` as the unprivileged `sagasu` user. With `SAGASU_HTTP_PORT` set, the host never exits when idle and shuts down in order on SIGTERM.
+- `sagasu.service` runs `sagasu host-run` as the unprivileged `sagasu` user. With a listener set, the host never exits when idle and shuts down in order on SIGTERM.
 - `sagasu-xvfb.service` provides the virtual display. The browser is not headless, so a person can sign in to it.
-- The listener binds to loopback only. Caddy is the only thing reachable from outside, and it forwards only `/mcp`.
+- The listener is a socket file that only its own account and Caddy can open, so no other local account can reach it. Caddy is the only thing reachable from outside, and it forwards only `/mcp` and the OAuth paths.
+- Each teammate's copy (below) is the same stack under its own account, display, socket and host name.
 - Each request is an independent POST answered with JSON. There are no sessions and no event stream, so agents keep working across a service restart.
 - The server stores the SHA-256 digest of each API key, never the key.
 - Code, interpreter and browser binaries are owned by root. Sagasu's state lives in `/var/lib/sagasu` (mode 0700).
@@ -100,6 +101,31 @@ sudo bash sagasu-src/deploy/server/install.sh --update   # after copying new cod
 
 Changing a setting restarts the service, which closes the browser. If agents then report `sign_in_required_on_host`, run `sudo sagasu-signin` again.
 
+## Teammates' copies
+
+A copy serves one SMU account. Never give a teammate a key to yours: everything they did would happen as you. Give them their own copy, on the same server:
+
+```bash
+sudo sagasu-ctl instance-add alex                         # https://alex.<your host>/mcp
+sudo sagasu-ctl access-add alex 'ssh-ed25519 AAAA... alex' # their SSH public key
+sudo sagasu-ctl instance-list
+sudo sagasu-ctl --instance alex status                    # any copy command, for their copy
+sudo sagasu-ctl access-remove alex                        # their SSH access only
+sudo sagasu-ctl instance-remove alex --yes                # the copy, its sign-in and data
+```
+
+`instance-add` creates a separate account (`sagasu-alex`), state folder, virtual display, socket, settings file and Caddy site. The host name is the owner's with the copy's name in front, so with sslip.io it needs no DNS change. The copy starts with booking off, OAuth on and no usable key.
+
+`access-add` creates a login, `fbs-alex`, that has no password and accepts only that key. The key can run only `sagasu-self alex`, which accepts a fixed list of commands for that copy (`signin`, `status`, `key-add`, `key-remove`, `connections`, `writes`, `oauth`, `restart`, `forget-sign-in`, `help`). It can forward only to that copy's own sign-in view ports. There is no shell, no other forwarding, and no access to other copies. The teammate signs in with:
+
+```bash
+ssh -t -L 6080:127.0.0.1:<view port> fbs-alex@SERVER signin
+```
+
+`access-add` prints the view port. The teammate then opens `http://localhost:6080/vnc.html?autoconnect=1&resize=scale`, as with the owner's sign-in.
+
+The installer adds `/etc/ssh/sshd_config.d/60-sagasu.conf`, which reads these keys from root-owned files in `/etc/ssh/sagasu_keys/` and allows local forwarding only. It checks the file with `sshd -t` before reloading SSH. Anyone with root on the server can still reach every copy's sign-in, so only host copies for people who trust whoever administers the server.
+
 ## Connecting an agent
 
 - URL: `https://HOST/mcp` (streamable HTTP)
@@ -139,8 +165,9 @@ All in `/etc/sagasu/sagasu.env`. See `sagasu.env.example`.
 
 | Setting | Meaning |
 | --- | --- |
-| `SAGASU_HTTP_PORT` | Turns the listener on and makes the host a long-lived service. 1024–65535. Caddy forwards to `127.0.0.1:8765`; change `reverse_proxy` in `/etc/caddy/Caddyfile` to match. |
-| `SAGASU_HTTP_BIND` | Loopback address only. Default `127.0.0.1`. Change `reverse_proxy` to match. |
+| `SAGASU_HTTP_SOCKET` | Turns the listener on as a socket file (absolute path, at most 100 characters) and makes the host a long-lived service. The kit uses `/run/sagasu/http.sock`, which Caddy forwards to. Set this or `SAGASU_HTTP_PORT`, not both. |
+| `SAGASU_HTTP_PORT` | Instead of a socket: a loopback TCP port, 1024–65535. Any local account can connect to it, so prefer the socket. Change `reverse_proxy` in `/etc/caddy/Caddyfile` to match. |
+| `SAGASU_HTTP_BIND` | With `SAGASU_HTTP_PORT`: loopback address only. Default `127.0.0.1`. |
 | `SAGASU_HTTP_ALLOWED_HOSTS` | Public host name(s) agents use, comma-separated. Each name also needs to be a site address in `/etc/caddy/Caddyfile`. |
 | `SAGASU_HTTP_KEYS` | `label:sha256hex`, comma-separated, 1–16 entries. |
 | `SAGASU_HTTP_OAUTH` | `off` (default) or `on`: serve the OAuth sign-in for apps that cannot send a key header. |
