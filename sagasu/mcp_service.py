@@ -40,7 +40,7 @@ from .fbs_account import (
 )
 from .observability import event, observed_operation
 from .origin import is_remote
-from .errors import public_failure
+from .errors import public_failure, sign_in_instruction
 from .config import ConfigurationRequired
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
 from .read_backends import HybridReads, READ_FAILURES
@@ -753,7 +753,7 @@ class AgentService:
                     if unknown
                     else (
                         (
-                            "Tell the user that SMU sign-in may be needed on the server; a remote connection cannot sign in."
+                            "SMU sign-in may be needed; " + sign_in_instruction() + "."
                             if remote
                             else "Run login, complete SMU sign-in/MFA, then retry the read."
                         )

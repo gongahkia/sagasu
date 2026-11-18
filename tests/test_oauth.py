@@ -361,6 +361,31 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         status, headers, _ = await self.request("GET", "/authorize?" + query)
         return status, headers.get("location", "")
 
+    async def through_desk(self, headers):
+        """After the key: the SMU sign-in page, driven as its script drives it.
+
+        The fake backend signs in at once, so the page sends the app back."""
+        self.assertEqual(headers["location"], "/sign-in")
+        cookie = headers["set-cookie"].split(";", 1)[0]
+        status, _, body = await self.request(
+            "POST",
+            "/sign-in/start",
+            {},
+            {"Cookie": cookie, "Origin": f"https://{HOST}"},
+        )
+        self.assertEqual(status, 200, body)
+        state = None
+        for _ in range(250):
+            status, _, body = await self.request(
+                "GET", "/sign-in/status", headers={"Cookie": cookie}
+            )
+            self.assertEqual(status, 200, body)
+            state = json.loads(body)
+            if state["next"]:
+                return state["next"]
+            await asyncio.sleep(0.02)
+        self.fail(f"the SMU sign-in page never sent the app back: {state}")
+
     async def sign_in(self, key=KEY, redirect=CHATGPT):
         _, client = await self.register(redirect)
         verifier, challenge = pkce()
@@ -373,7 +398,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             headers={"Origin": f"https://{HOST}"},
         )
         self.assertEqual(status, 303)
-        location = headers["location"]
+        location = await self.through_desk(headers)
         self.assertTrue(location.startswith(redirect), location)
         code = parse_qs(urlsplit(location).query)["code"][0]
         status, _, body = await self.request(
@@ -639,7 +664,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             "/oauth/sign-in",
             form={"request": request_id, "key": KEY, "action": "allow"},
         )
-        code = parse_qs(urlsplit(headers["location"]).query)["code"][0]
+        code = parse_qs(urlsplit(await self.through_desk(headers)).query)["code"][0]
         exchange = {
             "grant_type": "authorization_code",
             "code": code,
@@ -837,6 +862,52 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
             await self.start()
         status, _, _ = await self.mcp("tools/list", token=tokens["access_token"])
         self.assertEqual(status, 401)
+
+    async def test_the_smu_sign_in_page_is_served_without_a_key_header(self):
+        from sagasu import errors
+
+        status, headers, body = await self.request("GET", "/sign-in")
+        self.assertEqual(status, 200)
+        self.assertIn(b'name="key"', body)
+        status, _, _ = await self.request("GET", "/sign-in/status")
+        self.assertEqual(status, 401)  # the page's own refusal: no visit
+        status, _, _ = await self.request(
+            "GET", "/sign-in", headers={"Host": "other.example"}
+        )
+        self.assertEqual(status, 421)
+        status, _, _ = await self.request("GET", "/sign-inx")
+        self.assertEqual(status, 401)  # the gate's: not the page's path
+        # Agents are told where to send a person to sign in.
+        self.assertEqual(errors.SIGN_IN_URL, f"https://{HOST}/sign-in")
+        await self.stop_host()
+        self.assertIsNone(errors.SIGN_IN_URL)
+
+    async def test_a_key_opens_the_sign_in_page_without_any_app(self):
+        status, headers, _ = await self.request(
+            "POST",
+            "/sign-in",
+            form={"key": KEY},
+            headers={"Origin": f"https://{HOST}"},
+        )
+        self.assertEqual((status, headers["location"]), (303, "/sign-in"))
+        cookie = headers["set-cookie"].split(";", 1)[0]
+        status, _, body = await self.request(
+            "POST",
+            "/sign-in/start",
+            {},
+            {"Cookie": cookie, "Origin": f"https://{HOST}"},
+        )
+        self.assertEqual(status, 200, body)
+        for _ in range(250):
+            _, _, body = await self.request(
+                "GET", "/sign-in/status", headers={"Cookie": cookie}
+            )
+            state = json.loads(body)
+            if state["phase"] == "signed_in":
+                break
+            await asyncio.sleep(0.02)
+        self.assertEqual((state["phase"], state["next"]), ("signed_in", None))
+        self.assertIn(("login", None), self.backend.calls)
 
     async def test_other_paths_still_need_a_key(self):
         for path in ("/", "/oauth", "/admin", "/.well-known/openid-configuration"):

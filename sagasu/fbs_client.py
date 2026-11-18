@@ -23,6 +23,7 @@ from urllib.parse import parse_qs, urlparse
 
 from .observability import event, observed_operation, observed_step, step
 from .origin import is_remote
+from .live_view import LIVE_VIEW
 from .action_journal import checkpoint_verified
 from .personal_options import SCRAPE_PARAM_CHOICES
 from .personal import SMU_EMAIL_RE
@@ -892,6 +893,18 @@ class FBSClient:
 
     @observed_step("auth.login")
     async def _complete_interactive_authentication(self) -> None:
+        # A login started from the server's web sign-in page: the person there
+        # sees this page and taps and types into it (live_view.py).
+        view = LIVE_VIEW.get()
+        if view is None or not self.page:
+            return await self._interactive_authentication(None)
+        await view.attach(self.page, self.context)
+        try:
+            return await self._interactive_authentication(view)
+        finally:
+            await view.detach()
+
+    async def _interactive_authentication(self, view) -> None:
         if not self.page:
             raise FBSError("Browser page is unavailable")
         started = asyncio.get_running_loop().time()
@@ -919,6 +932,8 @@ class FBSClient:
                 await self.page.wait_for_timeout(750)
                 continue
             state, prompt = await self._classify_auth_state()
+            if view is not None:
+                view.state = state
             state_changed = state != previous_state
             if state_changed:
                 event("auth.state", state=state)

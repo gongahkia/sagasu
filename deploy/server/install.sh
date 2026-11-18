@@ -204,6 +204,21 @@ if grep -q '^SAGASU_HTTP_PORT=8765$' "$SETTINGS" &&
     sed -i 's|^SAGASU_HTTP_PORT=8765$|SAGASU_HTTP_SOCKET=/run/sagasu/http.sock|' "$SETTINGS"
 fi
 
+# Teammates' copies: refresh each proxy site sagasu-ctl wrote, so they publish
+# the same paths as the owner's (checked with the whole configuration below).
+for instance in /etc/sagasu/instances/*; do
+    name=${instance##*/}
+    site=/etc/caddy/sites/$name.caddy
+    [[ -f $instance && $name =~ ^[a-z][a-z0-9]{1,15}$ ]] || continue
+    head -n 1 "$site" 2>/dev/null | grep -q "^# One teammate's copy of Sagasu" || continue
+    site_host=$(sed -n 's/^HOST=\([a-z0-9.-]*\)$/\1/p' "$instance")
+    [[ -n $site_host ]] || continue
+    sed -e "s/@HOST@/$site_host/" -e "s#@SOCKET@#/run/sagasu-$name/http.sock#" \
+        "$KIT/Caddysite.template" >"$site.sagasu-new"
+    chmod 0644 "$site.sagasu-new"
+    mv "$site.sagasu-new" "$site"
+done
+
 # An update refreshes a proxy configuration this kit wrote, never one written by hand.
 if [[ -z $HOST ]] && head -n 1 /etc/caddy/Caddyfile 2>/dev/null |
     grep -q '^# Publishes only Sagasu'; then

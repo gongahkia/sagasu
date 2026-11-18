@@ -116,11 +116,44 @@ REASONS = {
 }
 
 
+# Where a person signs in to SMU from a browser, when this host serves its web
+# sign-in page (set by the remote listener). Agents pass it on to the person.
+SIGN_IN_URL = None
+
+
+def set_sign_in_url(url):
+    global SIGN_IN_URL
+    SIGN_IN_URL = url
+
+
+def sign_in_instruction():
+    """What an agent tells its person when only that person can sign in."""
+    if SIGN_IN_URL is None:
+        return "tell the user that they must sign in on the server themselves"
+    return (
+        f"give the user this link to open in a browser: {SIGN_IN_URL} . There they "
+        "enter their access key and sign in to SMU with their own account, "
+        "approving it in Microsoft Authenticator"
+    )
+
+
 def public_failure(error):
     reason = getattr(error, "reason", None)
     if reason not in REASONS:
         return {}
     message, action, tool = REASONS[reason]
+    if reason == "sign_in_required_on_host":
+        action = (
+            "SMU sign-in has lapsed; "
+            + sign_in_instruction()
+            + ". Do not retry until they say they have signed in."
+        )
+    elif reason == "session_renewal_pending":
+        action = (
+            "Retry the same request once. If it fails again, SMU sign-in is needed: "
+            + sign_in_instruction()
+            + "."
+        )
     details = getattr(error, "details", {})
     # Only small counts/flags and known catalogue labels cross the boundary.
     safe = {
@@ -139,10 +172,16 @@ def public_failure(error):
                     for label in SCRAPE_PARAM_CHOICES["facility_type"]
                     if label in labels
                 ]
-    return {
+    failure = {
         "reason": reason,
         "message": message,
         "next_action": action,
         "next_tool": tool,
         "details": safe,
     }
+    if (
+        reason in {"sign_in_required_on_host", "session_renewal_pending"}
+        and SIGN_IN_URL is not None
+    ):
+        failure["sign_in_url"] = SIGN_IN_URL
+    return failure

@@ -641,6 +641,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                             ),
                         ),
                         oauth_store=settings.preferences.with_name("oauth.sqlite3"),
+                        service=service,
                     )
                     await remote_http.start()
             # The server context manager waits for all accepted transports on

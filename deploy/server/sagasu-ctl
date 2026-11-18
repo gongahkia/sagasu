@@ -13,8 +13,8 @@ For a copy (the owner's, or a teammate's with --instance NAME):
 
 For the owner only, to give a teammate a copy signed in to their own account:
   sagasu-ctl instance-list
-  sagasu-ctl instance-add NAME                   create a copy with its own address
-  sagasu-ctl access-add NAME 'ssh-ed25519 AAAA...'   let the teammate's SSH key in
+  sagasu-ctl instance-add NAME [--read-only]     a copy with its own address and key
+  sagasu-ctl access-add NAME 'ssh-ed25519 AAAA...'   optional: an SSH login for them
   sagasu-ctl access-remove NAME
   sagasu-ctl instance-remove NAME --yes          delete the copy and its data
 """
@@ -184,6 +184,7 @@ def copy_command(copy, arguments):
             print(f"{unit:20} {state}")
         host = value(lines, "SAGASU_HTTP_ALLOWED_HOSTS", path=copy.env).split(",")[0]
         print(f"{'address':20} https://{host}/mcp")
+        print(f"{'smu sign-in page':20} https://{host}/sign-in")
         print(
             f"{'remote writes':20} {value(lines, 'SAGASU_HTTP_WRITES', 'off', copy.env)}"
         )
@@ -296,7 +297,7 @@ def reload_caddy():
     return True
 
 
-def instance_add(name):
+def instance_add(name, writes="on"):
     check_name(name, exists=False)
     owner = read(Copy())
     base = value(owner, "SAGASU_HTTP_ALLOWED_HOSTS").split(",")[0]
@@ -332,9 +333,9 @@ def instance_add(name):
         "root",
         0o644,
     )
-    # The copy needs one key to start. Nobody ever sees this one: the teammate's
-    # first key-add replaces it.
-    unused = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+    # The teammate's key, shown once below. With it they connect their app and
+    # sign in to SMU on the copy's own sign-in page; they never run a command.
+    key = "sgs_" + secrets.token_urlsafe(32)
     write_file(
         copy.env,
         "\n".join(
@@ -352,8 +353,8 @@ def instance_add(name):
                 "SAGASU_SESSION_COOKIES=fbs",
                 f"SAGASU_HTTP_SOCKET={socket}",
                 f"SAGASU_HTTP_ALLOWED_HOSTS={host}",
-                f"SAGASU_HTTP_KEYS=setup:{unused}",
-                "SAGASU_HTTP_WRITES=off",
+                f"SAGASU_HTTP_KEYS=main:{hashlib.sha256(key.encode()).hexdigest()}",
+                f"SAGASU_HTTP_WRITES={writes}",
                 "SAGASU_HTTP_OAUTH=on",
                 "",
             ]
@@ -369,10 +370,13 @@ def instance_add(name):
         sys.exit("The web proxy rejected the new site; the copy was not published.")
     subprocess.run(["systemctl", "enable", "--now", *copy.units], check=True)
     print(
-        f"Created the copy '{name}'.\n"
+        f"Created the copy '{name}'. Booking by agents is {writes}.\n\n"
+        f"Send {name} these two things. The key is shown only this once:\n\n"
         f"  Address:  https://{host}/mcp\n"
-        f"  Next: ask {name} for an SSH public key, then run\n"
-        f"        sudo sagasu-ctl access-add {name} 'ssh-ed25519 AAAA...'"
+        f"  Key:      {key}\n\n"
+        "They add the address in ChatGPT or Claude, sign in with the key, then sign\n"
+        "in to their own SMU account on the page that opens. They can sign in to SMU\n"
+        f"again at any time at https://{host}/sign-in"
     )
 
 
@@ -511,6 +515,8 @@ def main(arguments):
         instance_list()
     elif command == "instance-add" and len(arguments) == 2:
         instance_add(arguments[1])
+    elif command == "instance-add" and arguments[2:] == ["--read-only"]:
+        instance_add(arguments[1], writes="off")
     elif command == "instance-remove" and arguments[2:] == ["--yes"]:
         instance_remove(arguments[1])
     elif command == "access-add" and len(arguments) >= 3:

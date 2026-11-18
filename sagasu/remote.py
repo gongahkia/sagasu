@@ -26,6 +26,7 @@ from pathlib import Path
 from .config import ConfigError
 from .oauth import CLIENT_ADDRESS, PUBLIC_PATHS
 from .observability import event
+from .signin_desk import is_desk_path
 
 MCP_PATH = "/mcp"
 # Requests being served at once, counted only after the key has matched, so
@@ -88,10 +89,12 @@ class KeyGate:
     was issued for, and the OAuth paths themselves are served without one.
     """
 
-    def __init__(self, app, keys, oauth=None, allowed_hosts=()):
+    def __init__(self, app, keys, oauth=None, allowed_hosts=(), desk=False):
         self.app = app
         self.keys = dict(keys)
         self.oauth = oauth
+        # The SMU sign-in page checks the key itself (signin_desk.py).
+        self.desk = desk
         self.allowed_hosts = frozenset(allowed_hosts)
         self.active = 0
         self.rejected = {}
@@ -143,7 +146,10 @@ class KeyGate:
             await self.app(scope, receive, send)
             return
         headers = [(name.lower(), value) for name, value in scope.get("headers") or ()]
-        if self.oauth is not None and scope.get("path") in PUBLIC_PATHS:
+        path = scope.get("path") or ""
+        if (self.oauth is not None and path in PUBLIC_PATHS) or (
+            self.desk and is_desk_path(path)
+        ):
             if not self.host_allowed(headers):
                 await self.reply(
                     send,
@@ -322,11 +328,13 @@ def bind_loopback(host, port):
 class RemoteHTTP:
     """Serve one remote MCP server inside the host's event loop."""
 
-    def __init__(self, listener, server, oauth_store=None):
+    def __init__(self, listener, server, oauth_store=None, service=None):
         self.listener = listener
         self.mcp_server = server
         self.oauth_store = oauth_store
+        self.service = service
         self.oauth = None
+        self.desk = None
         self.server = None
         self.task = None
 
@@ -359,6 +367,19 @@ class RemoteHTTP:
             store = OAuthStore(self.oauth_store)
             store.clear()
             store.close()
+        if self.service is not None:
+            # A person with a key signs in to SMU here, from any browser.
+            from .errors import set_sign_in_url
+            from .signin_desk import SignInDesk
+
+            self.desk = SignInDesk(
+                self.service,
+                self.listener.keys,
+                f"https://{self.listener.allowed_hosts[0]}",
+            )
+            # The SDK serves extra routes from this list alongside /mcp.
+            self.mcp_server._custom_starlette_routes.extend(self.desk.routes())
+            set_sign_in_url(self.desk.url)
         if self.listener.oauth:
             from .oauth import SagasuOAuth
 
@@ -368,8 +389,10 @@ class RemoteHTTP:
                 self.listener.allowed_hosts[0],
                 self.listener.oauth_redirect_hosts,
             )
-            # The SDK serves extra routes from this list alongside /mcp.
             self.mcp_server._custom_starlette_routes.extend(self.oauth.routes())
+            if self.desk is not None:
+                self.oauth.desk = self.desk
+                self.desk.oauth = self.oauth
         app = self.mcp_server.streamable_http_app(
             streamable_http_path=MCP_PATH,
             json_response=True,
@@ -398,6 +421,7 @@ class RemoteHTTP:
                     self.listener.keys,
                     oauth=self.oauth,
                     allowed_hosts=self.listener.allowed_hosts,
+                    desk=self.desk is not None,
                 ),
                 log_config=None,
                 access_log=False,
@@ -447,4 +471,10 @@ class RemoteHTTP:
             if self.oauth is not None:
                 self.oauth.close()
                 self.oauth = None
+            if self.desk is not None:
+                from .errors import set_sign_in_url
+
+                await self.desk.close()
+                self.desk = None
+                set_sign_in_url(None)
         event("remote.stopped")

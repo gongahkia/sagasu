@@ -1,6 +1,6 @@
 # One teammate's copy of Sagasu, written by sagasu-ctl instance-add.
 @HOST@ {
-	@mcp path /mcp /authorize /token /register /revoke /oauth/sign-in /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server
+	@mcp path /mcp /sign-in /sign-in/* /authorize /token /register /revoke /oauth/sign-in /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server
 	handle @mcp {
 		request_body {
 			max_size 4MB

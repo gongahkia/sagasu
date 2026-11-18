@@ -326,7 +326,7 @@ def create_server(
         else (
             "REMOTE CONNECTION: you reach a private server over HTTPS with an API key; it stays signed in to one person's FBS account. "
             "Tools named below that are missing from your tool list are switched off for remote use. "
-            "You cannot sign in or approve MFA from here. If an operation fails with sign_in_required_on_host, tell the user to sign in on the server and stop retrying; on session_renewal_pending retry once. "
+            "You cannot sign in or approve MFA from here. If an operation fails with sign_in_required_on_host, give the user the sign_in_url from the error (they sign in to SMU there themselves) and stop retrying until they say they have; on session_renewal_pending retry once. "
             + (
                 ""
                 if remote.writes
@@ -1334,9 +1334,9 @@ def create_server(
                 "policy": "Tools missing from the tool list are switched off for remote use. Sequences below that need them do not apply to this connection.",
             }
             document["authentication"] = [
-                "Sign-in happens on the server, by its owner. Remote connections cannot sign in or read MFA prompts",
+                "The person signs in to SMU themselves, in a browser, at the sign_in_url that sign-in errors carry. Remote connections cannot sign in or read MFA prompts",
                 "session_status verifies the saved session without credentials",
-                "sign_in_required_on_host: tell the user to sign in on the server and stop retrying until they confirm",
+                "sign_in_required_on_host: give the user the sign_in_url from the error and stop retrying until they confirm they have signed in",
                 "session_renewal_pending: the session did not renew in time; retry the request once",
             ]
             document["recovery"]["session"] = document["authentication"][1]

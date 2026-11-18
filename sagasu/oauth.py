@@ -348,6 +348,9 @@ class SagasuOAuth:
         self.codes = {}
         self.wrong_keys = Limiter(WRONG_KEYS_PER_ADDRESS, WRONG_KEY_WINDOW)
         self.registrations = Limiter(REGISTRATIONS_PER_ADDRESS, 3600)
+        # The SMU sign-in page (signin_desk.py). With it, an app is sent back
+        # only once this copy is signed in to SMU.
+        self.desk = None
         self.store.keep_only_keys(keys)
         self.store.prune(self.clock())
 
@@ -591,17 +594,16 @@ class SagasuOAuth:
         redirect_host = urlsplit(str(params.redirect_uri)).hostname or ""
         if form is None:
             return self._form(request_id, pending, redirect_host)
+        continuation = {
+            "client_id": pending["client_id"],
+            "client_name": pending["client_name"],
+            "params": params,
+            "redirect_host": redirect_host,
+        }
         if form.get("action") == "cancel":
             self.pending.pop(request_id, None)
             return RedirectResponse(
-                construct_redirect_uri(
-                    str(params.redirect_uri),
-                    error="access_denied",
-                    error_description="The sign-in was cancelled.",
-                    state=params.state,
-                ),
-                status_code=303,
-                headers=NO_STORE,
+                self.refuse(continuation), status_code=303, headers=NO_STORE
             )
         address = self._address(request)
         if self.wrong_keys.used_up(address):
@@ -637,6 +639,17 @@ class SagasuOAuth:
                 400,
             )
         self.pending.pop(request_id, None)
+        if self.desk is not None:
+            # Next: sign in to SMU on this server; the app is sent back after.
+            return self.desk.begin(request, label, continuation)
+        return RedirectResponse(
+            self.finish(continuation, label), status_code=303, headers=NO_STORE
+        )
+
+    def finish(self, continuation, label):
+        """The app's redirect with a fresh one-time code for this key."""
+        params = continuation["params"]
+        now = self.clock()
         key_digest = next(known for known, name in self.keys.items() if name == label)
         self.codes = {
             key: value for key, value in self.codes.items() if value.expires_at > now
@@ -650,22 +663,28 @@ class SagasuOAuth:
             # one, so an app that names it when refreshing is not refused.
             scopes=params.scopes or [SCOPE],
             expires_at=now + CODE_SECONDS,
-            client_id=pending["client_id"],
+            client_id=continuation["client_id"],
             code_challenge=params.code_challenge,
             redirect_uri=params.redirect_uri,
             redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             resource=self.resource,
             subject=label,
             key_digest=key_digest,
-            client_name=pending["client_name"],
-            redirect_host=redirect_host,
+            client_name=continuation["client_name"],
+            redirect_host=continuation["redirect_host"],
         )
-        return RedirectResponse(
-            construct_redirect_uri(
-                str(params.redirect_uri), code=code, state=params.state
-            ),
-            status_code=303,
-            headers=NO_STORE,
+        return construct_redirect_uri(
+            str(params.redirect_uri), code=code, state=params.state
+        )
+
+    @staticmethod
+    def refuse(continuation):
+        params = continuation["params"]
+        return construct_redirect_uri(
+            str(params.redirect_uri),
+            error="access_denied",
+            error_description="The sign-in was cancelled.",
+            state=params.state,
         )
 
     def _form(self, request_id, pending, redirect_host, error=None, status=200):
@@ -820,7 +839,7 @@ button.secondary {{ background: transparent; color: var(--text); border-color: v
 
 FORM_BODY = """<h1>Sign in to Sagasu</h1>
 <p><strong>{app}</strong> wants to use this Sagasu FBS server. It will be sent back to <strong>{host}</strong>.</p>
-<p class="muted">Only continue if you started this from that app yourself. The key is checked here and never given to the app.</p>
+<p class="muted">Only continue if you started this from that app yourself. The key is checked here and never given to the app. Next, you sign in to your own SMU account here, if you are not signed in already.</p>
 {error}
 <form method="post" autocomplete="off">
 <input type="hidden" name="request" value="{request}">
