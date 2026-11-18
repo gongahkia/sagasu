@@ -52,7 +52,7 @@ KEY_RE='^[a-z0-9][a-z0-9_-]{0,31}:[0-9a-f]{64}$'
 recorded_host() {
     sed -n 's/^SAGASU_HTTP_ALLOWED_HOSTS=\([a-z0-9.-]*\).*/\1/p' "$SETTINGS" | tail -n 1
 }
-if [[ -e $SETTINGS ]] && ! grep -q '^SAGASU_HTTP_PORT=' "$SETTINGS"; then
+if [[ -e $SETTINGS ]] && ! grep -qE '^SAGASU_HTTP_(PORT|SOCKET)=' "$SETTINGS"; then
     printf '%s\n' \
         "$SETTINGS exists but has no remote listener settings." \
         'It may belong to deploy/linux. Move it aside, or add the SAGASU_HTTP_*' \
@@ -104,7 +104,9 @@ if ! id sagasu >/dev/null 2>&1; then
 fi
 install -d -o root -g root -m 0755 /opt/sagasu /opt/sagasu/bin /opt/sagasu/browsers
 install -d -o sagasu -g sagasu -m 0700 /var/lib/sagasu
-install -d -o root -g sagasu -m 0750 /etc/sagasu
+# 0751: every copy's account must pass through to its own settings file, but
+# none may list the folder; each file keeps its own owner and mode.
+install -d -o root -g sagasu -m 0751 /etc/sagasu
 # Teammates' copies (sagasu-ctl instance-add): their settings, web proxy sites
 # and SSH keys, all owned by root.
 install -d -o root -g root -m 0755 /etc/sagasu/instances /etc/caddy/sites /etc/ssh/sagasu_keys

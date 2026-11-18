@@ -37,6 +37,9 @@ SITES = "/etc/caddy/sites"
 SSH_KEYS = "/etc/ssh/sagasu_keys"
 KIT = "/opt/sagasu/app/deploy/server"
 LABEL = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
+# A teammate's copy starts with this key so it can run; nobody holds it, and the
+# copy's first real key replaces it.
+PLACEHOLDER = "setup"
 NAME = re.compile(r"[a-z][a-z0-9]{1,15}")
 RESERVED = {"owner", "root", "admin", "www", "mail", "sagasu", "api", "mcp"}
 PUBLIC_KEY = re.compile(
@@ -188,7 +191,12 @@ def copy_command(copy, arguments):
             f"{'oauth sign-in':20} {value(lines, 'SAGASU_HTTP_OAUTH', 'off', copy.env)}"
             f" ({len(connections(copy))} app(s) signed in)"
         )
-        print(f"{'api keys':20} {', '.join(sorted(keys(copy, lines))) or 'none'}")
+        shown = [
+            label
+            for label in sorted(keys(copy, lines))
+            if not (copy.name and label == PLACEHOLDER)
+        ]
+        print(f"{'api keys':20} {', '.join(shown) or 'none yet (create one with key-add)'}")
         sys.stdout.flush()
         subprocess.run([*copy.launch, "host", "status"])
     elif command in {"writes", "oauth"} and arguments[1:] in (["on"], ["off"]):
@@ -210,6 +218,10 @@ def copy_command(copy, arguments):
             print("To sign one out, remove or replace its key (key-remove LABEL).")
     elif command == "key-add" and len(arguments) == 2:
         label, current = arguments[1], keys(copy, lines)
+        if copy.name:
+            if label == PLACEHOLDER:
+                sys.exit(f"'{PLACEHOLDER}' is reserved; pick another label.")
+            current.pop(PLACEHOLDER, None)
         if not LABEL.fullmatch(label) or label in current or len(current) >= 16:
             sys.exit(
                 "Use a new label: lowercase letters, digits, - or _ (at most 16 keys)."
@@ -320,8 +332,8 @@ def instance_add(name):
         "root",
         0o644,
     )
-    # The copy needs one key to start. Nobody ever sees this one: the teammate
-    # creates their own keys and can then remove it.
+    # The copy needs one key to start. Nobody ever sees this one: the teammate's
+    # first key-add replaces it.
     unused = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
     write_file(
         copy.env,
@@ -382,14 +394,15 @@ def access_add(name, key_text):
                 "--shell",
                 "/bin/sh",
                 "--home-dir",
-                "/nonexistent",
+                "/",
                 "--no-create-home",
                 login,
             ],
             check=True,
         )
     # No password at all ("*"), rather than a locked account: key login only.
-    subprocess.run(["usermod", "-p", "*", login], check=True)
+    # Home "/" (root-owned, nothing of theirs in it) only spares SSH a warning.
+    subprocess.run(["usermod", "-p", "*", "-d", "/", login], check=True)
     os.makedirs(SSH_KEYS, mode=0o755, exist_ok=True)
     options = ",".join(
         [
