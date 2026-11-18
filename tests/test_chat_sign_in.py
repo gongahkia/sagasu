@@ -435,6 +435,17 @@ class ReviewRegressionTests(ChatSignInCase):
         self.assertIsNotNone(self.store.load())  # the saved one still works
         self.assertEqual(self.store.recent()[-1]["outcome"], "saved_password_rejected")
 
+    async def test_a_renewal_that_times_out_with_nothing_saved_asks_to_save(self):
+        # Live finding: with prompts blocked, Microsoft's page may never settle,
+        # so the client reports a plain expiry rather than a sign-in prompt.
+        self.store.erase()
+        self.backend.run = AsyncMock(
+            side_effect=AuthenticationRequired("FBS session expired")
+        )
+        job = await self.finish(self.remote())
+        self.assertEqual(job.error["reason"], "sign_in_setup_needed")
+        self.assertFalse(job.error["retry_safe"])
+
     async def test_a_write_stopped_while_signing_in_is_known_not_submitted(self):
         with remote_origin():
             operation = self.service.start("cancel", ({"reference_number": "BK-1"}, "x"))[

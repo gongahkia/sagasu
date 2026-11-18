@@ -837,6 +837,22 @@ class FBSClient:
                             raise
                         await self._sign_in_with_saved_credentials(fresh=True)
                         renewed = True
+                    if (
+                        not renewed
+                        and self.sign_in_permit is not None
+                        and self._trusted_login_url(self.page.url)
+                    ):
+                        # Still on Microsoft's sign-in when time ran out: with
+                        # its prompts blocked the page may never settle into a
+                        # step, but it is plainly asking for a sign-in.
+                        if not self.may_sign_in:
+                            raise AuthenticationRequired(
+                                "The SMU session has ended.", reason="sign_in_needed"
+                            ) from None
+                        if not self.sign_in_permit.used:
+                            event("auth.silent_renewal", outcome="sign_in_with_saved")
+                            await self._sign_in_with_saved_credentials(fresh=True)
+                            renewed = True
                 if not renewed:
                     raise AuthenticationRequired(
                         "FBS session expired; run an interactive login first"

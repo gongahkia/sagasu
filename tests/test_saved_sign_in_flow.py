@@ -405,6 +405,33 @@ class UnattendedSignInTests(SavedSignInCase):
 class ReviewRegressionTests(SavedSignInCase):
     """Cases found by the independent reviews of this change."""
 
+    async def remote_client(self, interactive=True):
+        with remote_origin():
+            client = self.make_client(interactive=interactive)
+        client.page = Mock(url=LOGIN_URL, goto=AsyncMock(), wait_for_function=AsyncMock())
+        client.page.locator.return_value.count = AsyncMock(return_value=0)
+        client.context = None
+        client._await_silent_renewal = AsyncMock(return_value=False)  # timed out
+        client._sign_in_with_saved_credentials = AsyncMock()
+        client._wait_for_frame = AsyncMock(
+            return_value=Mock(wait_for_selector=AsyncMock())
+        )
+        client._save_session = AsyncMock()
+        return client
+
+    async def test_a_renewal_that_times_out_on_microsoft_signs_in(self):
+        # Live finding: the page never settles while prompts are blocked.
+        client = await self.remote_client()
+        await client.ensure_authenticated()
+        client._sign_in_with_saved_credentials.assert_awaited_once_with(fresh=True)
+
+    async def test_a_check_that_times_out_on_microsoft_never_signs_in(self):
+        client = await self.remote_client(interactive=False)
+        with self.assertRaises(AuthenticationRequired) as caught:
+            await client.ensure_authenticated()
+        self.assertEqual(caught.exception.reason, "sign_in_needed")
+        client._sign_in_with_saved_credentials.assert_not_awaited()
+
     async def test_resuming_a_live_session_checks_no_password(self):
         # Mid-redirect on Microsoft, then FBS: nothing was typed, so nothing
         # was checked, and the copy must not learn its owner from it.

@@ -989,6 +989,17 @@ class AgentService:
                         "sign_in_setup_needed",
                     }:
                         self._pause_remote_sign_in(error.reason)
+                elif refusal is not None:
+                    # Sign-in is on for this copy but this job could not use
+                    # it (nothing saved, or the limits), and the session did
+                    # not renew: say what the person can do, not "retry".
+                    error = AuthenticationRequired(
+                        "SMU sign-in is needed.",
+                        reason=refusal[0],
+                        details=(
+                            {"retry_after_minutes": refusal[1]} if refusal[1] else None
+                        ),
+                    )
                 else:
                     error = AuthenticationRequired(
                         "The saved FBS session did not renew itself.",
