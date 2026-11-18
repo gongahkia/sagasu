@@ -10,6 +10,9 @@ PartOf=sagasu-xvfb.service
 User=sagasu
 Group=sagasu
 UMask=0077
+# The web proxy reaches the remote listener through a socket file in this
+# folder: owned by this service, group caddy, setgid so the socket joins it.
+ExecStartPre=+/usr/bin/install -d -o sagasu -g caddy -m 2750 /run/sagasu
 ExecStart=/opt/sagasu/bin/sagasu-launch host-run
 Restart=always
 RestartSec=5

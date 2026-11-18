@@ -48,6 +48,14 @@ FBS_URL = "https://fbs.intranet.smu.edu.sg/home"
 FBS_HOST = "fbs.intranet.smu.edu.sg"
 # How long a remote read waits for Microsoft's own single sign-on redirect.
 SILENT_RENEWAL_SECONDS = 25
+# During a remote request, the browser may load Microsoft's pages only as
+# documents and their assets. A sign-on redirect needs nothing else, while an
+# approval prompt is sent by the page's own background calls (for example to
+# /SAS/BeginAuth), so blocking those means no request reaches anyone's phone.
+MICROSOFT_LOGIN = re.compile(
+    r"^https://(login\.microsoftonline\.com|login\.microsoft\.com|login\.windows\.net)/"
+)
+PASSIVE_RESOURCES = frozenset({"document", "stylesheet", "image", "font", "script"})
 # Microsoft pages that wait for a person. Anything else is a redirect in
 # progress or an error page, and says nothing about whether sign-in is needed.
 SIGN_IN_PROMPTS = frozenset(
@@ -526,6 +534,7 @@ class FBSClient:
         # Microsoft session to renew FBS, never start or steer a sign-in.
         self.silent_renewal = is_remote()
         self.interactive = interactive and not self.silent_renewal
+        self._guarding = False
         self.headless = (
             os.getenv("SAGASU_HEADLESS", "false").lower() in {"1", "true", "yes"}
             if headless is None
@@ -686,8 +695,38 @@ class FBSClient:
             name == FBS_HOST or FBS_HOST.endswith("." + name)
         )
 
+    @staticmethod
+    async def _refuse_prompts(route) -> None:
+        request = route.request
+        # /SAS/ is Microsoft's endpoint family for starting and checking
+        # second-factor prompts; nothing on it is part of a sign-on redirect.
+        if request.resource_type not in PASSIVE_RESOURCES or "/SAS/" in request.url:
+            event("auth.prompt_blocked", resource=request.resource_type)
+            await route.abort()
+        else:
+            await route.fallback()
+
+    async def _guard_microsoft(self) -> None:
+        """Stop Microsoft's pages from starting an approval prompt.
+
+        Installed for remote requests only, for the life of this client, which
+        holds the shared browser exclusively until it exits.
+        """
+        if self.silent_renewal and not self._guarding and self.context is not None:
+            await self.context.route(MICROSOFT_LOGIN, self._refuse_prompts)
+            self._guarding = True
+
+    async def _release_microsoft(self) -> None:
+        if self._guarding and self.context is not None:
+            self._guarding = False
+            try:
+                await self.context.unroute(MICROSOFT_LOGIN, self._refuse_prompts)
+            except Exception:
+                pass
+
     async def __aexit__(self, exc_type, exc, traceback) -> None:
         try:
+            await self._release_microsoft()
             if exc is not None:
                 from .operation_diagnostics import capture_failure
 
@@ -707,6 +746,7 @@ class FBSClient:
         if not self.page:
             raise FBSError("Browser has not been started")
         await self.progress("opening FBS")
+        await self._guard_microsoft()
         try:
             await self.page.goto(FBS_URL, wait_until="domcontentloaded", timeout=60000)
         except PlaywrightTimeoutError:

@@ -48,7 +48,7 @@ SAGASU_READ_BACKEND=auto
 # SAGASU_HEADLESS=true
 # MFA approval remains yours; agents read the prompt with authentication_status.
 # Optional remote listener for a private server (see deploy/server/README.md):
-# SAGASU_HTTP_PORT=8765
+# SAGASU_HTTP_PORT=8765   (or SAGASU_HTTP_SOCKET=/run/sagasu/http.sock)
 # SAGASU_HTTP_ALLOWED_HOSTS=booking.example.org
 # SAGASU_HTTP_KEYS=laptop:<sha256 of the API key, hex>
 # SAGASU_HTTP_WRITES=off
@@ -96,21 +96,40 @@ class RemoteListener:
     # an API key once on this server's page. Redirects go only to these hosts.
     oauth: bool = False
     oauth_redirect_hosts: tuple[str, ...] = ()
+    # Listen on this socket file instead of the loopback port.
+    socket: str | None = None
 
 
 def parse_remote_listener(values):
     """Return (listener or None, problems). Nothing is returned for a partial setup."""
     port_text = (values.get("SAGASU_HTTP_PORT") or "").strip()
-    if not port_text:
+    socket_text = (values.get("SAGASU_HTTP_SOCKET") or "").strip()
+    if not port_text and not socket_text:
         return None, []
     problems = []
-    try:
-        port = int(port_text)
-        if not 1024 <= port <= 65535:
-            raise ValueError()
-    except ValueError:
-        port = None
-        problems.append("SAGASU_HTTP_PORT must be an integer from 1024 to 65535.")
+    port = socket_path = None
+    if port_text and socket_text:
+        problems.append("Set SAGASU_HTTP_PORT or SAGASU_HTTP_SOCKET, not both.")
+    elif socket_text:
+        # A private socket file: on a machine with several users, a loopback
+        # port could be taken by another user while this host is stopped.
+        if (
+            not socket_text.startswith("/")
+            or "\0" in socket_text
+            or len(socket_text) > 100
+        ):
+            problems.append(
+                "SAGASU_HTTP_SOCKET must be an absolute path of at most 100 characters."
+            )
+        else:
+            socket_path = socket_text
+    else:
+        try:
+            port = int(port_text)
+            if not 1024 <= port <= 65535:
+                raise ValueError()
+        except ValueError:
+            problems.append("SAGASU_HTTP_PORT must be an integer from 1024 to 65535.")
     bind = (values.get("SAGASU_HTTP_BIND") or "127.0.0.1").strip()
     try:
         if not ipaddress.ip_address(bind).is_loopback:
@@ -195,6 +214,7 @@ def parse_remote_listener(values):
             writes == "on",
             oauth == "on",
             redirect_hosts,
+            socket_path,
         ),
         [],
     )
@@ -221,7 +241,10 @@ class Settings:
     @property
     def remote_listener_requested(self):
         """True when this host is meant to run as a long-lived remote service."""
-        return bool((self.values.get("SAGASU_HTTP_PORT") or "").strip())
+        return bool(
+            (self.values.get("SAGASU_HTTP_PORT") or "").strip()
+            or (self.values.get("SAGASU_HTTP_SOCKET") or "").strip()
+        )
 
     @property
     def http(self):
@@ -483,6 +506,7 @@ class Settings:
                     "enabled": True,
                     "bind": http.bind,
                     "port": http.port,
+                    "socket": http.socket,
                     "allowed_hosts": list(http.allowed_hosts),
                     "key_labels": sorted(http.keys.values()),
                     "writes": http.writes,

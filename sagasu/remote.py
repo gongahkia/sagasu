@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import socket
 import time
 from pathlib import Path
@@ -275,6 +276,34 @@ def throttle_third_party_logs():
             handler.addFilter(ThirdPartyThrottle())
 
 
+def bind_unix(path):
+    """A listening socket file only its owner and its folder's group may use.
+
+    The service makes the folder (group: the web proxy, setgid) before it
+    starts, so the file joins that group and nobody else can connect.
+    """
+    import stat
+
+    try:
+        if stat.S_ISSOCK(os.lstat(path).st_mode):
+            os.unlink(path)  # left by a host that stopped without cleaning up
+    except FileNotFoundError:
+        pass
+    except OSError:
+        raise ConfigError("The remote listener's socket path is not usable.") from None
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        listener.bind(path)
+        os.chmod(path, 0o660)
+        listener.setblocking(False)
+    except OSError:
+        listener.close()
+        raise ConfigError(
+            "The remote listener could not create its socket. Check SAGASU_HTTP_SOCKET and its folder."
+        ) from None
+    return listener
+
+
 def bind_loopback(host, port):
     family = socket.AF_INET6 if ":" in host else socket.AF_INET
     listener = socket.socket(family, socket.SOCK_STREAM)
@@ -357,7 +386,11 @@ class RemoteHTTP:
                 allowed_origins=[],
             ),
         )
-        bound = bind_loopback(self.listener.bind, self.listener.port)
+        bound = (
+            bind_unix(self.listener.socket)
+            if self.listener.socket
+            else bind_loopback(self.listener.bind, self.listener.port)
+        )
         self.server = Server(
             uvicorn.Config(
                 KeyGate(
@@ -389,6 +422,7 @@ class RemoteHTTP:
         event(
             "remote.listening",
             port=self.listener.port,
+            socket=self.listener.socket,
             writes=self.listener.writes,
             keys=len(self.listener.keys),
             oauth=self.oauth is not None,
@@ -405,6 +439,11 @@ class RemoteHTTP:
             await asyncio.gather(self.task, return_exceptions=True)
         finally:
             self.task = None
+            if self.listener.socket:
+                try:
+                    os.unlink(self.listener.socket)
+                except OSError:
+                    pass
             if self.oauth is not None:
                 self.oauth.close()
                 self.oauth = None

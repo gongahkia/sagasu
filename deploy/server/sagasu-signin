@@ -1,68 +1,121 @@
 #!/usr/bin/env bash
-# Sign in to SMU in the server's own browser, through a temporary view that is
-# reachable only over an SSH connection. Sagasu types nothing: you do.
+# Sign in to SMU in a Sagasu copy's own browser, through a temporary view that
+# is reachable only over an SSH connection. Sagasu types nothing: you do.
+#   sudo sagasu-signin          the owner's copy
+#   sudo sagasu-signin NAME     a teammate's copy (they reach it through sagasu-self)
 set -euo pipefail
 
 if [[ $EUID -ne 0 ]]; then
     printf '%s\n' 'Run with sudo: sudo sagasu-signin' >&2
     exit 2
 fi
-for unit in sagasu-xvfb sagasu; do
+INSTANCE=${1:-}
+if [[ -n $INSTANCE ]]; then
+    if [[ ! $INSTANCE =~ ^[a-z][a-z0-9]{1,15}$ || ! -f /etc/sagasu/instances/$INSTANCE ]]; then
+        printf '%s\n' 'Unknown Sagasu copy.' >&2
+        exit 2
+    fi
+    ACCOUNT=sagasu-$INSTANCE
+    STATE=/var/lib/sagasu-$INSTANCE
+    UNITS=("sagasu-xvfb@$INSTANCE" "sagasu@$INSTANCE")
+    setting() { sed -n "s/^$1=\([0-9][0-9]*\)\$/\1/p" "/etc/sagasu/instances/$INSTANCE"; }
+    DISPLAY_NUM=$(setting DISPLAY_NUM)
+    VNC_PORT=$(setting VNC_PORT)
+    WS_PORT=$(setting WS_PORT)
+    RUN=/run/sagasu-signin-$INSTANCE
+    LAUNCH=(/opt/sagasu/bin/sagasu-launch --instance "$INSTANCE")
+else
+    ACCOUNT=sagasu
+    STATE=/var/lib/sagasu
+    UNITS=(sagasu-xvfb sagasu)
+    DISPLAY_NUM=99
+    VNC_PORT=5900
+    WS_PORT=6080
+    RUN=/run/sagasu-signin
+    LAUNCH=(/opt/sagasu/bin/sagasu-launch)
+fi
+for unit in "${UNITS[@]}"; do
     if ! systemctl is-active --quiet "$unit"; then
-        printf '%s\n' "$unit is not running. Start it first: sudo systemctl start sagasu" >&2
+        printf '%s\n' "$unit is not running. Start it first (sudo systemctl start ${UNITS[1]})." >&2
         exit 1
     fi
 done
-if pgrep -u sagasu -x x11vnc >/dev/null; then
-    printf '%s\n' 'A sign-in view is already open. Close the other sagasu-signin first.' >&2
+if pgrep -u "$ACCOUNT" -x x11vnc >/dev/null; then
+    printf '%s\n' 'A sign-in view is already open for this copy. Close the other one first.' >&2
+    exit 1
+fi
+# Without its access cookie the display would be open to every local account.
+if [[ ! -s $STATE/.Xauthority ]]; then
+    printf '%s\n' 'The virtual display has no access cookie; refusing to open a view.' >&2
     exit 1
 fi
 
-RUN=/run/sagasu-signin
 # The host decides how long a sign-in may take; say and wait for the same time.
-MS=$(sed -n 's/^SAGASU_AUTH_TIMEOUT_MS=\([0-9][0-9]*\)[[:space:]]*$/\1/p' /etc/sagasu/sagasu.env | tail -n 1)
+ENV_FILE=/etc/sagasu/${INSTANCE:-sagasu}.env
+MS=$(sed -n 's/^SAGASU_AUTH_TIMEOUT_MS=\([0-9][0-9]*\)[[:space:]]*$/\1/p' "$ENV_FILE" | tail -n 1)
 MINUTES=$(( ${MS:-600000} / 60000 ))
 (( MINUTES >= 1 )) || MINUTES=1
 (( MINUTES <= 30 )) || MINUTES=30
-install -d -o sagasu -g sagasu -m 0700 "$RUN"
+
+install -d -o "$ACCOUNT" -g "$ACCOUNT" -m 0700 "$RUN"
 cleanup() {
-    pkill -u sagasu -x x11vnc 2>/dev/null || true
-    pkill -u sagasu -f 'websockify --web /usr/share/novnc' 2>/dev/null || true
+    pkill -u "$ACCOUNT" -x x11vnc 2>/dev/null || true
+    pkill -u "$ACCOUNT" -f 'websockify --web /usr/share/novnc' 2>/dev/null || true
     rm -rf "$RUN"
 }
 trap cleanup EXIT
+trap 'exit 130' HUP INT TERM
 
 # A one-time password for the view. VNC passwords are at most 8 characters, so
-# the view also listens on this machine only and needs your SSH key to reach.
+# the view also listens on this machine only and needs an SSH key to reach.
 PASSWORD=$(python3 -I -c "import secrets; print(''.join(secrets.choice('abcdefghjkmnpqrstuvwxyz23456789') for _ in range(8)))")
-runuser -u sagasu -- x11vnc -storepasswd "$PASSWORD" "$RUN/passwd" >/dev/null 2>&1
-runuser -u sagasu -- x11vnc -display :99 -auth /var/lib/sagasu/.Xauthority \
-    -localhost -rfbport 5900 -rfbauth "$RUN/passwd" \
+runuser -u "$ACCOUNT" -- x11vnc -storepasswd "$PASSWORD" "$RUN/passwd" >/dev/null 2>&1
+runuser -u "$ACCOUNT" -- x11vnc -display ":$DISPLAY_NUM" -auth "$STATE/.Xauthority" \
+    -localhost -rfbport "$VNC_PORT" -rfbportv6 -1 -rfbauth "$RUN/passwd" \
     -forever -shared -noxdamage -repeat -quiet -bg -o "$RUN/x11vnc.log" >/dev/null
 if command -v websockify >/dev/null && [[ -d /usr/share/novnc ]]; then
-    runuser -u sagasu -- sh -c \
-        "websockify --web /usr/share/novnc 127.0.0.1:6080 127.0.0.1:5900 >'$RUN/websockify.log' 2>&1 &"
+    runuser -u "$ACCOUNT" -- sh -c \
+        "websockify --web /usr/share/novnc 127.0.0.1:$WS_PORT 127.0.0.1:$VNC_PORT >'$RUN/websockify.log' 2>&1 &"
+fi
+
+# Both ports must belong to this copy: another account could have taken one
+# first and would then be showing a fake view.
+uid=$(id -u "$ACCOUNT")
+owns_port() {
+    local port=$1 listeners
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        listeners=$(ss -Hltne "sport = :$port")
+        if [[ -n $listeners ]]; then
+            ! grep -v "uid:$uid " <<<"$listeners" | grep -q .
+            return
+        fi
+        sleep 0.3
+    done
+    return 1
+}
+if ! owns_port "$VNC_PORT" || ! owns_port "$WS_PORT"; then
+    printf '%s\n' 'The sign-in view could not open safely: its port is in use. Nothing was started.' >&2
+    exit 1
 fi
 
 printf '%s\n' \
     '' \
     "A view of the server's browser is open for the next $MINUTES minutes." \
-    'It is reachable only through an SSH connection that forwards ports 5900 and' \
-    '6080 (the signin.sh helper on your computer already does this).' \
+    'It is reachable only through the SSH connection you used to start this.' \
     '' \
-    '  1. Open the view on your computer, either way:' \
-    '       Finder > Go > Connect to Server >  vnc://localhost:5901' \
-    '       or in a web browser:  http://localhost:6080/vnc.html?autoconnect=1&resize=scale' \
+    '  1. Open the view in a web browser on your computer:' \
+    '       http://localhost:6080/vnc.html?autoconnect=1&resize=scale' \
     "  2. Password for the view:  $PASSWORD" \
-    '     (A viewer may say "unencrypted". The view still travels inside SSH.)' \
-    '  3. In the view, sign in to Microsoft as you normally do and approve it in' \
-    '     Authenticator. If Microsoft asks "Stay signed in?", Yes keeps the server' \
-    '     signed in across restarts; No is safer but means signing in more often.' \
+    '     (A one-time code for this view, not your SMU password. The viewer may' \
+    '     say "unencrypted"; the view still travels inside SSH.)' \
+    '  3. In the view, sign in to Microsoft with your own SMU account and approve' \
+    '     it in Authenticator. If Microsoft asks "Stay signed in?", Yes keeps the' \
+    '     server signed in longer; No means signing in more often.' \
     '  4. Wait until this window says "Signed in". The view then closes by itself.' \
     ''
 
-if /opt/sagasu/bin/sagasu-launch login --timeout $((MINUTES * 60)); then
-    printf '\n%s\n' 'Signed in. The view is closed; remote agents can now use the server.'
+if "${LAUNCH[@]}" login --timeout $((MINUTES * 60)); then
+    printf '\n%s\n' 'Signed in. The view is closed; your agents can now use the server.'
 else
     printf '%s\n' \
         '' \
@@ -70,7 +123,6 @@ else
         '  - A mistyped password, a missed approval or running out of time:' \
         '    run it again when ready.' \
         '  - A block page, an error page, or a step you do not normally see:' \
-        '    do NOT try again. Stop the service (sudo systemctl disable --now' \
-        '    sagasu caddy) and check with your IT department first.' >&2
+        '    do NOT try again. Stop and check with your IT department first.' >&2
     exit 1
 fi

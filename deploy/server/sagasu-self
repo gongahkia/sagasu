@@ -1,0 +1,92 @@
+#!/usr/bin/python3
+"""What a teammate can do with their own Sagasu copy, and nothing else.
+
+Their SSH key is limited to running this command (see sagasu-ctl access-add).
+It reads the requested action from SSH, checks it against a fixed list, then
+runs it for their copy only, through sudo. It never touches another copy.
+"""
+
+import os
+import pwd
+import re
+import shutil
+import subprocess
+import sys
+
+NAME = re.compile(r"[a-z][a-z0-9]{1,15}")
+LABEL = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
+HELP = """Your Sagasu copy. Run these as:  ssh <your login>@<server> COMMAND
+
+  signin              open the sign-in view and sign in to SMU (the default)
+  status              your copy's address, keys and settings
+  key-add LABEL       create a key for an app (shown once; keep it safe)
+  key-remove LABEL    stop a key working; apps using it are signed out
+  connections         apps signed in to your copy through OAuth
+  writes on|off       let your agents book, amend and cancel, or not
+  oauth on|off        let apps sign in with a key once, or not
+  restart             restart your copy
+  forget-sign-in      delete your copy's SMU sign-in and browser data
+  help                this list
+"""
+
+
+def parse(words):
+    """The validated action, or None. Nothing else is ever run."""
+    if not words:
+        return ["signin"]
+    command, rest = words[0], words[1:]
+    simple = {"signin", "status", "connections", "restart", "forget-sign-in", "help"}
+    if command in simple and not rest:
+        return [command]
+    if command in {"key-add", "key-remove"} and len(rest) == 1 and LABEL.fullmatch(rest[0]):
+        return [command, rest[0]]
+    if command in {"writes", "oauth"} and rest in (["on"], ["off"]):
+        return [command, rest[0]]
+    return None
+
+
+def main():
+    if len(sys.argv) < 2 or not NAME.fullmatch(sys.argv[1]):
+        sys.exit("Unknown copy.")
+    name = sys.argv[1]
+    if not os.path.isfile(f"/etc/sagasu/instances/{name}"):
+        sys.exit("Unknown copy.")
+    if os.geteuid() != 0:
+        # Started by SSH as the teammate's login.
+        if pwd.getpwuid(os.getuid()).pw_name != f"fbs-{name}":
+            sys.exit("Not allowed.")
+        action = parse(os.environ.get("SSH_ORIGINAL_COMMAND", "").split())
+        if action is None:
+            print(HELP, file=sys.stderr)
+            sys.exit(2)
+        if action == ["help"]:
+            print(HELP)
+            return
+        os.execv(
+            "/usr/bin/sudo", ["sudo", "-n", "/opt/sagasu/bin/sagasu-self", name, *action]
+        )
+    # As root, through sudo: check everything again.
+    sudo_user = os.environ.get("SUDO_USER")
+    if sudo_user not in (None, f"fbs-{name}"):
+        sys.exit("Not allowed.")
+    action = parse(sys.argv[2:])
+    if action is None or action == ["help"]:
+        print(HELP)
+        sys.exit(0 if action else 2)
+    if action == ["signin"]:
+        os.execv("/opt/sagasu/bin/sagasu-signin", ["sagasu-signin", name])
+    if action == ["forget-sign-in"]:
+        subprocess.run(["systemctl", "stop", f"sagasu@{name}"], check=True)
+        for part in ("profile", "auth"):
+            shutil.rmtree(f"/var/lib/sagasu-{name}/{part}", ignore_errors=True)
+        subprocess.run(["systemctl", "start", f"sagasu@{name}"], check=True)
+        print("Your copy's SMU sign-in and browser data are deleted.")
+        return
+    result = subprocess.run(
+        ["/opt/sagasu/bin/sagasu-ctl", "--instance", name, *action]
+    )
+    sys.exit(result.returncode)
+
+
+if __name__ == "__main__":
+    main()

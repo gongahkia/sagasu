@@ -1,0 +1,31 @@
+[Unit]
+Description=Sagasu MCP host for the copy %i, with its remote listener
+Documentation=file:/opt/sagasu/app/deploy/server/README.md
+After=network-online.target sagasu-xvfb@%i.service
+Wants=network-online.target
+Requires=sagasu-xvfb@%i.service
+PartOf=sagasu-xvfb@%i.service
+
+[Service]
+User=sagasu-%i
+Group=sagasu-%i
+UMask=0077
+ExecStartPre=+/usr/bin/install -d -o sagasu-%i -g caddy -m 2750 /run/sagasu-%i
+ExecStart=/opt/sagasu/bin/sagasu-launch --instance %i host-run
+Restart=always
+RestartSec=5
+RestartPreventExitStatus=78
+KillMode=mixed
+TimeoutStopSec=150
+LimitNOFILE=16384
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

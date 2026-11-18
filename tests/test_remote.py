@@ -418,12 +418,13 @@ class RemoteJobTests(ServiceCase):
         await self.remote()
         self.backend.error = None  # the session has recovered meanwhile
         calls = len(self.backend.calls)
-        for _ in range(4):  # a request every 200 s: all inside the pause
-            self.now += 200
+        step = SIGN_IN_RETRY_SECONDS / 5
+        for _ in range(4):  # four requests, all inside the pause
+            self.now += step
             refused = await self.remote()
             self.assertEqual(refused.error["reason"], "sign_in_required_on_host")
         self.assertEqual(len(self.backend.calls), calls)
-        self.now += 200  # 1000 s after the detection, not after the last refusal
+        self.now += step + 1  # measured from the detection, not the last refusal
         self.assertFalse(self.service.host_sign_in_required)
         self.assertEqual((await self.remote()).status, "succeeded")
 
@@ -1325,3 +1326,167 @@ class MisconfiguredListenerTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MicrosoftPromptGuardTests(unittest.IsolatedAsyncioTestCase):
+    """A remote request must never let Microsoft's page send an approval prompt.
+
+    Runs real Chromium against stand-in Microsoft pages served by the test
+    itself. The browser cannot resolve any real host.
+    """
+
+    async def test_prompt_calls_are_blocked_for_remote_requests_only(self):
+        from playwright.async_api import async_playwright
+
+        page_html = """<!doctype html><title>start</title><script>
+        fetch('/common/SAS/BeginAuth', {method: 'POST', body: '{}'})
+          .then(() => document.title = 'sent', () => document.title = 'blocked');
+        </script><p>Approve sign in request</p>"""
+        for remote, expected in ((True, "blocked"), (False, "sent")):
+            with self.subTest(remote=remote):
+                pushes = []
+                async with async_playwright() as playwright:
+                    if not Path(playwright.chromium.executable_path).is_file():
+                        self.skipTest(
+                            "Install Playwright Chromium to run browser tests"
+                        )
+                    browser = await playwright.chromium.launch(
+                        headless=True,
+                        args=[
+                            "--host-resolver-rules=MAP * ~NOTFOUND",
+                            "--no-proxy-server",
+                        ],
+                    )
+                    try:
+                        context = await browser.new_context()
+
+                        async def microsoft(route):
+                            if "/SAS/" in route.request.url:
+                                pushes.append(route.request.url)
+                                await route.fulfill(status=200, body="{}")
+                            else:
+                                await route.fulfill(
+                                    status=200, body=page_html, content_type="text/html"
+                                )
+
+                        # The stand-in for Microsoft, registered before the guard
+                        # as the network would be.
+                        await context.route(
+                            "https://login.microsoftonline.com/**", microsoft
+                        )
+                        if remote:
+                            with remote_origin():
+                                client = FBSClient(interactive=False, headless=True)
+                        else:
+                            client = FBSClient(interactive=False, headless=True)
+                        client.context = context
+                        await client._guard_microsoft()
+                        page = await context.new_page()
+                        await page.goto(
+                            "https://login.microsoftonline.com/tenant/saml2?SAMLRequest=x"
+                        )
+                        await page.wait_for_function(
+                            "document.title !== 'start'", timeout=5000
+                        )
+                        self.assertEqual(await page.title(), expected)
+                        self.assertEqual(len(pushes), 0 if remote else 1)
+                        await client._release_microsoft()
+                        # Released afterwards: the next local sign-in is unaffected.
+                        await page.goto("https://login.microsoftonline.com/again")
+                        await page.wait_for_function(
+                            "document.title !== 'start'", timeout=5000
+                        )
+                        self.assertEqual(await page.title(), "sent")
+                    finally:
+                        await browser.close()
+
+
+class SocketListenerTests(unittest.IsolatedAsyncioTestCase):
+    """The listener can use a private socket file instead of a loopback port."""
+
+    def test_socket_settings(self):
+        listener, problems = parse_remote_listener(
+            {
+                **{k: v for k, v in VALID.items() if k != "SAGASU_HTTP_PORT"},
+                "SAGASU_HTTP_SOCKET": "/run/sagasu-alex/http.sock",
+            }
+        )
+        self.assertEqual(problems, [])
+        self.assertEqual(listener.socket, "/run/sagasu-alex/http.sock")
+        self.assertIsNone(listener.port)
+        for change in (
+            {"SAGASU_HTTP_SOCKET": "relative/http.sock"},
+            {"SAGASU_HTTP_SOCKET": "/" + "x" * 120},
+            {"SAGASU_HTTP_PORT": "8765", "SAGASU_HTTP_SOCKET": "/run/x.sock"},
+        ):
+            with self.subTest(change=change):
+                base = {k: v for k, v in VALID.items() if k != "SAGASU_HTTP_PORT"}
+                listener, problems = parse_remote_listener({**base, **change})
+                self.assertIsNone(listener)
+                self.assertTrue(problems)
+
+    @unittest.skipIf(os.name == "nt", "Unix sockets")
+    async def test_served_on_a_private_socket_and_removed_on_stop(self):
+        directory = tempfile.mkdtemp(prefix="sgs", dir="/tmp")
+        self.addCleanup(lambda: __import__("shutil").rmtree(directory, True))
+        path = os.path.join(directory, "http.sock")
+        env = Path(directory) / ".env"
+        env.write_text(
+            "SAGASU_BROWSER_PROFILE=browser\nSAGASU_PREFERENCES_PATH=personal.sqlite3\n"
+            f"SAGASU_HTTP_SOCKET={path}\nSAGASU_HTTP_ALLOWED_HOSTS=sagasu.test\n"
+            f"SAGASU_HTTP_KEYS=laptop:{DIGEST}\n"
+        )
+        # A stale socket file from an earlier run is replaced.
+        stale = socket.socket(socket.AF_UNIX)
+        stale.bind(path)
+        stale.close()
+        with patch.dict(os.environ, {}, clear=True):
+            settings = Settings.load(env)
+        self.assertTrue(settings.remote_listener_requested)
+        host = asyncio.create_task(
+            serve_host(settings, service=AgentService(backend=FakeBackend()))
+        )
+        try:
+            for _ in range(300):
+                try:
+                    _, writer = await asyncio.open_unix_connection(path)
+                    writer.close()
+                    await writer.wait_closed()
+                    break
+                except OSError:
+                    await asyncio.sleep(0.01)
+            self.assertEqual(os.stat(path).st_mode & 0o777, 0o660)
+
+            def call(key):
+                class Connection(http.client.HTTPConnection):
+                    def connect(self):
+                        self.sock = socket.socket(socket.AF_UNIX)
+                        self.sock.connect(path)
+
+                connection = Connection("sagasu.test", timeout=15)
+                try:
+                    connection.request(
+                        "POST",
+                        "/mcp",
+                        body=json.dumps(
+                            {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+                        ),
+                        headers={
+                            "Content-Type": "application/json",
+                            "Accept": "application/json, text/event-stream",
+                            **({"X-API-Key": key} if key else {}),
+                        },
+                    )
+                    return connection.getresponse().status
+                finally:
+                    connection.close()
+
+            self.assertEqual(await asyncio.to_thread(call, KEY), 200)
+            self.assertEqual(await asyncio.to_thread(call, None), 401)
+            reply = await control(settings, "stop")
+            self.assertTrue(reply["stopping"])
+            await asyncio.wait_for(host, 30)
+            self.assertFalse(os.path.exists(path))
+        finally:
+            host.cancel()
+            await asyncio.gather(host, return_exceptions=True)

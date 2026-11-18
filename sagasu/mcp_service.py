@@ -48,8 +48,9 @@ from .read_backends import HybridReads, READ_FAILURES
 WRITE_KINDS = {"book", "cancel", "approve_task", "amend"}
 # After a remote request finds that a person must sign in on the host, further
 # remote FBS requests fail fast for this long instead of reloading Microsoft's
-# sign-in page. A successful operation (the owner's login) lifts it at once.
-SIGN_IN_RETRY_SECONDS = 900
+# sign-in page from the server's address. A successful operation (the owner's
+# own sign-in) lifts it at once.
+SIGN_IN_RETRY_SECONDS = 6 * 3600
 
 
 class AgentError(ValueError):

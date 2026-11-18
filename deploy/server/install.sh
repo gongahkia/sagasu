@@ -105,6 +105,9 @@ fi
 install -d -o root -g root -m 0755 /opt/sagasu /opt/sagasu/bin /opt/sagasu/browsers
 install -d -o sagasu -g sagasu -m 0700 /var/lib/sagasu
 install -d -o root -g sagasu -m 0750 /etc/sagasu
+# Teammates' copies (sagasu-ctl instance-add): their settings, web proxy sites
+# and SSH keys, all owned by root.
+install -d -o root -g root -m 0755 /etc/sagasu/instances /etc/caddy/sites /etc/ssh/sagasu_keys
 
 # Code, interpreter and browser are owned by root: the service cannot change them.
 rsync -a --delete \
@@ -124,6 +127,8 @@ WAS_ACTIVE=0
 if systemctl is-active --quiet sagasu.service; then
     WAS_ACTIVE=1
 fi
+# Teammates' copies run the same code, so they stop and start with it.
+mapfile -t COPIES < <(systemctl list-units 'sagasu@*.service' --state=active --plain --no-legend | awk '{print $1}')
 restore_service() {
     code=$?
     if [[ $code -ne 0 ]]; then
@@ -132,11 +137,14 @@ restore_service() {
             printf '%s\n' 'Starting Sagasu again with what is installed.' >&2
             systemctl start sagasu.service || true
         fi
+        for unit in "${COPIES[@]}"; do
+            systemctl start "$unit" || true
+        done
     fi
     exit "$code"
 }
 trap restore_service EXIT
-systemctl stop sagasu.service 2>/dev/null || true
+systemctl stop sagasu.service "${COPIES[@]}" 2>/dev/null || true
 
 /opt/sagasu/venv/bin/python -m pip install --quiet --upgrade /opt/sagasu/app
 /opt/sagasu/venv/bin/python -m pip install --quiet --force-reinstall --no-deps /opt/sagasu/app
@@ -145,13 +153,34 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/sagasu/browsers \
     /opt/sagasu/venv/bin/python -m playwright install chromium
 chmod -R a+rX /opt/sagasu/browsers
 
-for name in sagasu-launch sagasu-signin sagasu-ctl; do
+for name in sagasu-launch sagasu-signin sagasu-ctl sagasu-self; do
     install -o root -g root -m 0755 "$KIT/$name" "/opt/sagasu/bin/$name"
 done
 ln -sf /opt/sagasu/bin/sagasu-signin /usr/local/bin/sagasu-signin
 ln -sf /opt/sagasu/bin/sagasu-ctl /usr/local/bin/sagasu-ctl
-install -o root -g root -m 0644 "$KIT/sagasu.service" /etc/systemd/system/sagasu.service
-install -o root -g root -m 0644 "$KIT/sagasu-xvfb.service" /etc/systemd/system/sagasu-xvfb.service
+for unit in sagasu.service sagasu-xvfb.service sagasu@.service sagasu-xvfb@.service; do
+    install -o root -g root -m 0644 "$KIT/$unit" "/etc/systemd/system/$unit"
+done
+
+# SSH for teammates: their keys live in a root-owned folder (never in a home
+# folder their own processes could write), and nobody may open listening
+# ports on this server through SSH. Checked before it takes effect.
+SSHD_DROPIN=/etc/ssh/sshd_config.d/60-sagasu.conf
+printf '%s\n' \
+    '# Sagasu: teammates'"'"' SSH keys live in /etc/ssh/sagasu_keys, owned by root.' \
+    '# Nobody may open listening ports on this server through SSH.' \
+    'AuthorizedKeysFile .ssh/authorized_keys /etc/ssh/sagasu_keys/%u' \
+    'AllowTcpForwarding local' >"$SSHD_DROPIN.new"
+mv "$SSHD_DROPIN.new" "$SSHD_DROPIN"
+if ! sshd -t; then
+    rm -f "$SSHD_DROPIN"
+    printf '%s\n' 'The SSH settings for teammates were refused by sshd and were not applied.' >&2
+    exit 1
+fi
+if ! sshd -T 2>/dev/null | grep -qi '^authorizedkeysfile .*sagasu_keys'; then
+    printf '%s\n' 'WARNING: another SSH setting overrides AuthorizedKeysFile; teammates cannot sign in until it is merged.' >&2
+fi
+systemctl reload ssh 2>/dev/null || true
 
 if [[ ! -e $SETTINGS ]]; then
     sed -e "s/@PUBLIC_HOST@/$HOST/" -e "s/@KEY_DIGESTS@/$KEY/" \
@@ -163,6 +192,14 @@ fi
 # Settings the template gained after this server was installed.
 if ! grep -q '^SAGASU_AUTH_TIMEOUT_MS=' "$SETTINGS"; then
     printf '%s\n' 'SAGASU_AUTH_TIMEOUT_MS=900000' >>"$SETTINGS"
+fi
+# The web proxy now reaches Sagasu through a private socket file instead of a
+# loopback port, which another local account could take while Sagasu is down.
+# Done only when this kit also writes the proxy configuration below.
+if grep -q '^SAGASU_HTTP_PORT=8765$' "$SETTINGS" &&
+    ! grep -q '^SAGASU_HTTP_SOCKET=' "$SETTINGS" &&
+    head -n 1 /etc/caddy/Caddyfile 2>/dev/null | grep -q '^# Publishes only Sagasu'; then
+    sed -i 's|^SAGASU_HTTP_PORT=8765$|SAGASU_HTTP_SOCKET=/run/sagasu/http.sock|' "$SETTINGS"
 fi
 
 # An update refreshes a proxy configuration this kit wrote, never one written by hand.
@@ -212,6 +249,10 @@ systemctl enable sagasu-xvfb.service sagasu.service caddy.service
 # Sagasu is stopped here, so the display can take a changed unit file.
 systemctl restart sagasu-xvfb.service
 systemctl start sagasu.service
+for unit in "${COPIES[@]}"; do
+    systemctl restart "sagasu-xvfb@${unit#sagasu@}" || true
+    systemctl start "$unit" || true
+done
 systemctl reload-or-restart caddy.service
 
 printf '%s\n' \
@@ -225,4 +266,4 @@ printf '%s\n' \
     '  1. Allow inbound TCP 443 to this server in the cloud provider firewall.' \
     '  2. Sign in to SMU on this server:  sudo sagasu-signin' \
     'Then agents connect to https://HOST/mcp with header  Authorization: Bearer <key>.' \
-    'Status: sudo sagasu-ctl status'
+    'Status: sudo sagasu-ctl status     Teammates'"'"' copies: sudo sagasu-ctl instance-list'

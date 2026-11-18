@@ -19,7 +19,7 @@
 		request_body {
 			max_size 4MB
 		}
-		reverse_proxy 127.0.0.1:8765 {
+		reverse_proxy unix//run/sagasu/http.sock {
 			flush_interval -1
 		}
 	}
@@ -32,3 +32,6 @@
 		X-Content-Type-Options nosniff
 	}
 }
+
+# Teammates' copies, one file each (sagasu-ctl instance-add).
+import /etc/caddy/sites/*.caddy
