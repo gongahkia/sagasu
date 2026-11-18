@@ -33,34 +33,43 @@ MAX_IN_FLIGHT = 32
 ALTERNATIVE_KEY_HEADER = "x-api-key"
 
 
-def key_label(keys, headers):
-    """Return the label of the API key a request carries, else None.
+def check_key(keys, headers):
+    """Return (label, None) for a configured API key, else (None, why not).
 
-    The key is either `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+    The key is either `Authorization: Bearer <key>` or `X-API-Key: <key>`. The
+    reason is a fixed category for the private log; it never includes a value.
     """
     try:
         value = headers.get("authorization") or ""
         alternative = headers.get(ALTERNATIVE_KEY_HEADER) or ""
     except AttributeError:
-        return None
+        return None, "no_key_header"
     if value and alternative:
-        return None
-    if value:
-        scheme, _, token = value.partition(" ")
-        if scheme.lower() != "bearer":
-            return None
-    else:
+        return None, "several_key_headers"
+    if not value and not alternative:
+        return None, "no_key_header"
+    scheme, _, token = (value or alternative).strip().partition(" ")
+    if scheme.lower() != "bearer":
+        if value:
+            return None, "not_a_bearer_key"
+        # X-API-Key normally carries the key alone; "Bearer <key>" pasted
+        # there by habit means the same thing.
         token = alternative
     token = token.strip()
     if not 20 <= len(token) <= 512:
-        return None
+        return None, "wrong_length"
     digest = hashlib.sha256(token.encode("utf-8", "surrogatepass")).hexdigest()
     found = None
     for known, label in keys.items():
         # Compare against every configured digest; no early exit.
         if hmac.compare_digest(known, digest):
             found = label
-    return found
+    return found, None if found else "unknown_key"
+
+
+def key_label(keys, headers):
+    """Return the label of the API key a request carries, else None."""
+    return check_key(keys, headers)[0]
 
 
 class KeyGate:
@@ -70,7 +79,7 @@ class KeyGate:
         self.app = app
         self.keys = dict(keys)
         self.active = 0
-        self.rejected = 0
+        self.rejected = {}
         self.reported_at = 0.0
 
     async def __call__(self, scope, receive, send):
@@ -84,15 +93,24 @@ class KeyGate:
         ]
         # Exactly one credential in exactly one header, so the check here and
         # the label in the log can never be about different values.
-        if len(supplied) != 1 or key_label(self.keys, dict(supplied)) is None:
-            self.rejected += 1
+        label, reason = (
+            check_key(self.keys, dict(supplied))
+            if len(supplied) <= 1
+            else (None, "several_key_headers")
+        )
+        if label is None:
+            self.rejected[reason] = self.rejected.get(reason, 0) + 1
             now = time.monotonic()
             if now - self.reported_at >= 60:
                 # At most one line a minute, so probing cannot flood the log.
+                # It says why keys were refused, never what was sent.
                 event(
-                    "remote.unauthorized", level=logging.WARNING, requests=self.rejected
+                    "remote.unauthorized",
+                    level=logging.WARNING,
+                    requests=sum(self.rejected.values()),
+                    reasons=dict(self.rejected),
                 )
-                self.reported_at, self.rejected = now, 0
+                self.reported_at, self.rejected = now, {}
             await self.reply(
                 send,
                 401,

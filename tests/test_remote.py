@@ -935,7 +935,8 @@ class RemoteListenerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn(b"search_rooms", body)
         for name, value in (
             ("X-Api-Key", "wrong-key-" + "w" * 40),
-            ("X-Api-Key", "Bearer " + KEY),  # this header takes the key alone
+            ("X-Api-Key", "Bearer wrong-key-" + "w" * 40),
+            ("X-Api-Key", "short"),
             ("X-Sagasu-Key", KEY),
             ("Proxy-Authorization", "Bearer " + KEY),
         ):
@@ -1002,6 +1003,11 @@ class RemoteListenerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status, 200)
         calls = [r.fields for r in logs.records if r.getMessage() == "remote.tool_call"]
         self.assertEqual(calls[0]["key"], "laptop")  # same label as the other header
+        # "Bearer <key>" pasted into this header by habit means the same thing.
+        status, _, _ = await self.http(
+            payload=packet, key=None, headers={"X-API-Key": "Bearer " + KEY}
+        )
+        self.assertEqual(status, 200)
         # Never both: one credential, in one header.
         status, _, _ = await self.http(payload=packet, headers={"X-API-Key": KEY})
         self.assertEqual(status, 401)
@@ -1090,6 +1096,29 @@ class RemoteListenerTests(unittest.IsolatedAsyncioTestCase):
             self.addAsyncCleanup(self.close, writer)
         self.assertTrue(reply["ok"])
         spawn.assert_not_called()
+
+    async def test_the_log_says_why_a_key_was_refused_but_never_what_was_sent(self):
+        from sagasu.remote import check_key
+
+        keys = {DIGEST: "laptop"}
+        cases = {
+            "no_key_header": {},
+            "several_key_headers": {"authorization": "Bearer " + KEY, "x-api-key": KEY},
+            "not_a_bearer_key": {"authorization": "Basic " + KEY},
+            "wrong_length": {"x-api-key": "short"},
+            "unknown_key": {"x-api-key": "wrong-key-" + "w" * 40},
+        }
+        for reason, headers in cases.items():
+            with self.subTest(reason=reason):
+                self.assertEqual(check_key(keys, headers), (None, reason))
+        self.assertEqual(check_key(keys, {"x-api-key": KEY}), ("laptop", None))
+        packet = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+        secret = "wrong-key-" + "w" * 40
+        with self.assertLogs("sagasu.observability", level="WARNING") as logs:
+            await self.http(payload=packet, key=None, headers={"X-API-Key": secret})
+        record = logs.records[0]
+        self.assertEqual(record.fields["reasons"], {"unknown_key": 1})
+        self.assertNotIn(secret, json.dumps(record.fields))
 
     async def test_only_post_is_served_so_no_stream_or_session_is_held(self):
         for method in ("GET", "DELETE", "PUT"):
