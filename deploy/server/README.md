@@ -68,7 +68,11 @@ Two steps remain, and both need a person:
 
 ## Signing in
 
-Sign-in happens in the server's own browser, seen through a temporary view that listens on the server's loopback interface and is protected by a one-time password. Reach it through SSH:
+Sign-in happens in the server's own browser. There are two ways to reach it.
+
+**From any browser, with a key: `https://HOST/sign-in`.** Enter an API key, then sign in to Microsoft on a live picture of its sign-in page: tap the picture, and type into the box above it. It works on a phone. Only Microsoft's sign-in pages are shown (never FBS, the address bar or other tabs). Only taps, text of up to 256 printable characters, and Enter, Backspace, Tab and Escape are passed on, and none of it is logged or kept. The page names the copy it signs in to, and it accepts a key posted from itself only. Its cookie is HttpOnly, SameSite=Strict, limited to `/sign-in` and valid for 20 minutes, and a newer visit replaces an older one. A sign-in left without the page for 90 seconds is stopped, so it does not hold up agents' requests. Apps that sign in through OAuth are sent through this page after the key and return once SMU sign-in is done. Agents that use a key header receive the link in `sign_in_required_on_host` errors (`sign_in_url`).
+
+**Through SSH**, with a temporary view that listens on the server's loopback interface and is protected by a one-time password:
 
 ```bash
 ssh -t -L 5901:127.0.0.1:5900 -L 6080:127.0.0.1:6080 ubuntu@SERVER 'sudo sagasu-signin'
@@ -99,24 +103,22 @@ sudo bash sagasu-src/deploy/server/install.sh --update   # after copying new cod
 
 `--update` keeps keys, settings and saved state. It refreshes a proxy configuration this kit wrote, and it leaves a service you had disabled stopped and disabled. If a step fails, it starts Sagasu again with what is installed.
 
-Changing a setting restarts the service, which closes the browser. If agents then report `sign_in_required_on_host`, run `sudo sagasu-signin` again.
+Changing a setting restarts the service, which closes the browser. If agents then report `sign_in_required_on_host`, sign in again at `https://HOST/sign-in` or with `sudo sagasu-signin`.
 
 ## Teammates' copies
 
 A copy serves one SMU account. Never give a teammate a key to yours: everything they did would happen as you. Give them their own copy, on the same server:
 
 ```bash
-sudo sagasu-ctl instance-add alex                         # https://alex.<your host>/mcp
-sudo sagasu-ctl access-add alex 'ssh-ed25519 AAAA... alex' # their SSH public key
+sudo sagasu-ctl instance-add alex                         # prints https://alex.<your host>/mcp and a key
 sudo sagasu-ctl instance-list
 sudo sagasu-ctl --instance alex status                    # any copy command, for their copy
-sudo sagasu-ctl access-remove alex                        # their SSH access only
 sudo sagasu-ctl instance-remove alex --yes                # the copy, its sign-in and data
 ```
 
-`instance-add` creates a separate account (`sagasu-alex`), state folder, virtual display, socket, settings file and Caddy site. The host name is the owner's with the copy's name in front, so with sslip.io it needs no DNS change. The copy starts with booking off, OAuth on and no usable key.
+`instance-add` creates a separate account (`sagasu-alex`), state folder, virtual display, socket, settings file and Caddy site, and one API key, printed once. The host name is the owner's with the copy's name in front, so with sslip.io it needs no DNS change. The copy starts with OAuth on and booking on (`--read-only` keeps booking off). Send the teammate the address and the key. They connect their app and sign in to SMU at their copy's `/sign-in` page; they never need the server itself.
 
-`access-add` creates a login, `fbs-alex`, that has no password and accepts only that key. The key can run only `sagasu-self alex`, which accepts a fixed list of commands for that copy (`signin`, `status`, `key-add`, `key-remove`, `connections`, `writes`, `oauth`, `restart`, `forget-sign-in`, `help`). It can forward only to that copy's own sign-in view ports. There is no shell, no other forwarding, and no access to other copies. The teammate signs in with:
+Optionally, `access-add alex 'ssh-ed25519 AAAA...'` gives a teammate an SSH login instead, and `access-remove alex` takes it away. `access-add` creates a login, `fbs-alex`, that has no password and accepts only that key. The key can run only `sagasu-self alex`, which accepts a fixed list of commands for that copy (`signin`, `status`, `key-add`, `key-remove`, `connections`, `writes`, `oauth`, `restart`, `forget-sign-in`, `help`). It can forward only to that copy's own sign-in view ports. There is no shell, no other forwarding, and no access to other copies. The teammate signs in with:
 
 ```bash
 ssh -t -L 6080:127.0.0.1:<view port> fbs-alex@SERVER signin
@@ -169,7 +171,7 @@ All in `/etc/sagasu/sagasu.env`. See `sagasu.env.example`.
 | `SAGASU_HTTP_PORT` | Instead of a socket: a loopback TCP port, 1024–65535. Any local account can connect to it, so prefer the socket. Change `reverse_proxy` in `/etc/caddy/Caddyfile` to match. |
 | `SAGASU_HTTP_BIND` | With `SAGASU_HTTP_PORT`: loopback address only. Default `127.0.0.1`. |
 | `SAGASU_HTTP_ALLOWED_HOSTS` | Public host name(s) agents use, comma-separated. Each name also needs to be a site address in `/etc/caddy/Caddyfile`. |
-| `SAGASU_HTTP_KEYS` | `label:sha256hex`, comma-separated, 1–16 entries. |
+| `SAGASU_HTTP_KEYS` | `label:sha256hex`, comma-separated, 1–16 entries. A key also opens the SMU sign-in page at `/sign-in`. |
 | `SAGASU_HTTP_OAUTH` | `off` (default) or `on`: serve the OAuth sign-in for apps that cannot send a key header. |
 | `SAGASU_OAUTH_REDIRECT_HOSTS` | Hosts an OAuth app's redirect may use, comma-separated. Default `chatgpt.com,claude.ai,claude.com,localhost,127.0.0.1`. |
 | `SAGASU_HTTP_WRITES` | `off` (default) or `on`. `on` needs `SAGASU_MCP_CONFIRMATION=agent`. |
