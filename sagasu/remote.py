@@ -379,7 +379,14 @@ class RemoteHTTP:
             )
             # The SDK serves extra routes from this list alongside /mcp.
             self.mcp_server._custom_starlette_routes.extend(self.desk.routes())
-            set_sign_in_url(self.desk.url)
+            # One-time links (no access key) only where the person can save
+            # their sign-in; the page then accepts only their own account.
+            set_sign_in_url(
+                self.desk.url,
+                self.desk.link
+                if getattr(self.service, "saved_sign_in", None) is not None
+                else None,
+            )
         if self.listener.oauth:
             from .oauth import SagasuOAuth
 

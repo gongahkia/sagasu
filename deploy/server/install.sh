@@ -219,6 +219,35 @@ for instance in /etc/sagasu/instances/*; do
     mv "$site.sagasu-new" "$site"
 done
 
+# Saved SMU sign-ins (sagasu/saved_sign_in.py): each copy gets its own key,
+# readable only by that copy's account. Created once and never rewritten: a new
+# key would make every sign-in saved with the old one unreadable.
+ensure_signin_key() {
+    local name=$1 account=$2 env_file=$3
+    local key=/etc/sagasu/$name.signin-key
+    if [[ ! -s $key ]]; then
+        (umask 077 && { head -c 32 /dev/urandom | base64 -w0; echo; } >"$key.new")
+        chown "root:$account" "$key.new"
+        chmod 0640 "$key.new"
+        mv "$key.new" "$key"
+        # Switched on only when this run made the key. A key without the
+        # line means the copy was switched off on purpose; leave it off.
+        if ! grep -q '^SAGASU_HTTP_SIGN_IN_KEY_FILE=' "$env_file"; then
+            printf 'SAGASU_HTTP_SIGN_IN_KEY_FILE=%s\n' "$key" >>"$env_file"
+        fi
+    else
+        chown "root:$account" "$key"
+        chmod 0640 "$key"
+    fi
+}
+ensure_signin_key sagasu sagasu "$SETTINGS"
+for instance in /etc/sagasu/instances/*; do
+    name=${instance##*/}
+    [[ -f $instance && $name =~ ^[a-z][a-z0-9]{1,15}$ ]] || continue
+    [[ -f /etc/sagasu/$name.env ]] && id "sagasu-$name" >/dev/null 2>&1 || continue
+    ensure_signin_key "$name" "sagasu-$name" "/etc/sagasu/$name.env"
+done
+
 # An update refreshes a proxy configuration this kit wrote, never one written by hand.
 if [[ -z $HOST ]] && head -n 1 /etc/caddy/Caddyfile 2>/dev/null |
     grep -q '^# Publishes only Sagasu'; then
@@ -256,7 +285,13 @@ if [[ ! -f $RULES ]] || ! grep -q -- "$SAVED" "$RULES"; then
 fi
 
 systemctl daemon-reload
+# Teammates' copies come back whatever the owner chose for their own.
+for unit in "${COPIES[@]}"; do
+    systemctl restart "sagasu-xvfb@${unit#sagasu@}" || true
+    systemctl start "$unit" || true
+done
 if [[ $LEAVE_STOPPED -eq 1 ]]; then
+    systemctl reload-or-restart caddy.service || true
     printf '%s\n' '' \
         'Sagasu was disabled before this run. It has been updated and left stopped.' \
         'To bring it back: sudo systemctl enable --now sagasu-xvfb sagasu caddy'
@@ -266,10 +301,6 @@ systemctl enable sagasu-xvfb.service sagasu.service caddy.service
 # Sagasu is stopped here, so the display can take a changed unit file.
 systemctl restart sagasu-xvfb.service
 systemctl start sagasu.service
-for unit in "${COPIES[@]}"; do
-    systemctl restart "sagasu-xvfb@${unit#sagasu@}" || true
-    systemctl start "$unit" || true
-done
 systemctl reload-or-restart caddy.service
 
 printf '%s\n' \

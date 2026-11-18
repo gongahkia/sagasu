@@ -9,7 +9,6 @@ runs it for their copy only, through sudo. It never touches another copy.
 import os
 import pwd
 import re
-import shutil
 import subprocess
 import sys
 
@@ -25,7 +24,7 @@ HELP = """Your Sagasu copy. Run these as:  ssh <your login>@<server> COMMAND
   writes on|off       let your agents book, amend and cancel, or not
   oauth on|off        let apps sign in with a key once, or not
   restart             restart your copy
-  forget-sign-in      delete your copy's SMU sign-in and browser data
+  forget-sign-in      delete your copy's SMU sign-in, saved password and browser data
   help                this list
 """
 
@@ -75,13 +74,8 @@ def main():
         sys.exit(0 if action else 2)
     if action == ["signin"]:
         os.execv("/opt/sagasu/bin/sagasu-signin", ["sagasu-signin", name])
-    if action == ["forget-sign-in"]:
-        subprocess.run(["systemctl", "stop", f"sagasu@{name}"], check=True)
-        for part in ("profile", "auth"):
-            shutil.rmtree(f"/var/lib/sagasu-{name}/{part}", ignore_errors=True)
-        subprocess.run(["systemctl", "start", f"sagasu@{name}"], check=True)
-        print("Your copy's SMU sign-in and browser data are deleted.")
-        return
+    # Every action, forget-sign-in included, runs through sagasu-ctl, so the
+    # two can never disagree about what a copy holds.
     result = subprocess.run(
         ["/opt/sagasu/bin/sagasu-ctl", "--instance", name, *action]
     )

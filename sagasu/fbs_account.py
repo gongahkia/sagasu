@@ -204,6 +204,7 @@ async def _open_task_list(client):
         cookie = cookies[0]
         scope = {key: cookie[key] for key in ("name", "domain", "path")}
         interactive = client.interactive
+        may_sign_in = getattr(client, "may_sign_in", interactive)
         recovered = False
         try:
             # a fresh application session recovered the observed task error;
@@ -212,6 +213,7 @@ async def _open_task_list(client):
                 "renewing the FBS application session once for Task List"
             )
             client.interactive = False
+            client.may_sign_in = False
             await client.context.clear_cookies(**scope)
             await client.ensure_authenticated()
             frame = await open_account_tab(
@@ -229,6 +231,7 @@ async def _open_task_list(client):
             raise original from None
         finally:
             client.interactive = interactive
+            client.may_sign_in = may_sign_in
             if not recovered:
                 await client.context.clear_cookies(**scope)
                 await client.context.add_cookies([cookie])

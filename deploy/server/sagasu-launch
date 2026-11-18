@@ -37,18 +37,42 @@ if [[ $(id -un) != "$ACCOUNT" ]]; then
     exit 2
 fi
 
-# Ask the same parser the service uses whether a password is stored.
+# Ask the same parser the service uses whether a password is stored in plain
+# text, and whether the key for saved sign-ins is one this account cannot change.
 stored=0
 /opt/sagasu/venv/bin/python -I -c '
-import sys
+import os, stat, sys
 from dotenv import dotenv_values
 values = dotenv_values(sys.argv[1], interpolate=False)
-sys.exit(3 if values.get("SMU_LOGIN_PASSWORD") else 0)
-' "$ENV_FILE" || stored=$?
+if values.get("SMU_LOGIN_PASSWORD"):
+    sys.exit(3)
+key = (values.get("SAGASU_HTTP_SIGN_IN_KEY_FILE") or "").strip()
+if key:
+    try:
+        info = os.stat(key)
+    except OSError:
+        sys.exit(0)  # missing: saved sign-ins are simply off
+    real = os.path.realpath(key)
+    if (
+        not real.startswith("/etc/sagasu/")
+        or real.startswith(os.path.realpath(sys.argv[2]) + "/")
+        or info.st_uid != 0
+        or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+        or not stat.S_ISREG(info.st_mode)
+    ):
+        sys.exit(4)
+' "$ENV_FILE" "$STATE" || stored=$?
 if [[ -n ${SMU_LOGIN_PASSWORD:-} || $stored -eq 3 ]]; then
     printf '%s\n' \
-        'Refusing to start: an SMU password must not be stored on this server.' \
-        'Remove SMU_LOGIN_PASSWORD and sign in through the sign-in view instead.' >&2
+        'Refusing to start: SMU_LOGIN_PASSWORD would keep a password in plain text.' \
+        'Remove it from the settings file. A person saves their sign-in on the' \
+        "copy's own sign-in page instead, where it is kept encrypted." >&2
+    exit 78
+fi
+if [[ $stored -eq 4 ]]; then
+    printf '%s\n' \
+        'Refusing to start: SAGASU_HTTP_SIGN_IN_KEY_FILE must be a root-owned file in' \
+        '/etc/sagasu that only root can change (install.sh makes it).' >&2
     exit 78
 fi
 

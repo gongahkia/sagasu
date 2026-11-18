@@ -10,15 +10,22 @@ For a copy (the owner's, or a teammate's with --instance NAME):
   sagasu-ctl [--instance NAME] key-remove LABEL  revoke an API key
   sagasu-ctl [--instance NAME] restart           restart that copy
   sagasu-ctl [--instance NAME] logs              last 80 lines of its private log
+  sagasu-ctl [--instance NAME] forget-sign-in    delete its SMU sign-in, saved
+                                                 password and browser data
+  sagasu-ctl [--instance NAME] smu-account EMAIL accept only this SMU account
 
 For the owner only, to give a teammate a copy signed in to their own account:
   sagasu-ctl instance-list
-  sagasu-ctl instance-add NAME [--read-only]     a copy with its own address and key
+  sagasu-ctl instance-add NAME [EMAIL] [--read-only]
+                                                 a copy with its own address and
+                                                 key; EMAIL locks it to that
+                                                 teammate's SMU account
   sagasu-ctl access-add NAME 'ssh-ed25519 AAAA...'   optional: an SSH login for them
   sagasu-ctl access-remove NAME
   sagasu-ctl instance-remove NAME --yes          delete the copy and its data
 """
 
+import base64
 import datetime
 import glob
 import hashlib
@@ -37,6 +44,11 @@ SITES = "/etc/caddy/sites"
 SSH_KEYS = "/etc/ssh/sagasu_keys"
 KIT = "/opt/sagasu/app/deploy/server"
 LABEL = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
+# The same SMU addresses Sagasu accepts (sagasu/personal.py SMU_EMAIL_RE).
+SMU_EMAIL = re.compile(
+    r"[A-Za-z0-9._%+-]+@(smu\.edu\.sg|(scis|sis|computing|law|business|accountancy|economics|socsc)\.smu\.edu\.sg)",
+    re.I,
+)
 # A teammate's copy starts with this key so it can run; nobody holds it, and the
 # copy's first real key replaces it.
 PLACEHOLDER = "setup"
@@ -67,6 +79,19 @@ class Copy:
             self.units = ("sagasu-xvfb", "sagasu")
             self.launch = ["/opt/sagasu/bin/sagasu-launch"]
         self.oauth_store = f"{self.state}/oauth.sqlite3"
+        # Encrypts the person's saved SMU sign-in (install.sh makes it).
+        self.sign_in_key = f"/etc/sagasu/{name or 'sagasu'}.signin-key"
+        # What forget-sign-in deletes: the SMU session, the saved password,
+        # the sign-in record and the sign-in pictures.
+        self.sign_in_state = [
+            f"{self.state}/{part}"
+            for part in (
+                "profile",
+                "auth",
+                "saved-sign-in.json",
+                "sign-in-ledger.json",
+            )
+        ]
 
 
 def read(copy):
@@ -75,7 +100,7 @@ def read(copy):
 
 
 ASSIGNMENT = re.compile(r"\s*(?:export\s+)?'?([A-Za-z_][A-Za-z0-9_]*)'?\s*=(.*)")
-PLAIN = re.compile(r"[A-Za-z0-9_.:,/@-]*")
+PLAIN = re.compile(r"[A-Za-z0-9_.:,/@%+-]*")
 KEY_ENTRY = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}:[0-9a-f]{64}")
 
 
@@ -168,8 +193,47 @@ def restart(copy):
     print("Restarting Sagasu (this closes the server's browser).")
     subprocess.run(["systemctl", "restart", copy.units[1]], check=True)
     print(
-        "Done. If agents then report that sign-in is needed, sign in again"
-        " (the same sign-in command as the first time)."
+        "Done. If SMU asks to sign in again, a saved sign-in does it from chat;"
+        " otherwise sign in again on the copy's sign-in page."
+    )
+
+
+def make_sign_in_key(copy):
+    """A fresh key for the copy's saved sign-in, readable only by its account."""
+    if os.path.exists(copy.sign_in_key):
+        os.remove(copy.sign_in_key)
+    text = base64.b64encode(secrets.token_bytes(32)).decode() + "\n"
+    write_file(copy.sign_in_key, text, copy.account, 0o640)
+
+
+def forget_sign_in(copy):
+    subprocess.run(["systemctl", "stop", copy.units[1]], check=True)
+    try:
+        for path in copy.sign_in_state + glob.glob(f"{copy.state}/.saved-sign-in-*.tmp") + glob.glob(f"{copy.state}/.sign-in-ledger-*.tmp"):
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path, ignore_errors=True)
+            elif os.path.lexists(path):
+                os.remove(path)
+    finally:
+        subprocess.run(["systemctl", "start", copy.units[1]], check=True)
+    print(
+        "The copy's SMU sign-in, saved password, sign-in record and browser data"
+        " are deleted."
+    )
+
+
+def saved_sign_in_line(copy, lines):
+    """Without the service's Python: what is configured and on disk."""
+    if not value(lines, "SAGASU_HTTP_SIGN_IN_KEY_FILE", "", copy.env):
+        return "off (no key configured)"
+    if not os.path.exists(copy.sign_in_key):
+        return "off (key missing)"
+    saved = os.path.exists(f"{copy.state}/saved-sign-in.json")
+    account = value(lines, "SAGASU_SMU_ACCOUNT", "", copy.env)
+    return (
+        ("on, a sign-in is saved" if saved else "on, nothing saved yet")
+        + (f", for {account} only" if account else "")
+        + " (the copy's status below says whether it works)"
     )
 
 
@@ -198,6 +262,7 @@ def copy_command(copy, arguments):
             if not (copy.name and label == PLACEHOLDER)
         ]
         print(f"{'api keys':20} {', '.join(shown) or 'none yet (create one with key-add)'}")
+        print(f"{'saved sign-in':20} {saved_sign_in_line(copy, lines)}")
         sys.stdout.flush()
         subprocess.run([*copy.launch, "host", "status"])
     elif command in {"writes", "oauth"} and arguments[1:] in (["on"], ["off"]):
@@ -245,6 +310,15 @@ def copy_command(copy, arguments):
         print(f"API key '{arguments[1]}' no longer works.")
         restart(copy)
     elif command == "restart" and len(arguments) == 1:
+        restart(copy)
+    elif command == "forget-sign-in" and len(arguments) == 1:
+        forget_sign_in(copy)
+    elif command == "smu-account" and len(arguments) == 2:
+        # Lock the copy to one SMU account: no other can be saved or used.
+        if not SMU_EMAIL.fullmatch(arguments[1]):
+            sys.exit("Use an SMU email address (name@smu.edu.sg).")
+        write(copy, lines, "SAGASU_SMU_ACCOUNT", arguments[1].lower())
+        print(f"This copy now accepts only {arguments[1].lower()}.")
         restart(copy)
     elif command == "logs" and len(arguments) == 1:
         subprocess.run(["tail", "-n", "80", f"{copy.state}/host.log"])
@@ -297,8 +371,10 @@ def reload_caddy():
     return True
 
 
-def instance_add(name, writes="on"):
+def instance_add(name, writes="on", account=None):
     check_name(name, exists=False)
+    if account is not None and not SMU_EMAIL.fullmatch(account):
+        sys.exit("Use an SMU email address (name@smu.edu.sg) for the copy's owner.")
     owner = read(Copy())
     base = value(owner, "SAGASU_HTTP_ALLOWED_HOSTS").split(",")[0]
     used = {int(instance_settings(other)["INDEX"]) for other in instance_names()}
@@ -336,6 +412,9 @@ def instance_add(name, writes="on"):
     # The teammate's key, shown once below. With it they connect their app and
     # sign in to SMU on the copy's own sign-in page; they never run a command.
     key = "sgs_" + secrets.token_urlsafe(32)
+    # A fresh key for their saved SMU sign-in; one left by an earlier copy of
+    # the same name may belong to a group ID that has since been reused.
+    make_sign_in_key(copy)
     write_file(
         copy.env,
         "\n".join(
@@ -348,6 +427,9 @@ def instance_add(name, writes="on"):
                 f"SAGASU_AUTH_ARTIFACT_DIR={copy.state}/auth",
                 "SAGASU_READ_BACKEND=auto",
                 "SAGASU_MCP_CONFIRMATION=agent",
+                # On the live picture the person answers "Stay signed in?".
+                # Signing in with a saved password, Sagasu answers Yes
+                # (SAGASU_SAVED_SIGN_IN_STAY, default true).
                 "SAGASU_STAY_SIGNED_IN=false",
                 "SAGASU_AUTH_TIMEOUT_MS=900000",
                 "SAGASU_SESSION_COOKIES=fbs",
@@ -356,6 +438,8 @@ def instance_add(name, writes="on"):
                 f"SAGASU_HTTP_KEYS=main:{hashlib.sha256(key.encode()).hexdigest()}",
                 f"SAGASU_HTTP_WRITES={writes}",
                 "SAGASU_HTTP_OAUTH=on",
+                f"SAGASU_HTTP_SIGN_IN_KEY_FILE={copy.sign_in_key}",
+                *([f"SAGASU_SMU_ACCOUNT={account.lower()}"] if account else []),
                 "",
             ]
         ),
@@ -374,9 +458,11 @@ def instance_add(name, writes="on"):
         f"Send {name} these two things. The key is shown only this once:\n\n"
         f"  Address:  https://{host}/mcp\n"
         f"  Key:      {key}\n\n"
-        "They add the address in ChatGPT or Claude, sign in with the key, then sign\n"
-        "in to their own SMU account on the page that opens. They can sign in to SMU\n"
-        f"again at any time at https://{host}/sign-in"
+        "They add the address in ChatGPT or Claude and sign in with the key. On the\n"
+        "page that opens they save their own SMU email and password once and approve\n"
+        "one sign-in in Microsoft Authenticator. After that, when SMU asks again, their\n"
+        "agent shows them a number to enter in Authenticator; nothing else."
+        + ("" if account else f"\n\nTo lock the copy to their SMU account: sudo sagasu-ctl --instance {name} smu-account EMAIL")
     )
 
 
@@ -470,7 +556,9 @@ def instance_remove(name):
     for path in (copy.state, f"/run/sagasu-{name}", f"/tmp/sagasu-{uid}" if uid else ""):
         if path and os.path.exists(path):
             shutil.rmtree(path, ignore_errors=True)
-    for path in (copy.env, f"{INSTANCES}/{name}"):
+    # The sign-in key goes before the account, so it is never left owned by a
+    # group ID that a later copy could be given.
+    for path in (copy.env, copy.sign_in_key, f"{INSTANCES}/{name}"):
         if os.path.exists(path):
             os.remove(path)
     subprocess.run(["userdel", copy.account], capture_output=True)
@@ -513,10 +601,17 @@ def main(arguments):
         sys.exit("Only the server's owner can do that.")
     if command == "instance-list" and len(arguments) == 1:
         instance_list()
-    elif command == "instance-add" and len(arguments) == 2:
-        instance_add(arguments[1])
-    elif command == "instance-add" and arguments[2:] == ["--read-only"]:
-        instance_add(arguments[1], writes="off")
+    elif command == "instance-add" and 2 <= len(arguments) <= 4:
+        rest = arguments[2:]
+        read_only = "--read-only" in rest
+        others = [item for item in rest if item != "--read-only"]
+        if len(others) > 1 or rest.count("--read-only") > 1:
+            sys.exit(__doc__)
+        instance_add(
+            arguments[1],
+            writes="off" if read_only else "on",
+            account=others[0] if others else None,
+        )
     elif command == "instance-remove" and arguments[2:] == ["--yes"]:
         instance_remove(arguments[1])
     elif command == "access-add" and len(arguments) >= 3:

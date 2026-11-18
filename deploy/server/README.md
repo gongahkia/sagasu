@@ -11,7 +11,8 @@ This is separate from `deploy/linux`, which installs a headless runtime for an a
 | Search rooms, read bookings, tasks, credits, history | Yes | Yes |
 | Book, amend, cancel | Only if `SAGASU_HTTP_WRITES=on` | Yes |
 | Change saved contacts, preferences, plans, templates | Only if `SAGASU_HTTP_WRITES=on` | Yes |
-| Sign in to SMU, see or answer an MFA prompt | Never | Yes |
+| Sign in to SMU | Only with the person's own saved sign-in (below); the person approves on their phone | Yes |
+| See or answer an MFA prompt | Sees the number to enter, in results, on its own requests only | Yes |
 | Approve other people's requests, batch several actions | Never | Yes |
 | See, read, cancel or submit anything started at the server | Never | Yes |
 | Stop, recover or inspect the host; take browser screenshots | Never | Yes |
@@ -20,7 +21,7 @@ Remote tools are removed from the tool list, not merely refused, so an agent nev
 
 Every operation and review records whether a remote call or the person at the server created it. A remote caller is shown, and can address, only what remote calls created; the owner sees everything.
 
-A remote call never types or clicks on a Microsoft page. When the FBS session has lapsed it waits up to 25 seconds for Microsoft's own single sign-on redirect. If Microsoft asks for anything, the call fails with `sign_in_required_on_host` and further remote FBS requests are refused for 15 minutes without loading the sign-in page again, or until the owner signs in. Multi-date planning calls stop at the first date that needs the owner.
+When the FBS session has lapsed, a remote call first waits up to 25 seconds for Microsoft's own single sign-on redirect. If Microsoft asks for more, what happens depends on whether the person saved their SMU sign-in on the copy ("Saved sign-in" below). With one saved, the copy signs in with it and the call's result shows the number to enter in Microsoft Authenticator. Without one, a remote call never types or clicks on a Microsoft page: it fails with `sign_in_setup_needed` (or `sign_in_required_on_host` where saving is off), and further remote FBS requests are refused without loading the sign-in page again until the person signs in. Multi-date planning calls stop at the first date that needs the person.
 
 ## How it fits together
 
@@ -82,11 +83,33 @@ Then open `vnc://localhost:5901` (macOS Screen Sharing) or `http://localhost:608
 
 The view stays open for 15 minutes (`SAGASU_AUTH_TIMEOUT_MS=900000`). Sagasu types nothing. Its sign-in loop still clicks on three Microsoft screens if they appear: "Use my password", the Microsoft Authenticator choice, and a passkey prompt, which it moves past.
 
-`SAGASU_STAY_SIGNED_IN=false` leaves Microsoft's "Stay signed in?" question to you. Yes keeps the server signed in across restarts. No is safer and means signing in again after a restart or when the session lapses.
+On the live picture, `SAGASU_STAY_SIGNED_IN=false` leaves Microsoft's "Stay signed in?" question to you. Yes keeps the server signed in across restarts; No means signing in again after a restart or when the session lapses. When Sagasu signs in with a saved sign-in, nobody is watching, so it answers itself: Yes, unless `SAGASU_SAVED_SIGN_IN_STAY=false`.
 
 If Microsoft shows a block page, an error, or a step you do not normally see, do not retry from the server. Stop the service and ask your IT department.
 
-`SMU_LOGIN_PASSWORD` must not be set on a server. Configuration validation rejects it together with the remote listener, and the launcher refuses to start.
+`SMU_LOGIN_PASSWORD` must not be set on a server: it would keep a password in plain text. Configuration validation rejects it together with the remote listener, and the launcher refuses to start. The launcher also refuses a sign-in key that is not a root-owned file in `/etc/sagasu` that only root can change.
+
+### Saved sign-in: signing in from chat
+
+Each copy has its own key, `/etc/sagasu/NAME.signin-key` (root-owned, readable only by that copy's account), which `install.sh` creates once and never rewrites. With it set (`SAGASU_HTTP_SIGN_IN_KEY_FILE`), the person saves their SMU email and password on the copy's own sign-in page, once. They are kept encrypted in the copy's state folder (`saved-sign-in.json`, AES-256-GCM). After that:
+
+1. When SMU needs a new sign-in, the agent's request signs in with them. Nobody watches the browser; Sagasu answers Microsoft's "Stay signed in?" itself (Yes, unless `SAGASU_SAVED_SIGN_IN_STAY=false`).
+2. The request's result has a `sign_in` field with the number to enter in Microsoft Authenticator and the words to give the person. The agent shows it and ends its turn.
+3. The person enters the number and replies "done". The agent's next `wait_operation` waits through the approval and returns the result.
+
+The person never gives a password to an agent or a chat. When a sign-in page is needed (first use, a changed password), errors carry `sign_in_url`: a one-time link to the copy's page that needs no access key, used once and valid for 15 minutes.
+
+Safeguards:
+
+- **One account per copy.** A copy accepts only the first SMU account Microsoft accepted on it, or the one set with `sagasu-ctl [--instance NAME] smu-account EMAIL` (or `instance-add NAME EMAIL`). Nobody can be led into saving their password on someone else's copy.
+- **Limits on disk.** At most 4 sign-ins an hour and 5 passwords typed a day, kept in `sign-in-ledger.json` so restarts do not reset them.
+- **Holds.** After a sign-in that ends short of FBS, remote requests stop signing in. A missed or denied approval is lifted when the person asks their agent to sign in again. A rejected password (which is deleted at once), a lock or block, or an unclear end after the password is lifted only on the person's own sign-in page or by a successful sign-in.
+- **Checks never sign in.** `session_status` and other checks fail with `sign_in_needed` instead of sending a request to the phone.
+- **Records.** The sign-in page lists recent sign-ins and where they came from.
+
+The encryption protects copies of the state folder. It does not protect against whoever controls the running service or the server: the administrator can read every saved password. Only host copies for people who trust whoever administers the server.
+
+Without the key (or if it is unreadable), the copy works exactly as before: agents cannot sign in, and the person signs in on the live picture.
 
 ## Day to day
 
@@ -98,25 +121,29 @@ sudo sagasu-ctl connections       # apps signed in through OAuth, per key
 sudo sagasu-ctl key-add laptop    # new API key, printed once
 sudo sagasu-ctl key-remove laptop # revoke a key
 sudo sagasu-ctl logs              # private host log: one line per remote tool call
+sudo sagasu-ctl forget-sign-in    # delete the SMU session, saved password and sign-in record
+sudo sagasu-ctl smu-account EMAIL # accept only this SMU account on the copy
 sudo bash sagasu-src/deploy/server/install.sh --update   # after copying new code
 ```
 
 `--update` keeps keys, settings and saved state. It refreshes a proxy configuration this kit wrote, and it leaves a service you had disabled stopped and disabled. If a step fails, it starts Sagasu again with what is installed.
 
-Changing a setting restarts the service, which closes the browser. If agents then report `sign_in_required_on_host`, sign in again at `https://HOST/sign-in` or with `sudo sagasu-signin`.
+Changing a setting restarts the service, which closes the browser. With a saved sign-in, the next request signs in again and shows the number to approve. Otherwise sign in again at `https://HOST/sign-in` or with `sudo sagasu-signin`.
+
+To switch saved sign-ins off for a copy: `sagasu-ctl [--instance NAME] forget-sign-in`, then remove the `SAGASU_HTTP_SIGN_IN_KEY_FILE` line from its settings file and restart it. An older version of this kit ignores the line, but its `forget-sign-in` does not delete `saved-sign-in.json`; run the new one first.
 
 ## Teammates' copies
 
 A copy serves one SMU account. Never give a teammate a key to yours: everything they did would happen as you. Give them their own copy, on the same server:
 
 ```bash
-sudo sagasu-ctl instance-add alex                         # prints https://alex.<your host>/mcp and a key
+sudo sagasu-ctl instance-add alex alex@smu.edu.sg         # prints https://alex.<your host>/mcp and a key
 sudo sagasu-ctl instance-list
 sudo sagasu-ctl --instance alex status                    # any copy command, for their copy
 sudo sagasu-ctl instance-remove alex --yes                # the copy, its sign-in and data
 ```
 
-`instance-add` creates a separate account (`sagasu-alex`), state folder, virtual display, socket, settings file and Caddy site, and one API key, printed once. The host name is the owner's with the copy's name in front, so with sslip.io it needs no DNS change. The copy starts with OAuth on and booking on (`--read-only` keeps booking off). Send the teammate the address and the key. They connect their app and sign in to SMU at their copy's `/sign-in` page; they never need the server itself.
+`instance-add` creates a separate account (`sagasu-alex`), state folder, virtual display, socket, settings file and Caddy site, and one API key, printed once. The host name is the owner's with the copy's name in front, so with sslip.io it needs no DNS change. The copy starts with OAuth on and booking on (`--read-only` keeps booking off). The optional email locks the copy to that teammate's SMU account. Send the teammate the address and the key. They connect their app, save their SMU sign-in on the page that opens, and approve one sign-in; after that their agent signs them in from chat. They never need the server itself.
 
 Optionally, `access-add alex 'ssh-ed25519 AAAA...'` gives a teammate an SSH login instead, and `access-remove alex` takes it away. `access-add` creates a login, `fbs-alex`, that has no password and accepts only that key. The key can run only `sagasu-self alex`, which accepts a fixed list of commands for that copy (`signin`, `status`, `key-add`, `key-remove`, `connections`, `writes`, `oauth`, `restart`, `forget-sign-in`, `help`). It can forward only to that copy's own sign-in view ports. There is no shell, no other forwarding, and no access to other copies. The teammate signs in with:
 

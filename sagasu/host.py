@@ -78,6 +78,13 @@ def identity_parts(settings):
         del effective["remote_listener"]
     if settings.values.get("SAGASU_HTTP_KEYS"):
         effective["SAGASU_HTTP_KEYS"] = settings.values["SAGASU_HTTP_KEYS"]
+    for key in (
+        "SAGASU_HTTP_SIGN_IN_KEY_FILE",
+        "SAGASU_SMU_ACCOUNT",
+        "SAGASU_SAVED_SIGN_IN_STAY",
+    ):
+        if settings.values.get(key):
+            effective[key] = settings.values[key]
     code = hashlib.sha256()
     for path in sorted((Path(__file__).parent).glob("*.py")):
         code.update(path.name.encode())
@@ -97,6 +104,29 @@ def _fingerprint(parts):
 
 def fingerprint(settings):
     return _fingerprint(identity_parts(settings))
+
+
+def saved_sign_in(settings, listener):
+    """The person's saved sign-in store, or None when this copy cannot keep one.
+
+    Off unless the key file is set and readable at start-up: a copy without a
+    key behaves exactly as before (the person signs in on the page; agents
+    cannot sign in).
+    """
+    if not getattr(listener, "sign_in_key_file", None):
+        return None
+    from .observability import event
+    from .saved_sign_in import SavedSignIn
+
+    store = SavedSignIn(
+        settings.preferences.parent,
+        listener.sign_in_key_file,
+        account=getattr(listener, "smu_account", None),
+    )
+    if not store.available:
+        event("saved_sign_in.unavailable", level=30)
+        return None
+    return store
 
 
 def recovery_state(service):
@@ -627,6 +657,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                     from .mcp_server import RemoteAccess
                     from .remote import LABEL_HEADER, RemoteHTTP
 
+                    service.saved_sign_in = saved_sign_in(settings, listener)
                     remote_http = RemoteHTTP(
                         listener,
                         create_server(
@@ -638,6 +669,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                                 # The gate in front of /mcp names the key it
                                 # accepted, whether sent directly or as a token.
                                 caller=lambda headers: headers.get(LABEL_HEADER),
+                                saved_sign_in=service.saved_sign_in is not None,
                             ),
                         ),
                         oauth_store=settings.preferences.with_name("oauth.sqlite3"),

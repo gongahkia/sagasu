@@ -53,6 +53,7 @@ SAGASU_READ_BACKEND=auto
 # SAGASU_HTTP_KEYS=laptop:<sha256 of the API key, hex>
 # SAGASU_HTTP_WRITES=off
 # SAGASU_HTTP_OAUTH=off
+# SAGASU_HTTP_SIGN_IN_KEY_FILE=/etc/sagasu/sagasu.signin-key   (lets each person save their SMU sign-in)
 """
 
 # Apps whose OAuth redirect may receive a sign-in code. Loopback serves desktop
@@ -98,6 +99,11 @@ class RemoteListener:
     oauth_redirect_hosts: tuple[str, ...] = ()
     # Listen on this socket file instead of the loopback port.
     socket: str | None = None
+    # The key that encrypts the person's saved SMU sign-in (saved_sign_in.py).
+    # Without it, nothing can be saved and the person signs in on the page.
+    sign_in_key_file: str | None = None
+    # The one SMU account this copy belongs to, when the administrator set it.
+    smu_account: str | None = None
 
 
 def parse_remote_listener(values):
@@ -203,6 +209,19 @@ def parse_remote_listener(values):
         problems.append(
             "SAGASU_OAUTH_REDIRECT_HOSTS must list host names, without scheme, port or path."
         )
+    key_file = (values.get("SAGASU_HTTP_SIGN_IN_KEY_FILE") or "").strip() or None
+    if key_file is not None and (
+        not key_file.startswith("/") or "\0" in key_file or len(key_file) > 200
+    ):
+        problems.append(
+            "SAGASU_HTTP_SIGN_IN_KEY_FILE must be an absolute path of at most 200 characters."
+        )
+    account = (values.get("SAGASU_SMU_ACCOUNT") or "").strip() or None
+    if account is not None:
+        from .personal import SMU_EMAIL_RE
+
+        if not SMU_EMAIL_RE.fullmatch(account):
+            problems.append("SAGASU_SMU_ACCOUNT must be an SMU email address.")
     if problems:
         return None, problems
     return (
@@ -215,6 +234,8 @@ def parse_remote_listener(values):
             oauth == "on",
             redirect_hosts,
             socket_path,
+            key_file,
+            account,
         ),
         [],
     )
@@ -512,6 +533,7 @@ class Settings:
                     "writes": http.writes,
                     "oauth": http.oauth,
                     "oauth_redirect_hosts": list(http.oauth_redirect_hosts),
+                    "saved_sign_in": http.sign_in_key_file is not None,
                 }
                 if (http := self.http) is not None
                 else {
