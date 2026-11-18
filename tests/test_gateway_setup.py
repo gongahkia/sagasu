@@ -1117,8 +1117,13 @@ class ProxyAndUnitTests(unittest.TestCase):
         self.assertEqual(folder[-1], "/run/sagasu-gateway")
         self.assertEqual(folder[folder.index("-g") + 1], "caddy")
         self.assertEqual(folder[folder.index("-m") + 1], "2750")
+        # The socket folder with "-": ExecStartPre makes it, after the sandbox
+        # is set up for that step (live finding: 226/NAMESPACE without it).
         self.assertEqual(set(service["ReadWritePaths"].split()),
-                         {"/var/lib/sagasu-gateway", "/run/sagasu-gateway"})
+                         {"/var/lib/sagasu-gateway", "-/run/sagasu-gateway"})
+        install = (KIT / "install.sh").read_text()
+        # A failed start reaches the readiness check (and its backout), not set -e.
+        self.assertIn("systemctl restart sagasu-gateway.service || true", install)
         self.assertEqual(service["WorkingDirectory"], "/var/lib/sagasu-gateway")
         self.assertEqual(parser["Install"]["WantedBy"], "multi-user.target")
         # It holds a key to every copy: socket files only, no capabilities,
