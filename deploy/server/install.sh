@@ -93,15 +93,27 @@ if [[ -e /etc/systemd/system/sagasu.service ]] &&
     ! systemctl is-enabled --quiet sagasu.service; then
     LEAVE_STOPPED=1
 fi
+# The same for the gateway, once it exists.
+LEAVE_GATEWAY_STOPPED=0
+if [[ -e /etc/systemd/system/sagasu-gateway.service ]] &&
+    ! systemctl is-enabled --quiet sagasu-gateway.service; then
+    LEAVE_GATEWAY_STOPPED=1
+fi
 
 apt-get update
-apt-get install --yes python3 python3-venv ca-certificates rsync \
+apt-get install --yes python3 python3-venv ca-certificates rsync curl \
     xvfb xauth x11vnc novnc websockify caddy
 
 if ! id sagasu >/dev/null 2>&1; then
     useradd --system --user-group --home-dir /var/lib/sagasu \
         --shell /usr/sbin/nologin --no-create-home sagasu
 fi
+# The gateway (one address for every copy): its own account, no browser.
+if ! id sagasu-gateway >/dev/null 2>&1; then
+    useradd --system --user-group --home-dir /var/lib/sagasu-gateway \
+        --shell /usr/sbin/nologin --no-create-home sagasu-gateway
+fi
+install -d -o sagasu-gateway -g sagasu-gateway -m 0700 /var/lib/sagasu-gateway
 install -d -o root -g root -m 0755 /opt/sagasu /opt/sagasu/bin /opt/sagasu/browsers
 install -d -o sagasu -g sagasu -m 0700 /var/lib/sagasu
 # 0751: every copy's account must pass through to its own settings file, but
@@ -160,7 +172,7 @@ for name in sagasu-launch sagasu-signin sagasu-ctl sagasu-self; do
 done
 ln -sf /opt/sagasu/bin/sagasu-signin /usr/local/bin/sagasu-signin
 ln -sf /opt/sagasu/bin/sagasu-ctl /usr/local/bin/sagasu-ctl
-for unit in sagasu.service sagasu-xvfb.service sagasu@.service sagasu-xvfb@.service; do
+for unit in sagasu.service sagasu-xvfb.service sagasu@.service sagasu-xvfb@.service sagasu-gateway.service; do
     install -o root -g root -m 0644 "$KIT/$unit" "/etc/systemd/system/$unit"
 done
 
@@ -248,6 +260,32 @@ for instance in /etc/sagasu/instances/*; do
     ensure_signin_key "$name" "sagasu-$name" "/etc/sagasu/$name.env"
 done
 
+# The gateway: one address (the owner's host name) for every copy.
+GATEWAY_SETTINGS=/etc/sagasu/gateway.env
+if [[ ! -e $GATEWAY_SETTINGS ]]; then
+    # App sign-in at the shared address follows the owner's own setting (off
+    # when it was never set, as for a copy).
+    oauth=$(sed -n 's/^SAGASU_HTTP_OAUTH=\(on\|off\)$/\1/p' "$SETTINGS" | tail -n 1)
+    redirects=$(sed -n 's/^SAGASU_OAUTH_REDIRECT_HOSTS=\([a-z0-9.,-]*\)$/\1/p' "$SETTINGS" | tail -n 1)
+    {
+        printf '%s\n' \
+            '# The gateway: one address for every copy (sagasu/gateway.py).' \
+            "SAGASU_GATEWAY_HOST=$(recorded_host)" \
+            'SAGASU_GATEWAY_SOCKET=/run/sagasu-gateway/http.sock' \
+            'SAGASU_GATEWAY_ROUTES=/etc/sagasu/gateway-routes.json' \
+            'SAGASU_GATEWAY_STATE=/var/lib/sagasu-gateway' \
+            "SAGASU_GATEWAY_OAUTH=${oauth:-off}"
+        [[ -z $redirects ]] || printf 'SAGASU_OAUTH_REDIRECT_HOSTS=%s\n' "$redirects"
+    } >"$GATEWAY_SETTINGS.new"
+    chown root:sagasu-gateway "$GATEWAY_SETTINGS.new"
+    chmod 0640 "$GATEWAY_SETTINGS.new"
+    mv "$GATEWAY_SETTINGS.new" "$GATEWAY_SETTINGS"
+fi
+# Its routing table, while the copies are stopped: any copy given its gateway
+# key now starts with it, without another restart. Fails (and so does this
+# install) if the owner's copy cannot be put on the shared address.
+/opt/sagasu/bin/sagasu-ctl gateway-sync --no-restart --strict
+
 # An update refreshes a proxy configuration this kit wrote, never one written by hand.
 if [[ -z $HOST ]] && head -n 1 /etc/caddy/Caddyfile 2>/dev/null |
     grep -q '^# Publishes only Sagasu'; then
@@ -259,6 +297,8 @@ if [[ -n $HOST ]]; then
     fi
     sed -e "s/@PUBLIC_HOST@/$HOST/" "$KIT/Caddyfile.template" >/etc/caddy/Caddyfile.sagasu-new
     caddy validate --config /etc/caddy/Caddyfile.sagasu-new --adapter caddyfile >/dev/null
+    # Kept, so a gateway that fails its first start can be backed out below.
+    [[ ! -e /etc/caddy/Caddyfile ]] || cp -p /etc/caddy/Caddyfile /etc/caddy/Caddyfile.previous
     mv /etc/caddy/Caddyfile.sagasu-new /etc/caddy/Caddyfile
 fi
 
@@ -285,6 +325,48 @@ if [[ ! -f $RULES ]] || ! grep -q -- "$SAVED" "$RULES"; then
 fi
 
 systemctl daemon-reload
+
+# The gateway, before any copy starts again. The first time, the owner's
+# copy's OAuth sign-ins move to it while that copy is stopped, so apps signed
+# in at this address stay signed in (and nothing keeps using the old file).
+MOVED_STORE=0
+if [[ ! -e /var/lib/sagasu-gateway/oauth.sqlite3 && -f /var/lib/sagasu/oauth.sqlite3 ]]; then
+    install -o sagasu-gateway -g sagasu-gateway -m 0600 \
+        /var/lib/sagasu/oauth.sqlite3 /var/lib/sagasu-gateway/oauth.sqlite3
+    mv /var/lib/sagasu/oauth.sqlite3 /var/lib/sagasu/oauth.sqlite3.moved-to-gateway
+    MOVED_STORE=1
+fi
+gateway_answers() {
+    # A request without a key must get the gateway's own 401.
+    local host code
+    host=$(sed -n 's/^SAGASU_GATEWAY_HOST=\([a-z0-9.-]*\)$/\1/p' "$GATEWAY_SETTINGS")
+    for _ in $(seq 1 30); do
+        code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            --unix-socket /run/sagasu-gateway/http.sock -H "Host: $host" \
+            http://localhost/mcp 2>/dev/null || true)
+        [[ $code == 401 ]] && return 0
+        sleep 1
+    done
+    return 1
+}
+if [[ $LEAVE_GATEWAY_STOPPED -eq 0 ]]; then
+    systemctl enable sagasu-gateway.service
+    systemctl restart sagasu-gateway.service
+    if ! gateway_answers; then
+        printf '%s\n' '' \
+            'The gateway did not start; backing it out. The owner'"'"'s address goes on' \
+            'serving the owner'"'"'s copy directly. See: journalctl -u sagasu-gateway' >&2
+        systemctl disable --now sagasu-gateway.service || true
+        if [[ $MOVED_STORE -eq 1 ]]; then
+            mv /var/lib/sagasu/oauth.sqlite3.moved-to-gateway /var/lib/sagasu/oauth.sqlite3
+            rm -f /var/lib/sagasu-gateway/oauth.sqlite3
+        fi
+        [[ ! -e /etc/caddy/Caddyfile.previous ]] ||
+            cp -p /etc/caddy/Caddyfile.previous /etc/caddy/Caddyfile
+        exit 1
+    fi
+fi
+
 # Teammates' copies come back whatever the owner chose for their own.
 for unit in "${COPIES[@]}"; do
     systemctl restart "sagasu-xvfb@${unit#sagasu@}" || true
@@ -309,6 +391,7 @@ printf '%s\n' \
     "  sagasu       $(systemctl is-active sagasu.service)" \
     "  sagasu-xvfb  $(systemctl is-active sagasu-xvfb.service)" \
     "  caddy        $(systemctl is-active caddy.service)" \
+    "  gateway      $(systemctl is-active sagasu-gateway.service)" \
     '' \
     'Still to do, by a person, on a first install:' \
     '  1. Allow inbound TCP 443 to this server in the cloud provider firewall.' \

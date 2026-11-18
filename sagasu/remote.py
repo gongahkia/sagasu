@@ -19,6 +19,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import socket
 import time
 from pathlib import Path
@@ -41,6 +42,15 @@ ALTERNATIVE_KEY_HEADER = "x-api-key"
 # this header is always removed first.
 LABEL_HEADER = "x-sagasu-key-label"
 TOKEN_REASONS = frozenset({"unknown_token", "expired_token", "key_removed"})
+# The key the server's gateway (gateway.py) uses for this copy, and the header
+# it names the person's own key in, by its SHA-256 digest. Only the gateway's
+# key, the copy's OAuth switch and the copy's own keys decide.
+GATEWAY_LABEL = "gateway"
+CALLER_HEADER = b"x-sagasu-caller"
+CALLER = re.compile(r"[0-9a-f]{64}")
+# The gateway's key opens /mcp only: never the sign-in page or OAuth sign-in.
+def person_keys(keys):
+    return {digest: label for digest, label in keys.items() if label != GATEWAY_LABEL}
 
 
 def check_key(keys, headers):
@@ -173,6 +183,21 @@ class KeyGate:
                 CLIENT_ADDRESS.reset(token)
             return
         label, reason = self.credentials(headers)
+        if label == GATEWAY_LABEL:
+            # The server's gateway (gateway.py), for an app that signed in
+            # there. The copy decides whose request it is: the key named (by
+            # digest) must be one of its own, now, with OAuth allowed here. So
+            # removing a key, or switching OAuth off, takes effect at once.
+            named = next(
+                (value for name, value in headers if name == CALLER_HEADER), b""
+            ).decode("latin-1")
+            owner = self.keys.get(named) if CALLER.fullmatch(named) else None
+            if self.oauth is None:
+                label, reason = None, "oauth_off"
+            elif owner is None or owner == GATEWAY_LABEL:
+                label, reason = None, "key_removed"
+            else:
+                label = f"oauth:{owner}"
         if label is None:
             self.rejected[reason] = self.rejected.get(reason, 0) + 1
             now = time.monotonic()
@@ -223,7 +248,7 @@ class KeyGate:
                 headers=[
                     (name, value)
                     for name, value in scope.get("headers") or ()
-                    if name.lower() != LABEL_HEADER.encode()
+                    if name.lower() not in {LABEL_HEADER.encode(), CALLER_HEADER}
                 ]
                 + [(LABEL_HEADER.encode(), label.encode())],
             )
@@ -374,7 +399,7 @@ class RemoteHTTP:
 
             self.desk = SignInDesk(
                 self.service,
-                self.listener.keys,
+                person_keys(self.listener.keys),
                 f"https://{self.listener.allowed_hosts[0]}",
             )
             # The SDK serves extra routes from this list alongside /mcp.
@@ -392,7 +417,7 @@ class RemoteHTTP:
 
             self.oauth = SagasuOAuth(
                 self.oauth_store,
-                self.listener.keys,
+                person_keys(self.listener.keys),
                 self.listener.allowed_hosts[0],
                 self.listener.oauth_redirect_hosts,
             )

@@ -1,0 +1,49 @@
+[Unit]
+Description=Sagasu gateway: one address for every copy on this server
+Documentation=file:/opt/sagasu/app/deploy/server/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sagasu-gateway
+Group=sagasu-gateway
+# The copies' sockets are reachable by the web proxy's group only.
+SupplementaryGroups=caddy
+UMask=0077
+WorkingDirectory=/var/lib/sagasu-gateway
+ExecStartPre=+/usr/bin/install -d -o sagasu-gateway -g caddy -m 2750 /run/sagasu-gateway
+ExecStart=/opt/sagasu/venv/bin/python -I -m sagasu.gateway --config /etc/sagasu/gateway.env
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+LimitNOFILE=16384
+# It holds a key to every copy, so it gets as little else as possible: no
+# network (only socket files), no capabilities, no other processes.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ReadWritePaths=/var/lib/sagasu-gateway /run/sagasu-gateway
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+
+[Install]
+WantedBy=multi-user.target

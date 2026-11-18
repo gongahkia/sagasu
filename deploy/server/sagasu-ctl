@@ -23,12 +23,19 @@ For the owner only, to give a teammate a copy signed in to their own account:
   sagasu-ctl access-add NAME 'ssh-ed25519 AAAA...'   optional: an SSH login for them
   sagasu-ctl access-remove NAME
   sagasu-ctl instance-remove NAME --yes          delete the copy and its data
+  sagasu-ctl gateway-sync [--rotate] [--no-restart]
+                                                 refresh the shared address's
+                                                 routing table (done for you by
+                                                 key, oauth and instance
+                                                 commands); --rotate gives every
+                                                 copy a new gateway key
 """
 
 import base64
 import datetime
 import glob
 import hashlib
+import json
 import os
 import pwd
 import re
@@ -52,6 +59,11 @@ SMU_EMAIL = re.compile(
 # A teammate's copy starts with this key so it can run; nobody holds it, and the
 # copy's first real key replaces it.
 PLACEHOLDER = "setup"
+# The gateway's own key for a copy (gateway.py): never shown, never removable
+# by hand, and never routed to from outside.
+GATEWAY = "gateway"
+GATEWAY_ACCOUNT = "sagasu-gateway"
+GATEWAY_ROUTES = "/etc/sagasu/gateway-routes.json"
 NAME = re.compile(r"[a-z][a-z0-9]{1,15}")
 RESERVED = {"owner", "root", "admin", "www", "mail", "sagasu", "api", "mcp"}
 PUBLIC_KEY = re.compile(
@@ -162,31 +174,58 @@ def save_keys(copy, lines, current):
     )
 
 
-def connections(copy):
-    """(key label, app name, redirect host, signed in) for each live OAuth grant."""
-    if not os.path.exists(copy.oauth_store):
-        return []
-    labels = {digest: label for label, digest in keys(copy, read(copy)).items()}
-    database = sqlite3.connect(f"file:{copy.oauth_store}?mode=ro", uri=True)
+GATEWAY_STORE = "/var/lib/sagasu-gateway/oauth.sqlite3"
+GATEWAY_SETTINGS = "/etc/sagasu/gateway.env"
+
+
+def gateway_serving():
+    """The gateway is running and lets apps sign in at the shared address."""
+    active = subprocess.run(
+        ["systemctl", "is-active", "--quiet", "sagasu-gateway"], check=False
+    ).returncode == 0
     try:
-        rows = database.execute(
-            """SELECT g.key_digest, g.client_name, g.redirect_host, g.created
-               FROM grants g WHERE EXISTS (
-                 SELECT 1 FROM tokens t WHERE t.grant_id = g.grant_id
-                 AND t.kind = 'refresh' AND t.expires > strftime('%s', 'now'))
-               ORDER BY g.created"""
-        ).fetchall()
-    finally:
-        database.close()
-    return [
-        (
-            labels.get(digest, "(key removed)"),
-            name or "?",
-            host or "?",
-            datetime.datetime.fromtimestamp(created).strftime("%d %b %H:%M"),
-        )
-        for digest, name, host, created in rows
-    ]
+        with open(GATEWAY_SETTINGS, encoding="utf-8") as stream:
+            oauth = "SAGASU_GATEWAY_OAUTH=on" in stream.read().split()
+    except OSError:
+        oauth = False
+    return active and oauth
+
+
+def connections(copy):
+    """(key label, app name, redirect host, signed in) for each live OAuth
+    grant of this copy's keys: at its own address and at the shared one."""
+    labels = {
+        digest: label
+        for label, digest in keys(copy, read(copy)).items()
+        if label != GATEWAY
+    }
+    found = []
+    for store, where in ((copy.oauth_store, ""), (GATEWAY_STORE, " (shared address)")):
+        if not os.path.exists(store):
+            continue
+        database = sqlite3.connect(f"file:{store}?mode=ro", uri=True)
+        try:
+            rows = database.execute(
+                """SELECT g.key_digest, g.client_name, g.redirect_host, g.created
+                   FROM grants g WHERE EXISTS (
+                     SELECT 1 FROM tokens t WHERE t.grant_id = g.grant_id
+                     AND t.kind = 'refresh' AND t.expires > strftime('%s', 'now'))
+                   ORDER BY g.created"""
+            ).fetchall()
+        finally:
+            database.close()
+        for digest, name, host, created in rows:
+            if store == GATEWAY_STORE and digest not in labels:
+                continue  # another copy's
+            found.append(
+                (
+                    labels.get(digest, "(key removed)"),
+                    (name or "?") + where,
+                    host or "?",
+                    datetime.datetime.fromtimestamp(created).strftime("%d %b %H:%M"),
+                )
+            )
+    return found
 
 
 def restart(copy):
@@ -259,7 +298,7 @@ def copy_command(copy, arguments):
         shown = [
             label
             for label in sorted(keys(copy, lines))
-            if not (copy.name and label == PLACEHOLDER)
+            if label != GATEWAY and not (copy.name and label == PLACEHOLDER)
         ]
         print(f"{'api keys':20} {', '.join(shown) or 'none yet (create one with key-add)'}")
         print(f"{'saved sign-in':20} {saved_sign_in_line(copy, lines)}")
@@ -274,6 +313,9 @@ def copy_command(copy, arguments):
             arguments[1] + ".",
         )
         restart(copy)
+        if command == "oauth":
+            # At the shared address too: off signs out every app there.
+            sync_after(copy)
     elif command == "connections" and len(arguments) == 1:
         rows = connections(copy)
         if not rows:
@@ -284,9 +326,9 @@ def copy_command(copy, arguments):
             print("To sign one out, remove or replace its key (key-remove LABEL).")
     elif command == "key-add" and len(arguments) == 2:
         label, current = arguments[1], keys(copy, lines)
+        if label == GATEWAY or (copy.name and label == PLACEHOLDER):
+            sys.exit(f"'{label}' is reserved; pick another label.")
         if copy.name:
-            if label == PLACEHOLDER:
-                sys.exit(f"'{PLACEHOLDER}' is reserved; pick another label.")
             current.pop(PLACEHOLDER, None)
         if not LABEL.fullmatch(label) or label in current or len(current) >= 16:
             sys.exit(
@@ -299,16 +341,18 @@ def copy_command(copy, arguments):
             f"API key '{label}' (shown once; keep it in a password manager):\n\n  {key}\n"
         )
         restart(copy)
+        sync_after(copy)
     elif command == "key-remove" and len(arguments) == 2:
         current = keys(copy, lines)
-        if arguments[1] not in current:
+        if arguments[1] not in current or arguments[1] == GATEWAY:
             sys.exit("No key has that label.")
-        if len(current) == 1:
+        if len([label for label in current if label != GATEWAY]) == 1:
             sys.exit("This is the only key. Add its replacement first with key-add.")
         del current[arguments[1]]
         save_keys(copy, lines, current)
         print(f"API key '{arguments[1]}' no longer works.")
         restart(copy)
+        sync_after(copy)
     elif command == "restart" and len(arguments) == 1:
         restart(copy)
     elif command == "forget-sign-in" and len(arguments) == 1:
@@ -452,16 +496,21 @@ def instance_add(name, writes="on", account=None):
     if not reload_caddy():
         os.remove(f"{SITES}/{name}.caddy")
         sys.exit("The web proxy rejected the new site; the copy was not published.")
+    # Its keys join the shared address's routing table before it first starts.
+    sync_after(copy)
+    # The shared address only while the gateway is running, with app sign-in.
+    shared = base if gateway_serving() else None
     subprocess.run(["systemctl", "enable", "--now", *copy.units], check=True)
     print(
         f"Created the copy '{name}'. Booking by agents is {writes}.\n\n"
         f"Send {name} these two things. The key is shown only this once:\n\n"
-        f"  Address:  https://{host}/mcp\n"
+        f"  Address:  https://{shared or host}/mcp\n"
         f"  Key:      {key}\n\n"
-        "They add the address in ChatGPT or Claude and sign in with the key. On the\n"
-        "page that opens they save their own SMU email and password once and approve\n"
-        "one sign-in in Microsoft Authenticator. After that, when SMU asks again, their\n"
-        "agent shows them a number to enter in Authenticator; nothing else."
+        "They add the address in ChatGPT or Claude and sign in with the key. The first\n"
+        "time SMU needs them, their agent gives them a link to a page where they save\n"
+        "their own SMU email and password once and approve one sign-in in Microsoft\n"
+        "Authenticator. After that, when SMU asks again, their agent shows them a\n"
+        "number to enter in Authenticator; nothing else."
         + ("" if account else f"\n\nTo lock the copy to their SMU account: sudo sagasu-ctl --instance {name} smu-account EMAIL")
     )
 
@@ -562,7 +611,131 @@ def instance_remove(name):
         if os.path.exists(path):
             os.remove(path)
     subprocess.run(["userdel", copy.account], capture_output=True)
+    sync_after()
     print(f"The copy '{name}' and its saved sign-in and data are deleted.")
+
+
+class GatewaySyncError(RuntimeError):
+    """The shared address's routing table could not be written as asked."""
+
+
+def gateway_sync(restart_changed=True, rotate=False, strict=False, quiet=False):
+    """Write the shared address's routing table (gateway.py) from every copy.
+
+    Each copy gets its own gateway key (label "gateway", digest in its settings,
+    the key itself only in the table, readable by the gateway's account), and
+    the table records whether the copy allows OAuth. It maps every other key's
+    digest to its copy. No person's key is in it.
+
+    A copy whose settings cannot be read is left out with a warning; the others
+    are still written. rotate: give every copy a new gateway key. strict: fail
+    unless the owner's copy is in the table (install.sh, before the gateway
+    first starts). Returns the copies whose settings changed (need a restart).
+    """
+    try:
+        pwd.getpwnam(GATEWAY_ACCOUNT)
+    except KeyError:
+        return []  # this server has no gateway (an older install)
+    try:
+        with open(GATEWAY_ROUTES, encoding="utf-8") as stream:
+            previous = json.load(stream).get("copies", {})
+    except (OSError, ValueError, AttributeError):
+        previous = {}
+    table = {"version": 1, "copies": {}, "keys": {}}
+    changed, owners, warnings = [], {}, []
+    for copy in [Copy()] + [Copy(name) for name in instance_names()]:
+        name = copy.name or "sagasu"
+        if not os.path.exists(copy.env):
+            continue
+        try:
+            lines = read(copy)
+            current = keys(copy, lines)
+            socket_path = value(lines, "SAGASU_HTTP_SOCKET", "", copy.env)
+            host = value(lines, "SAGASU_HTTP_ALLOWED_HOSTS", "", copy.env).split(",")[0]
+            oauth = value(lines, "SAGASU_HTTP_OAUTH", "off", copy.env) == "on"
+            if copy.name:
+                pwd.getpwnam(copy.account)
+        except (SystemExit, OSError, KeyError) as error:
+            warnings.append(f"{name}: settings unreadable ({error}); left off the shared address.")
+            continue
+        if not socket_path or not host:
+            warnings.append(f"{name}: no socket or host name; left off the shared address.")
+            continue
+        known = (previous.get(name) or {}).get("key") or ""
+        matches = bool(known) and current.get(GATEWAY) == hashlib.sha256(known.encode()).hexdigest()
+        if rotate or not matches:
+            if GATEWAY in current and not (rotate or matches):
+                # A "gateway" key the table does not know: maybe a person's key
+                # from before this label was reserved. Never replace it silently.
+                warnings.append(
+                    f"{name}: has a key labelled 'gateway' that is not the gateway's. If a "
+                    "person uses it, give them a new key (key-add) first; then run "
+                    "sagasu-ctl gateway-sync --rotate. Until then apps cannot sign in "
+                    "for this copy at the shared address (keys still work)."
+                )
+                known = None
+            elif GATEWAY not in current and len(current) >= 16:
+                warnings.append(
+                    f"{name}: 16 keys already, no room for the gateway's; keys still work "
+                    "at the shared address, but apps cannot sign in for this copy there."
+                )
+                known = None
+            else:
+                known = "sgs_" + secrets.token_urlsafe(32)
+                current[GATEWAY] = hashlib.sha256(known.encode()).hexdigest()
+                save_keys(copy, lines, current)
+                changed.append(copy)
+        table["copies"][name] = {
+            "socket": socket_path,
+            "host": host,
+            "key": known or None,
+            "oauth": oauth and bool(known),
+        }
+        for label, digest in current.items():
+            # "setup" is a placeholder only on teammates' copies.
+            if label == GATEWAY or (copy.name and label == PLACEHOLDER):
+                continue
+            owners.setdefault(digest, []).append({"copy": name, "label": label})
+    for digest, found in owners.items():
+        if len(found) == 1:
+            table["keys"][digest] = found[0]
+        else:  # a key on two copies would be ambiguous: neither
+            warnings.append(
+                "A key is configured on several copies ("
+                + ", ".join(item["copy"] for item in found)
+                + "); it works only at their own addresses."
+            )
+    if not quiet:
+        for line in warnings:
+            print(line)
+    if strict and "sagasu" not in table["copies"]:
+        raise GatewaySyncError(
+            "The owner's copy could not be put on the shared address; the table "
+            "was not written. Fix the warning above, then run install.sh again."
+        )
+    write_file(GATEWAY_ROUTES, json.dumps(table, indent=1) + "\n", GATEWAY_ACCOUNT, 0o640)
+    if restart_changed:
+        for copy in changed:
+            restart(copy)
+    return changed
+
+
+def sync_after(copy=None):
+    """After a command changed keys, OAuth or copies: refresh the table and
+    restart any other copy it gave a new gateway key. Never fails the command."""
+    teammate = os.environ.get("SUDO_USER", "").startswith("fbs-")
+    try:
+        changed = gateway_sync(restart_changed=False, quiet=teammate)
+    except (Exception, SystemExit) as error:
+        print(
+            "Warning: the shared address's routing table was not refreshed"
+            + ("" if teammate else f" ({error}); run sudo sagasu-ctl gateway-sync")
+            + "."
+        )
+        return
+    for other in changed:
+        if copy is None or other.env != copy.env:
+            subprocess.run(["systemctl", "restart", other.units[1]], check=False)
 
 
 def instance_list():
@@ -596,11 +769,29 @@ def main(arguments):
         "instance-list",
         "access-add",
         "access-remove",
+        "gateway-sync",
     }
     if command in owner_only and os.environ.get("SUDO_USER", "").startswith("fbs-"):
         sys.exit("Only the server's owner can do that.")
     if command == "instance-list" and len(arguments) == 1:
         instance_list()
+    elif command == "gateway-sync" and set(arguments[1:]) <= {
+        "--no-restart",
+        "--rotate",
+        "--strict",
+    }:
+        try:
+            changed = gateway_sync(
+                restart_changed="--no-restart" not in arguments,
+                rotate="--rotate" in arguments,
+                strict="--strict" in arguments,
+            )
+        except GatewaySyncError as error:
+            sys.exit(str(error))
+        print(
+            "The shared address's routing table is up to date"
+            + (f"; gave {len(changed)} copy(ies) a new gateway key." if changed else ".")
+        )
     elif command == "instance-add" and 2 <= len(arguments) <= 4:
         rest = arguments[2:]
         read_only = "--read-only" in rest

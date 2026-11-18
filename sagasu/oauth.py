@@ -313,10 +313,14 @@ class OAuthStore:
         """End every grant made with a key that is no longer configured, so a
         key that is restored later does not bring its old sign-ins back."""
         digests = sorted(digests)
-        marks = ",".join("?" * len(digests)) or "NULL"
-        self.db.execute(
-            f"DELETE FROM grants WHERE key_digest NOT IN ({marks})", digests
-        )
+        if digests:
+            marks = ",".join("?" * len(digests))
+            self.db.execute(
+                f"DELETE FROM grants WHERE key_digest NOT IN ({marks})", digests
+            )
+        else:
+            # No key at all: every grant ends. ("NOT IN (NULL)" would match none.)
+            self.db.execute("DELETE FROM grants")
         self.db.execute(
             "DELETE FROM tokens WHERE grant_id NOT IN (SELECT grant_id FROM grants)"
         )
@@ -690,6 +694,13 @@ class SagasuOAuth:
     def _form(self, request_id, pending, redirect_host, error=None, status=200):
         name = pending["client_name"] or "An app"
         body = FORM_BODY.format(
+            next_step=(
+                " Next, you sign in to your own SMU account here, if you are not"
+                " signed in already."
+                if self.desk is not None
+                else " If your SMU sign-in is not saved yet, your app will give you"
+                " a link to save it."
+            ),
             app=html.escape(name),
             host=html.escape(redirect_host),
             request=html.escape(request_id, quote=True),
@@ -839,7 +850,7 @@ button.secondary {{ background: transparent; color: var(--text); border-color: v
 
 FORM_BODY = """<h1>Sign in to Sagasu</h1>
 <p><strong>{app}</strong> wants to use this Sagasu FBS server. It will be sent back to <strong>{host}</strong>.</p>
-<p class="muted">Only continue if you started this from that app yourself. The key is checked here and never given to the app. Next, you sign in to your own SMU account here, if you are not signed in already.</p>
+<p class="muted">Only continue if you started this from that app yourself. The key is checked here and never given to the app.{next_step}</p>
 {error}
 <form method="post" autocomplete="off">
 <input type="hidden" name="request" value="{request}">

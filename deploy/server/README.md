@@ -39,6 +39,21 @@ agent --HTTPS + Authorization: Bearer <key>--> Caddy :443 (TLS certificate)
 - The server stores the SHA-256 digest of each API key, never the key.
 - Code, interpreter and browser binaries are owned by root. Sagasu's state lives in `/var/lib/sagasu` (mode 0700).
 
+## One address for everyone
+
+Every copy is published at one address, the owner's: `https://HOST/mcp`. A small gateway (`sagasu-gateway.service`, `sagasu/gateway.py`) sends each request to the copy of the person whose key it carries:
+
+- **With an API key** (`Authorization: Bearer` or `X-API-Key`), the request goes to the copy that owns the key, unchanged. That copy checks the key again, so the gateway alone cannot get anyone into a copy with a key.
+- **Apps that sign in through OAuth** (ChatGPT, Claude's "Sign in") sign in at the gateway: the person types their key once. The app's requests reach that key's copy with the gateway's own key for it (label `gateway`) and the person's key named by its SHA-256 digest (`X-Sagasu-Caller`). The **copy decides**: it accepts only if its own OAuth is on (`sagasu-ctl [--instance NAME] oauth on`) and the digest is one of its own keys now. So removing a key or switching OAuth off takes effect at once, wherever the app signed in.
+
+The routing table, `/etc/sagasu/gateway-routes.json` (root:sagasu-gateway, 0640), maps each key's digest to its copy, records each copy's OAuth switch, and holds the gateway's key for each copy. It holds no person's key. `sagasu-ctl` rewrites it after `key-add`, `key-remove`, `oauth on|off`, `instance-add` and `instance-remove` (or by hand: `sagasu-ctl gateway-sync`); the gateway re-reads it within a second. A copy whose settings cannot be read is left off with a warning; the others are still written. `sagasu-ctl gateway-sync --rotate` gives every copy a new gateway key (after a suspected leak). `connections` lists apps signed in at a copy's own address and at the shared one.
+
+The gateway runs as `sagasu-gateway` with no browser and no network (socket files only): it can reach the copies' sockets (it is in the web proxy's group) and its own state (`/var/lib/sagasu-gateway`, its OAuth sign-ins). It holds a key to every copy, so it is the most sensitive part; its key opens only `/mcp`, never a copy's sign-in page or OAuth. If the gateway is down, the web proxy sends `/mcp` straight to the owner's copy, so the owner's keys keep working; teammates' own addresses (`NAME.HOST`) never go through it. The SMU sign-in page stays on each copy's own address: that is where the links agents give people lead.
+
+**First install of the gateway** (`install.sh --update` on a server that had none): while the copies are stopped, every copy gets a gateway key and the table is written (the run stops if the owner's copy cannot be added). The owner's OAuth sign-ins move to the gateway (`/var/lib/sagasu/oauth.sqlite3` becomes `oauth.sqlite3.moved-to-gateway`), so apps signed in at this address stay signed in. The gateway must then answer a test request, or the installer backs it out: gateway disabled, sign-ins moved back, the previous Caddyfile restored.
+
+**To back it out by hand:** `sudo systemctl disable --now sagasu-gateway`; `sudo cp -p /etc/caddy/Caddyfile.previous /etc/caddy/Caddyfile && sudo systemctl reload caddy`; if apps should stay signed in, move `/var/lib/sagasu-gateway/oauth.sqlite3` back to `/var/lib/sagasu/oauth.sqlite3` (owner `sagasu`, mode 0600) and restart `sagasu`. The `gateway` keys left in each copy's settings are harmless; `key-remove` refuses that label, so remove them by hand if wanted.
+
 ## Install
 
 Create the first API key on your own computer, and keep it there:
