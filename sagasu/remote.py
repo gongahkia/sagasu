@@ -28,15 +28,31 @@ MCP_PATH = "/mcp"
 MAX_IN_FLIGHT = 32
 
 
+# Some agent platforms reserve Authorization for their own use and only allow
+# custom headers. They may send the key, on its own, in this header instead.
+ALTERNATIVE_KEY_HEADER = "x-api-key"
+
+
 def key_label(keys, headers):
-    """Return the label of the API key in an Authorization header, else None."""
+    """Return the label of the API key a request carries, else None.
+
+    The key is either `Authorization: Bearer <key>` or `X-API-Key: <key>`.
+    """
     try:
         value = headers.get("authorization") or ""
+        alternative = headers.get(ALTERNATIVE_KEY_HEADER) or ""
     except AttributeError:
         return None
-    scheme, _, token = value.partition(" ")
+    if value and alternative:
+        return None
+    if value:
+        scheme, _, token = value.partition(" ")
+        if scheme.lower() != "bearer":
+            return None
+    else:
+        token = alternative
     token = token.strip()
-    if scheme.lower() != "bearer" or not 20 <= len(token) <= 512:
+    if not 20 <= len(token) <= 512:
         return None
     digest = hashlib.sha256(token.encode("utf-8", "surrogatepass")).hexdigest()
     found = None
@@ -62,16 +78,13 @@ class KeyGate:
             await self.app(scope, receive, send)
             return
         supplied = [
-            value.decode("latin-1")
+            (name.lower().decode("latin-1"), value.decode("latin-1"))
             for name, value in scope.get("headers") or ()
-            if name.lower() == b"authorization"
+            if name.lower() in (b"authorization", ALTERNATIVE_KEY_HEADER.encode())
         ]
-        # Exactly one credential, so the check here and the label in the log
-        # can never be about different headers.
-        if (
-            len(supplied) != 1
-            or key_label(self.keys, {"authorization": supplied[0]}) is None
-        ):
+        # Exactly one credential in exactly one header, so the check here and
+        # the label in the log can never be about different values.
+        if len(supplied) != 1 or key_label(self.keys, dict(supplied)) is None:
             self.rejected += 1
             now = time.monotonic()
             if now - self.reported_at >= 60:
@@ -84,7 +97,7 @@ class KeyGate:
                 send,
                 401,
                 "unauthorized",
-                "Send one valid API key: Authorization: Bearer <key>.",
+                "Send one valid API key: Authorization: Bearer <key>, or X-API-Key: <key>.",
                 (b"www-authenticate", b'Bearer realm="sagasu"'),
             )
         elif scope.get("method") != "POST":

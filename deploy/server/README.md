@@ -102,10 +102,11 @@ Changing a setting restarts the service, which closes the browser. If agents the
 
 - URL: `https://HOST/mcp` (streamable HTTP)
 - Header: `Authorization: Bearer <key>`
+- Or, for an agent platform that reserves `Authorization` for itself: `X-API-Key: <key>` (the key alone). Send one of the two, never both.
 
 | Answer | Meaning |
 | --- | --- |
-| `401` | No valid key, or more than one `Authorization` header |
+| `401` | No valid key, or more than one key header |
 | `403` | The request carries a browser `Origin` header |
 | `405` | Not a POST. There is no event stream to open and no session to end |
 | `421` | The `Host` is not in `SAGASU_HTTP_ALLOWED_HOSTS` |

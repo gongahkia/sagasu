@@ -933,10 +933,17 @@ class RemoteListenerTests(unittest.IsolatedAsyncioTestCase):
                     {k.lower(): v for k, v in headers.items()}["www-authenticate"],
                 )
                 self.assertNotIn(b"search_rooms", body)
-        status, _, _ = await self.http(
-            payload=packet, key=None, headers={"X-Api-Key": KEY}
-        )
-        self.assertEqual(status, 401)
+        for name, value in (
+            ("X-Api-Key", "wrong-key-" + "w" * 40),
+            ("X-Api-Key", "Bearer " + KEY),  # this header takes the key alone
+            ("X-Sagasu-Key", KEY),
+            ("Proxy-Authorization", "Bearer " + KEY),
+        ):
+            with self.subTest(header=name):
+                status, _, _ = await self.http(
+                    payload=packet, key=None, headers={name: value}
+                )
+                self.assertEqual(status, 401)
         self.assertEqual((await self.http("GET", key=None))[0], 401)
         self.assertEqual((await self.http("DELETE", key=None))[0], 401)
         self.assertEqual(self.backend.calls, [])
@@ -972,6 +979,46 @@ class RemoteListenerTests(unittest.IsolatedAsyncioTestCase):
                 )
                 status = await asyncio.wait_for(reader.readline(), 5)
                 self.assertIn(b" 401 ", status)
+
+    async def test_the_key_may_arrive_alone_in_x_api_key(self):
+        # For agent platforms that reserve Authorization for themselves.
+        packet = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+        status, _, body = await self.http(
+            payload=packet, key=None, headers={"x-api-key": KEY}
+        )
+        self.assertEqual(status, 200)
+        self.assertIn(b"search_rooms", body)
+        with self.assertLogs("sagasu.observability", level="INFO") as logs:
+            status, _, _ = await self.http(
+                payload={
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {"name": "server_status", "arguments": {}},
+                },
+                key=None,
+                headers={"X-API-Key": KEY},
+            )
+        self.assertEqual(status, 200)
+        calls = [r.fields for r in logs.records if r.getMessage() == "remote.tool_call"]
+        self.assertEqual(calls[0]["key"], "laptop")  # same label as the other header
+        # Never both: one credential, in one header.
+        status, _, _ = await self.http(payload=packet, headers={"X-API-Key": KEY})
+        self.assertEqual(status, 401)
+        body = json.dumps(packet).encode()
+        reader, _ = await self.raw(
+            [
+                "POST /mcp HTTP/1.1",
+                "Host: sagasu.test",
+                "Content-Type: application/json",
+                "Accept: application/json, text/event-stream",
+                f"X-API-Key: {KEY}",
+                f"X-API-Key: {KEY}",
+                f"Content-Length: {len(body)}",
+            ],
+            body,
+        )
+        self.assertIn(b" 401 ", await asyncio.wait_for(reader.readline(), 5))
 
     async def test_a_refused_request_is_dropped_without_waiting_for_its_body(self):
         reader, _ = await self.raw(
