@@ -351,7 +351,8 @@ gateway_answers() {
 }
 if [[ $LEAVE_GATEWAY_STOPPED -eq 0 ]]; then
     systemctl enable sagasu-gateway.service
-    systemctl restart sagasu-gateway.service
+    # A failed start is handled below (backed out), not by set -e.
+    systemctl restart sagasu-gateway.service || true
     if ! gateway_answers; then
         printf '%s\n' '' \
             'The gateway did not start; backing it out. The owner'"'"'s address goes on' \

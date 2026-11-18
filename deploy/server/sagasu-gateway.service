@@ -23,7 +23,8 @@ LimitNOFILE=16384
 NoNewPrivileges=yes
 CapabilityBoundingSet=
 ProtectSystem=strict
-ReadWritePaths=/var/lib/sagasu-gateway /run/sagasu-gateway
+# "-": made by ExecStartPre, after the sandbox is set up for it.
+ReadWritePaths=/var/lib/sagasu-gateway -/run/sagasu-gateway
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
