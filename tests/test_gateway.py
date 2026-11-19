@@ -414,6 +414,27 @@ class KeyRoutingTests(GatewayCase):
                             {other: before[other] + (other == name) for other in before},
                         )
 
+    async def test_protocol_2026_headers_reach_the_copy(self):
+        # Live finding: from MCP 2026-07-28 a copy refuses (400) a request whose
+        # Mcp-Method / Mcp-Name / Mcp-Param-* headers do not match its body.
+        reply = await self.mcp(
+            bearer(ALEX_KEY),
+            ("content-type", "application/json"),
+            ("mcp-protocol-version", "2026-07-28"),
+            ("mcp-method", "tools/call"),
+            ("mcp-name", "search_rooms"),
+            ("mcp-param-date", "2026-11-20"),
+        )
+        self.assertEqual(reply.status, 200, reply.body)
+        seen = reply.json()["headers"]
+        for name, value in (
+            ("mcp-protocol-version", "2026-07-28"),
+            ("mcp-method", "tools/call"),
+            ("mcp-name", "search_rooms"),
+            ("mcp-param-date", "2026-11-20"),
+        ):
+            self.assertEqual(seen[name], [value], name)
+
     async def test_the_copy_checks_the_key_again(self):
         # A table that wrongly sends alex's key to blair gets nobody in.
         table = self.table()

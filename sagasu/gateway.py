@@ -348,7 +348,13 @@ class Gateway:
         if body is None:
             await reply(send, 413, "too_large", "The request is too large.")
             return
-        sent = [(name_, value) for name_, value in headers if name_ in FORWARDED]
+        # Every Mcp-* header too: from protocol 2026-07-28 a copy checks that
+        # Mcp-Method, Mcp-Name and Mcp-Param-* match the body (else 400).
+        sent = [
+            (name_, value)
+            for name_, value in headers
+            if name_ in FORWARDED or name_.startswith(b"mcp-")
+        ]
         sent += [
             (b"host", copy["host"].encode()),
             (b"x-forwarded-for", address.encode("latin-1", "replace")),
@@ -403,6 +409,19 @@ class Gateway:
             )
             await reply(send, 502, "copy_failed", "The copy's answer could not be read.")
             return
+        details = {}
+        if status >= 400 and status != 401:
+            # Why the copy refused it: its own error text, the request's
+            # header names (never values) and its JSON-RPC method.
+            details = {
+                "copy_error": _error_text(content),
+                "header_names": sorted({name_.decode("latin-1") for name_, _ in headers}),
+                "rpc": _rpc_method(body),
+                "content_type": next(
+                    (value.decode("latin-1")[:60] for name_, value in headers if name_ == b"content-type"),
+                    None,
+                ),
+            }
         event(
             "gateway.forwarded",
             copy=name,
@@ -410,6 +429,7 @@ class Gateway:
             oauth=by_token,
             status=status,
             ms=int((time.monotonic() - started) * 1000),
+            **details,
         )
         if status == 401:
             # Stale routes (a key removed a moment ago): the gateway's own
@@ -455,6 +475,31 @@ class Gateway:
             "Send one valid API key: Authorization: Bearer <key>, or X-API-Key: <key>.",
             (b"www-authenticate", challenge.encode()),
         )
+
+
+def _error_text(content):
+    """A copy's error message, short; never more than the copy itself says."""
+    try:
+        data = json.loads(content)
+        if isinstance(data, dict):
+            error = data.get("error")
+            text = error.get("message") if isinstance(error, dict) else data.get("message")
+            return str(text or "")[:200]
+    except ValueError:
+        pass
+    return content[:120].decode("utf-8", "replace")
+
+
+def _rpc_method(body):
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return f"unparsable ({len(body)} bytes)"
+    if isinstance(data, list):
+        return f"batch of {len(data)}"
+    if isinstance(data, dict):
+        return str(data.get("method") or "response")[:60]
+    return type(data).__name__
 
 
 def _address(scope, headers):
