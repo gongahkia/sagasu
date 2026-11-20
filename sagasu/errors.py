@@ -4,9 +4,24 @@ from .personal_options import SCRAPE_PARAM_CHOICES
 
 REASONS = {
     "amendment_unavailable": (
-        "The native FBS amendment could not be prepared. No CONFIRM action was attempted.",
+        "The native FBS amendment could not be prepared or was refused before submission. Nothing was submitted.",
         "Refresh amendment_options for the exact reference, review current permissions/fields and prepare a fresh amendment_review. An unreadable added-interval search is not evidence of no availability.",
         "amendment_options",
+    ),
+    "amendment_penalty": (
+        "FBS would charge a cancellation penalty to change this booking. Sagasu accepts only a zero penalty, so nothing was submitted and the booking is unchanged.",
+        "Tell the user the booking was not changed. If they accept the penalty, they can amend it in FBS themselves.",
+        None,
+    ),
+    "cancellation_unavailable": (
+        "FBS did not offer a cancellation Sagasu could verify. Nothing was submitted; the booking is unchanged.",
+        "Refresh list_bookings and prepare a new cancellation_review for the exact reference. If it fails again, the user can cancel in FBS directly.",
+        "list_bookings",
+    ),
+    "cancellation_penalty": (
+        "FBS would charge a cancellation penalty for this booking. Sagasu accepts only a zero penalty, so nothing was submitted and the booking is unchanged.",
+        "Tell the user the booking was not cancelled. If they accept the penalty, they can cancel it in FBS themselves.",
+        None,
     ),
     "browser_screenshot_unavailable": (
         "No browser screenshot was captured. The page is unavailable, changed during capture, or contains authentication controls.",

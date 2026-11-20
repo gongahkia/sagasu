@@ -203,63 +203,56 @@ class JournalServiceTests(ServiceCase):
 
 
 class CancellationCheckpointTests(unittest.IsolatedAsyncioTestCase):
+    """Against a stand-in shaped like FBS's real cancel form (20 Nov 2026)."""
+
+    async def asyncSetUp(self):
+        from tests.cancellation_fixture import CancellationFixture
+
+        self.fbs = CancellationFixture()
+        await self.fbs.setup(self)
+
     async def test_exact_reference_and_pending_status_are_checkpointed(self):
         from sagasu.fbs_account import cancel_booking
+        from tests.cancellation_fixture import ROW as FORM_ROW
 
         for status, expected_status in (
             ("Cancelled", "cancelled"),
             ("Pending Cancellation", "pending"),
         ):
             with self.subTest(status=status):
-                row = Mock()
-                row.locator.return_value.click = AsyncMock()
-                client = Mock()
-                with (
-                    patch("sagasu.fbs_account.read_bookings", AsyncMock()),
-                    patch(
-                        "sagasu.fbs_account.booking_rows",
-                        AsyncMock(
-                            side_effect=[
-                                [(ROW, row)],
-                                [({**ROW, "fbs_status": status}, row)],
-                            ]
-                        ),
-                    ),
-                    patch("sagasu.fbs_account.checkpoint_verified") as checkpoint,
-                ):
-                    result = await cancel_booking(client, ROW, "private reason")
+                self.fbs.status, self.fbs.status_after = "Confirmed", status
+                self.fbs.posts.clear()
+                with patch("sagasu.fbs_account.checkpoint_verified") as checkpoint:
+                    result = await cancel_booking(
+                        self.fbs.client, FORM_ROW, "  private\n reason "
+                    )
                 self.assertEqual(result["status"], expected_status)
                 self.assertEqual(
                     checkpoint.call_args.args[0],
                     {
                         "status": expected_status,
                         "fbs_status": status,
-                        "reference_number": ROW["reference_number"],
+                        "reference_number": FORM_ROW["reference_number"],
                     },
                 )
-                row.locator.return_value.click.assert_awaited_once()
+                self.assertEqual(len(self.fbs.posts), 1)
+                self.assertEqual(self.fbs.reasons[-1], "private reason")
 
-    async def test_disappearing_reference_never_creates_verified_checkpoint(self):
+    async def test_submitted_but_unchanged_reference_never_creates_verified_checkpoint(
+        self,
+    ):
         from sagasu.fbs_account import cancel_booking, CancellationOutcomeUnknown
+        from tests.cancellation_fixture import ROW as FORM_ROW
 
-        row = Mock()
-        row.locator.return_value.click = AsyncMock()
-        client = Mock()
-        client.page.wait_for_timeout = AsyncMock()
-        rows = AsyncMock(side_effect=[[(ROW, row)]] + [[]] * 60)
+        self.fbs.status_after = "Confirmed"
         with (
-            patch("sagasu.fbs_account.read_bookings", AsyncMock()),
-            patch("sagasu.fbs_account.booking_rows", rows),
-            patch(
-                "sagasu.fbs_account.confirm_cancellation_dialog",
-                AsyncMock(return_value=True),
-            ),
             patch("sagasu.fbs_account.checkpoint_verified") as checkpoint,
+            patch("sagasu.fbs_account.CANCEL_CHECKS", 2),
         ):
             with self.assertRaises(CancellationOutcomeUnknown):
-                await cancel_booking(client, ROW, "private reason")
+                await cancel_booking(self.fbs.client, FORM_ROW, "private reason")
         checkpoint.assert_not_called()
-        row.locator.return_value.click.assert_awaited_once()
+        self.assertEqual(len(self.fbs.posts), 1)
 
 
 class JournalCrashTests(unittest.TestCase):

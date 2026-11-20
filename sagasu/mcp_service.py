@@ -800,6 +800,12 @@ class AgentService:
             if original.kind == "amend"
             else {}
         )
+        if original.kind == "cancel":
+            from .reconciliation import CANCEL_SETTLE_SECONDS
+
+            extra["settled"] = (
+                self.clock() - original.updated_at >= CANCEL_SETTLE_SECONDS
+            )
         return self.start(
             "reconcile",
             {

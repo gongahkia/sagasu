@@ -268,6 +268,7 @@ class ActionJournal:
             "confirmed",
             "pending_confirmation",
             "cancelled",
+            "not_cancelled",
             "approved",
             "amended",
             "matching_booking_found",
@@ -294,15 +295,31 @@ class ActionJournal:
         # A caller cannot assert verification for an absence or ambiguous match.
         data["action_outcome_verified"] = (
             state
-            in {"confirmed", "pending_confirmation", "cancelled", "approved", "amended"}
+            in {
+                "confirmed",
+                "pending_confirmation",
+                "cancelled",
+                "not_cancelled",
+                "approved",
+                "amended",
+            }
             and result.get("action_outcome_verified") is True
         )
-        data["safe_to_retry"] = False
+        # Only a verified "did not take effect" makes a retry safe.
+        data["safe_to_retry"] = (
+            state == "not_cancelled"
+            and data["action_outcome_verified"]
+            and result.get("safe_to_retry") is True
+        )
         with self._db() as db:
-            if not db.execute(
-                "SELECT 1 FROM actions WHERE operation_id=?", (operation_id,)
-            ).fetchone():
+            original = db.execute(
+                "SELECT kind FROM actions WHERE operation_id=?", (operation_id,)
+            ).fetchone()
+            if not original:
                 raise JournalError("The original action history entry is unavailable.")
+            if state == "not_cancelled" and original[0] != "cancel":
+                # Only a cancel can be shown not to have taken effect.
+                data["action_outcome_verified"] = data["safe_to_retry"] = False
             db.execute(
                 "INSERT INTO reconciliations VALUES(?,?,?) ON CONFLICT(operation_id) DO UPDATE SET observed_at=excluded.observed_at,evidence=excluded.evidence",
                 (operation_id, now, json.dumps(data)),

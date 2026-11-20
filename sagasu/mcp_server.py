@@ -1147,7 +1147,7 @@ def create_server(
     async def cancellation_review(
         bookings_operation_id: str, reference_number: str, reason: str
     ) -> dict[str, Any]:
-        """Prepare cancellation of one exact cancellable reference in a successful My Bookings result. Does not cancel it."""
+        """Prepare cancellation of one exact cancellable reference in a successful My Bookings result. Does not cancel it. The reason (1–200 characters) is entered as FBS's required "Reason for Cancelling". On submission Sagasu accepts FBS's cancellation-penalty prompt only when the penalty is 0.00; any other penalty stops before anything is submitted (reason cancellation_penalty)."""
         return safe(
             service.review_cancellation, bookings_operation_id, reference_number, reason
         )
