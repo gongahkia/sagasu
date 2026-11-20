@@ -88,6 +88,13 @@ flowchart TD
                     <sub><b>gongahkia</b></sub>
                 </a>
             </td>
+			<td align="center">
+                <a href="https://github.com/weekiatscis">
+                    <img src="https://avatars.githubusercontent.com/u/178622259?v=4" width="100;" alt="weekiatscis"/>
+                    <br/>
+                    <sub><b>weekiatscis</b></sub>
+                </a>
+            </td>
             <td align="center">
                 <a href="https://github.com/SpringOrca69">
                     <img src="https://avatars.githubusercontent.com/u/159885540?v=4" width="100;" alt="SpringOrca69"/>
