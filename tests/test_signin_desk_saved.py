@@ -10,6 +10,8 @@ headless Chromium against a local server only. Never contacts FBS, Microsoft or
 any outside service.
 """
 
+from sagasu.hosted.authentication import HostedAuthentication
+
 import asyncio
 import json
 import tempfile
@@ -95,7 +97,9 @@ class SavedDeskCase(DeskCase):
         self.now = 1_000_000.0
         self.backend = PermitBackend()
         self.service = AgentService(backend=self.backend)
-        self.service.saved_sign_in = self.store
+        self.service.authentication = HostedAuthentication(
+            self.store, clock=self.service.clock
+        )
         self.desk = SignInDesk(
             self.service, {DIGEST: "laptop"}, f"https://{HOST}", clock=lambda: self.now
         )

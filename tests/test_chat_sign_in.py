@@ -6,6 +6,8 @@ permit with the outcome the test chooses. The real store encrypts to a temp
 directory. Nothing contacts FBS, Microsoft or any other service.
 """
 
+from sagasu.hosted.authentication import HostedAuthentication
+
 import asyncio
 import json
 import tempfile
@@ -125,7 +127,9 @@ class ChatSignInCase(unittest.IsolatedAsyncioTestCase):
 
     def make_service(self):
         service = AgentService(backend=self.backend, clock=lambda: self.now)
-        service.saved_sign_in = self.make_store()
+        service.authentication = HostedAuthentication(
+            self.make_store(), clock=service.clock
+        )
         self.addAsyncCleanup(self.close, service)
         return service
 
@@ -202,7 +206,9 @@ class PermitTests(ChatSignInCase):
         self.assertEqual(self.ledger().get("starts", []), [])
 
     async def test_without_a_store_remote_sign_in_stays_on_the_host(self):
-        self.service.saved_sign_in = None
+        self.service.authentication = HostedAuthentication(
+            None, clock=self.service.clock
+        )
         failed = await self.finish(self.remote())
         self.assertIsNone(self.backend.calls[-1][1])
         self.assertEqual(failed.error["reason"], "sign_in_required_on_host")
