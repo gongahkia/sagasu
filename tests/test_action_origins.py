@@ -705,7 +705,9 @@ class InstallStepStaticTests(unittest.TestCase):
         # installed into the venv first.
         self.assertLess(at('systemctl stop sagasu.service "${COPIES[@]}"'), owner)
         self.assertLess(
-            at("pip install --quiet --force-reinstall --no-deps /opt/sagasu/app"),
+            at(
+                'pip install --quiet --force-reinstall --no-deps "/opt/sagasu/app[hosted]"'
+            ),
             owner,
         )
         self.assertLess(at("systemctl restart sagasu-gateway.service"), owner)
