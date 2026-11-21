@@ -55,5 +55,10 @@ async def start_listener(settings, service, configuration_provider):
         oauth_store=settings.preferences.with_name("oauth.sqlite3"),
         service=service,
     )
-    await remote_http.start()
+    try:
+        await remote_http.start()
+    except BaseException:
+        # ownership reaches the host only after startup returns.
+        await remote_http.stop()
+        raise
     return remote_http
