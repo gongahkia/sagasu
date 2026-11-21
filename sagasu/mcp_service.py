@@ -864,7 +864,7 @@ class AgentService:
             if original.kind == "amend"
             else {}
         )
-        if original.kind == "cancel":
+        if original.kind in {"cancel", "approve_task"}:
             from .reconciliation import CANCEL_SETTLE_SECONDS
 
             extra["settled"] = (
@@ -2048,7 +2048,7 @@ class AgentService:
 
     def review_task_approval(self, tasks_operation_id, reference_number):
         task = self._task(tasks_operation_id, reference_number)
-        if not task.get("can_approve"):
+        if not (task.get("can_approve") or task.get("can_confirm")):
             raise AgentError(
                 "FBS does not expose approval for this task. Refresh Task List."
             )
@@ -2057,7 +2057,11 @@ class AgentService:
             task,
             {
                 "task": task,
-                "action": "Approve this task only; final booking status may still be pending",
+                "action": (
+                    "Approve this task only; final booking status may still be pending"
+                    if task.get("can_approve")
+                    else "Confirm this co-booking only, on the task's own page; the booking may then await approval"
+                ),
             },
         )
 

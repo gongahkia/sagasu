@@ -541,7 +541,8 @@ class ReconcileOperationSettleTests(ServiceCase):
         )
 
     async def test_non_cancel_kinds_send_no_settled_flag(self):
-        for kind in ("book", "approve_task", "amend"):
+        # approve_task gets the flag too, for its own "not_approved" rule.
+        for kind in ("book", "amend"):
             with self.subTest(kind=kind):
                 operation_id = "op-" + kind
                 self.service.jobs[operation_id] = Job(

@@ -1,5 +1,7 @@
 """Read-only evidence for uncertain writes. Absence is never proof of success."""
 
+import re
+
 from .repeat import booking_window
 from .fbs_account import read_bookings, read_task_list
 
@@ -35,6 +37,7 @@ def evidence(
             "pending_confirmation": "The exact booking reference exists and still requires confirmation.",
             "cancelled": "The exact reference is marked cancelled in FBS.",
             "not_cancelled": "FBS still shows the exact reference unchanged well after the attempt, so the cancellation did not take effect. A new cancellation may be prepared.",
+            "not_approved": "FBS still lists the exact task unchanged and pending well after the attempt, so the approval or confirmation did not take effect. A new one may be prepared.",
             "approved": "The exact task is marked approved; booking confirmation is a separate status.",
             "amended": "The exact booking reference shows the requested amended fields; inspect its actual FBS status for confirmation.",
             "matching_booking_found": "A matching booking exists, but it cannot be attributed to the interrupted action without its reference. Do not submit another booking.",
@@ -54,7 +57,39 @@ async def reconcile(client, payload):
         matches = [r for r in listing["tasks"] if r["reference_number"] == known_ref]
         if len(matches) > 1:
             return evidence("ambiguous", complete=listing["complete"])
-        if len(matches) == 1 and matches[0]["status"].strip().casefold() == "approved":
+        normalized_task = (
+            " ".join(matches[0]["status"].split()).casefold()
+            if len(matches) == 1
+            else ""
+        )
+        if (
+            len(matches) == 1
+            and payload.get("settled") is True
+            and listing.get("complete") is True
+            and isinstance(summary.get("status"), str)
+            and normalized_task == " ".join(summary["status"].split()).casefold()
+            and re.search(r"\bpending\b|\bawaiting\b", normalized_task)
+            and all(
+                isinstance(summary.get(k), str)
+                and summary[k]
+                and matches[0].get(k) == summary[k]
+                for k in ("room", "date_time")
+            )
+        ):
+            # Same pending status, room and time as when it was reviewed.
+            return evidence(
+                "not_approved",
+                verified=True,
+                reference=known_ref,
+                status=matches[0]["status"],
+                complete=True,
+                retry=True,
+            )
+        if len(matches) == 1 and normalized_task in {
+            "approved",
+            "confirmed",
+            "completed",
+        }:
             result = evidence(
                 "approved",
                 verified=True,
