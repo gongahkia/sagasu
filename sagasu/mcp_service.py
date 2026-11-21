@@ -14,7 +14,13 @@ import math
 from dataclasses import dataclass, field
 
 from .personal import SMU_EMAIL_RE
-from .auth_context import SAVED_CREDENTIALS, Permit
+from .auth_context import (
+    SAVED_CREDENTIALS,
+    BROWSER_AUTHENTICATION,
+    BrowserAuthentication,
+)
+from .authentication import Authentication, HOLDS, SIGN_IN_RETRY_SECONDS
+from .access import AccessPolicy
 from .action_journal import (
     VERIFIED_ACTION,
     JournalError,
@@ -42,18 +48,12 @@ from .fbs_account import (
     read_task_list,
 )
 from .observability import event, observed_operation
-from .origin import caller, is_remote
 from .errors import public_failure, sign_in_instruction
 from .config import ConfigurationRequired
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
 from .read_backends import HybridReads, READ_FAILURES
 
 WRITE_KINDS = {"book", "cancel", "approve_task", "amend"}
-# After a remote request finds that a person must sign in on the host, further
-# remote FBS requests fail fast for this long instead of reloading Microsoft's
-# sign-in page from the server's address. A successful operation (the owner's
-# own sign-in) lifts it at once.
-SIGN_IN_RETRY_SECONDS = 6 * 3600
 # Sign-in failures that only the person can resolve: retrying the request
 # cannot help.
 PERSON_NEEDED = frozenset(
@@ -65,16 +65,6 @@ PERSON_NEEDED = frozenset(
         *SAVED_SIGN_IN_REASONS,
     }
 )
-# After a saved sign-in ends short of FBS, remote requests stop signing in
-# until the person acts. page_only: only their sign-in page (or a successful
-# sign-in) lifts it; otherwise they may also ask their agent to try again.
-HOLDS = {
-    "saved_password_rejected": True,
-    "sign_in_blocked": True,
-    "sign_in_needs_page": True,
-    "sign_in_not_approved": False,
-    "sign_in_unfinished": False,
-}
 # Without a number shown this long, tell the person to approve anyway.
 NUMBER_GRACE_SECONDS = 10
 NUMBER = re.compile(r"\bnumber ([0-9]{2,3})\b")
@@ -403,6 +393,8 @@ class AgentService:
         ttl=3600,
         profile=None,
         journal=None,
+        access=None,
+        authentication=None,
     ):
         self.backend = backend or Backend()
         self.clock, self.limit, self.ttl = clock, limit, ttl
@@ -414,12 +406,8 @@ class AgentService:
         self.journal = journal
         self.journal_failed = False
         self._comparison_key = None
-        self.sign_in_retry_at = 0.0
-        self.sign_in_pause_reason = "sign_in_required_on_host"
-        # The person's saved SMU email and password (saved_sign_in.py), when
-        # this host serves remote agents and can keep them. Its ledger holds
-        # the sign-in limits and holds, so they survive restarts.
-        self.saved_sign_in = None
+        self.access = access or AccessPolicy()
+        self.authentication = authentication or Authentication(clock=clock)
         # Pulsed whenever a sign-in's approval state changes, for waiters.
         self.sign_in_changed = asyncio.Event()
         # What each sign-in waiting for approval has already put in front of a
@@ -432,103 +420,35 @@ class AgentService:
         changed, self.sign_in_changed = self.sign_in_changed, asyncio.Event()
         changed.set()
 
-    def sign_in_permit(self, credentials, *, saved, how=None, by=None):
-        """Leave for one job to sign in with these, counted in the ledger.
+    @property
+    def saved_sign_in(self):
+        return self.authentication.store
 
-        how: "chat" or "page", and by: the key label, for the person's record
-        of recent sign-ins.
-        """
-        store = self.saved_sign_in
-        by = by or caller() or "unknown"
-        how = how or ("chat" if is_remote() else "page")
-        return Permit(
+    @property
+    def sign_in_retry_at(self):
+        return self.authentication.retry_at
+
+    @sign_in_retry_at.setter
+    def sign_in_retry_at(self, value):
+        self.authentication.retry_at = value
+
+    @property
+    def sign_in_pause_reason(self):
+        return self.authentication.pause_reason
+
+    def sign_in_permit(self, credentials, *, saved, how=None, by=None):
+        return self.authentication.sign_in_permit(
             credentials,
             saved=saved,
-            on_start=(lambda: store.record("starts")) if store else None,
-            on_password=(lambda: store.record("passwords")) if store else None,
-            on_end=lambda permit, outcome: self._sign_in_ended(
-                permit, outcome, by, how
-            ),
+            how=how or ("chat" if self.access.remote else "page"),
+            by=by or self.access.label or "unknown",
         )
 
-    def _sign_in_ended(self, permit, outcome, by, how):
-        event("saved_sign_in.ended", outcome=outcome, key=by, how=how)
-        store = self.saved_sign_in
-        if store is None:
-            return
-        # Each step on its own: the hold matters most, so it comes first, and
-        # a failure in one never skips the others.
-        steps = []
-        if outcome == "signed_in":
-            if permit.saved and permit.verified:
-                steps.append(store.mark_verified)
-            steps.append(lambda: store.held() and store.lift(by_page=True))
-        else:
-            if outcome in HOLDS and permit.saved:
-                # Only a failure of the saved sign-in holds chat. A password
-                # mistyped on the page is the page's to show, and the saved
-                # one still works.
-                steps.append(lambda: store.hold(outcome, page_only=HOLDS[outcome]))
-            if outcome == "saved_password_rejected" and permit.saved:
-                # Never try a refused password again (lockouts).
-                steps.append(lambda: store.forget_password(refused=True))
-        steps.append(lambda: store.note(by, how, outcome))
-        for step in steps:
-            try:
-                step()
-            except Exception as error:
-                event(
-                    "saved_sign_in.record_failed",
-                    level=40,
-                    error_type=type(error).__name__,
-                )
-
     def sign_in_limit(self):
-        """(reason, minutes) when the limits allow no sign-in now, else None."""
-        store = self.saved_sign_in
-        if store is None:
-            return None
-        refused = store.refusal()
-        if refused is None or refused[0] != "sign_in_attempts_exceeded":
-            return None
-        return refused
-
-    def _remote_permit(self, job):
-        """(permit, None), or (None, (reason, minutes)) for a remote job.
-
-        (None, None): this host does not sign in for remote callers at all;
-        the person signs in on the host, as before.
-        """
-        store = self.saved_sign_in
-        if store is None:
-            return None, None
-        if job.kind == "login":
-            # The person asked: a hold set before they asked, that chat may
-            # lift, is lifted once. A later one stays (it is their answer).
-            store.lift(by_page=False, asked_at=job.created_at)
-        refused = store.refusal()
-        if refused is not None and refused[0] in HOLDS:
-            # Before anything else: a rejected password is already deleted,
-            # and the person must hear why, not that nothing is saved.
-            return None, refused
-        credentials = store.load()
-        if credentials is None:
-            return None, ("sign_in_setup_needed", None)
-        if refused is not None:
-            return None, refused
-        return self.sign_in_permit(credentials, saved=True), None
-
-    def _pause_remote_sign_in(self, reason):
-        """Refuse remote requests that need sign-in until the person acts."""
-        self.sign_in_retry_at = self.clock() + SIGN_IN_RETRY_SECONDS
-        self.sign_in_pause_reason = reason
+        return self.authentication.sign_in_limit()
 
     def signed_in(self):
-        """A person signed in (or the session worked): lift every pause."""
-        self.sign_in_retry_at = 0.0
-        self.sign_in_pause_reason = "sign_in_required_on_host"
-        if self.saved_sign_in is not None and self.saved_sign_in.held():
-            self.saved_sign_in.lift(by_page=True)
+        self.authentication.signed_in()
 
     def pending_sign_in(self):
         """The remote sign-in waiting for approval on the phone, if any."""
@@ -621,22 +541,22 @@ class AgentService:
     @property
     def host_sign_in_required(self):
         """A remote request recently found that only a person can renew sign-in."""
-        return self.clock() < self.sign_in_retry_at
+        return self.authentication.host_required
 
     def visible_jobs(self):
         """Retained jobs the current caller may know about."""
         self.prune()
-        remote = is_remote()
-        return [job for job in self.jobs.values() if job.remote or not remote]
+        return [
+            job for job in self.jobs.values() if self.access.can_observe(job.remote)
+        ]
 
     def visible_reviews(self):
         """Pending reviews the current caller may know about."""
         self.prune()
-        remote = is_remote()
         return [
             self.review(key)
             for key, review in list(self.reviews.items())
-            if review["remote"] or not remote
+            if self.access.can_observe(review["remote"])
         ]
 
     def prune(self):
@@ -663,10 +583,8 @@ class AgentService:
 
     def get(self, operation_id):
         self.prune()
-        if (
-            operation_id in self.jobs
-            and is_remote()
-            and not self.jobs[operation_id].remote
+        if operation_id in self.jobs and not self.access.can_observe(
+            self.jobs[operation_id].remote
         ):
             # The same answer as for an ID that never existed.
             raise AgentError(
@@ -674,7 +592,7 @@ class AgentService:
             )
         if operation_id not in self.jobs:
             saved = self.journal.get(operation_id) if self.journal else None
-            if saved and is_remote() and saved.get("origin") != "remote":
+            if saved and not self.access.can_observe(saved.get("origin") == "remote"):
                 # After a restart or expiry the same rule as in memory: a
                 # remote caller never sees what the person at the host did.
                 # Actions recorded before origins were kept count as local.
@@ -757,7 +675,7 @@ class AgentService:
                             "action_outcome_verified"
                         )
                     ):
-                        if is_remote() and not previous.remote:
+                        if not self.access.can_observe(previous.remote):
                             raise AgentError(
                                 "A matching action started at the host is active or unresolved. The person at the host must reconcile it before another can be submitted."
                             )
@@ -772,8 +690,8 @@ class AgentService:
             self.clock(),
             updated_at=self.clock(),
             summary=summary,
-            remote=is_remote(),
-            caller=caller(),
+            remote=self.access.remote,
+            caller=self.access.label,
         )
         if kind in WRITE_KINDS and self.journal:
             self.journal.reserve(job, review_id, summary)
@@ -804,7 +722,7 @@ class AgentService:
             for job in self.jobs.values()
             if job.kind == "booking_watch" and not job.terminal
         ]
-        remote = is_remote()
+        remote = self.access.remote
         for job in active:
             # Each side reuses only its own watchers: a remote caller never
             # gets the host's, and the host's watch never depends on one a
@@ -836,9 +754,7 @@ class AgentService:
                     "Action history is unavailable in diagnostic mode. Preserve existing data; read configuration_status and reconnect after correcting setup."
                 )
             raise AgentError("Durable action history is not configured.")
-        return self.journal.history(
-            offset, limit, origin="remote" if is_remote() else None
-        )
+        return self.journal.history(offset, limit, origin=self.access.history_origin)
 
     def reconcile_operation(self, operation_id):
         original = self.get(operation_id)
@@ -850,7 +766,7 @@ class AgentService:
             raise AgentError(
                 "This action has no verifiable history metadata; inspect FBS manually."
             )
-        if is_remote() and (original.reconciliation or {}).get(
+        if self.access.remote and (original.reconciliation or {}).get(
             "action_outcome_verified"
         ):
             raise AgentError(
@@ -947,7 +863,10 @@ class AgentService:
             self._pulse()
 
         backend_started = False
-        remote = is_remote()
+        remote = self.access.remote
+        auth_token = BROWSER_AUTHENTICATION.set(
+            BrowserAuthentication(passive_renewal=remote)
+        )
         permit = refusal = None
         permit_token = None
         from .operation_diagnostics import diagnostic_scope
@@ -977,7 +896,9 @@ class AgentService:
                     # in this job, and only once (see Permit). Decided here,
                     # holding the queue, so jobs queued together cannot each
                     # send a request to the phone.
-                    permit, refusal = self._remote_permit(job)
+                    permit, refusal = self.authentication.prepare(
+                        job, by=self.access.label
+                    )
                     if refusal is not None and refusal[0] in HOLDS:
                         # A sign-in already failed; the session is known to
                         # have ended. Say so without opening the browser.
@@ -1026,60 +947,12 @@ class AgentService:
             )
         except Exception as error:
             if remote and isinstance(error, AuthenticationRequired):
-                # Say who must act, and stop further remote requests from
-                # reloading the sign-in page or sending more phone requests.
-                if not backend_started:
-                    # Refused by a pause or hold itself: report it, never extend it.
-                    pass
-                elif permit is not None and permit.used and not permit.signed_in:
-                    # This job signed in with the saved password, and it ended
-                    # short of FBS (recorded and held by the permit). Never
-                    # "retry once": that would type the password again.
-                    error = AuthenticationRequired(
-                        "SMU sign-in did not finish.",
-                        reason=(
-                            permit.outcome
-                            if permit.outcome in SAVED_SIGN_IN_REASONS
-                            else "sign_in_unfinished"
-                        ),
-                    )
-                elif error.reason == "sign_in_needed":
-                    # A check that must not sign in found the session ended.
-                    pass
-                elif error.reason == "sign_in_required_on_host":
-                    # A person is needed and this job could not sign in:
-                    # nothing saved, or the limits stopped it.
-                    if refusal is not None:
-                        error = AuthenticationRequired(
-                            "SMU sign-in is needed.",
-                            reason=refusal[0],
-                            details=(
-                                {"retry_after_minutes": refusal[1]}
-                                if refusal[1]
-                                else None
-                            ),
-                        )
-                    if error.reason in {
-                        "sign_in_required_on_host",
-                        "sign_in_setup_needed",
-                    }:
-                        self._pause_remote_sign_in(error.reason)
-                elif refusal is not None:
-                    # Sign-in is on for this copy but this job could not use
-                    # it (nothing saved, or the limits), and the session did
-                    # not renew: say what the person can do, not "retry".
-                    error = AuthenticationRequired(
-                        "SMU sign-in is needed.",
-                        reason=refusal[0],
-                        details=(
-                            {"retry_after_minutes": refusal[1]} if refusal[1] else None
-                        ),
-                    )
-                else:
-                    error = AuthenticationRequired(
-                        "The saved FBS session did not renew itself.",
-                        reason="session_renewal_pending",
-                    )
+                error = self.authentication.failure(
+                    error,
+                    permit=permit,
+                    refusal=refusal,
+                    backend_started=backend_started,
+                )
             unknown = isinstance(
                 error,
                 (
@@ -1135,6 +1008,7 @@ class AgentService:
                 outcome=job.status,
             )
         finally:
+            BROWSER_AUTHENTICATION.reset(auth_token)
             if permit_token is not None:
                 SAVED_CREDENTIALS.reset(permit_token)
             job.diagnostic_events = diagnostic.events
@@ -1167,7 +1041,7 @@ class AgentService:
     def status_view(self, job, *, peek=False):
         """job.public(), plus for a remote caller the sign-in to approve."""
         output = job.public()
-        if not is_remote() or peek:
+        if not self.access.remote or peek:
             return output
         sign_in = self.sign_in_view(job)
         if sign_in is not None:
@@ -1239,7 +1113,7 @@ class AgentService:
         # Validate pagination before waiting, and keep the job reference if pruned later.
         self.result(operation_id, offset, limit, peek=True)
         job = self.get(operation_id)
-        if is_remote():
+        if self.access.remote:
             await self._wait_remote(job, timeout)
         elif not job.terminal and job.status != "awaiting_mfa":
             prompt_ready = asyncio.create_task(job.auth_event.wait())
@@ -2108,7 +1982,7 @@ class AgentService:
             "summary": summary,
             "expires_at": self.clock() + 600,
             "payload": payload,
-            "remote": is_remote(),
+            "remote": self.access.remote,
         }
         self.reviews[review["review_id"]] = review
         return self.review(review["review_id"])
@@ -2117,7 +1991,7 @@ class AgentService:
         self.prune()
         if review_id not in self.reviews or (
             # A remote caller acts only on reviews a remote call prepared.
-            is_remote()
+            self.access.remote
             and not self.reviews[review_id]["remote"]
         ):
             raise AgentError(
@@ -2241,7 +2115,7 @@ class AgentService:
     def confirm(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
-        if is_remote() and review["kind"] == "batch":
+        if self.access.remote and review["kind"] == "batch":
             # Single task approvals are allowed remotely; batches are not.
             raise AgentError("Batches cannot be submitted over a remote connection.")
         if review["kind"] == "amend":

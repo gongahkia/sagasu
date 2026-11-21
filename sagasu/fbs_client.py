@@ -22,9 +22,8 @@ from typing import Awaitable, Callable, Iterable
 from urllib.parse import parse_qs, urlparse
 
 from .observability import event, observed_operation, observed_step, step
-from .origin import is_remote
 from .auth_context import LIVE_VIEW
-from .auth_context import SAVED_CREDENTIALS
+from .auth_context import SAVED_CREDENTIALS, browser_authentication
 from .action_journal import checkpoint_verified
 from .personal_options import SCRAPE_PARAM_CHOICES
 from .personal import SMU_EMAIL_RE
@@ -175,7 +174,9 @@ def stops_remote_job(error) -> bool:
     every remaining date reloads Microsoft's sign-in page and the job still
     reports success.
     """
-    return is_remote() and isinstance(error, AuthenticationRequired)
+    return browser_authentication().passive_renewal and isinstance(
+        error, AuthenticationRequired
+    )
 
 
 def resolve_facility_types(
@@ -568,12 +569,15 @@ class FBSClient:
         progress: ProgressCallback | None = None,
         keep_alive: bool = True,
         profile_path: Path | None = None,
+        authentication=None,
     ) -> None:
         # A remote caller holds only an API key: it may wait for the existing
         # Microsoft session to renew FBS, never steer a sign-in. When the
         # person saved their own email and password on this copy, the job
         # runner hands them over, and the client signs in with them alone.
-        self.silent_renewal = is_remote()
+        self.silent_renewal = (
+            authentication or browser_authentication()
+        ).passive_renewal
         self.interactive = interactive and not self.silent_renewal
         # Checks that promise never to sign in (session status, probes,
         # reconciliation) pass interactive=False; they never use a permit.

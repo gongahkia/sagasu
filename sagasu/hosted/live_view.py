@@ -11,7 +11,6 @@ picture of the page and a few kinds of input, never the browser's address bar,
 other tabs, or any page outside Microsoft's sign-in.
 """
 
-
 from ..observability import event
 
 from ..auth_context import LIVE_VIEW

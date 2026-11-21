@@ -1,9 +1,31 @@
 """Per-operation authentication inputs shared by local and hosted adapters."""
 
 import contextvars
+from dataclasses import dataclass
+
+from .access import AccessPolicy
 
 SAVED_CREDENTIALS = contextvars.ContextVar("sagasu_saved_credentials", default=None)
 LIVE_VIEW = contextvars.ContextVar("sagasu_live_view", default=None)
+
+
+@dataclass(frozen=True)
+class BrowserAuthentication:
+    passive_renewal: bool = False
+
+
+BROWSER_AUTHENTICATION = contextvars.ContextVar(
+    "sagasu_browser_authentication", default=None
+)
+
+
+def browser_authentication():
+    configured = BROWSER_AUTHENTICATION.get()
+    return (
+        configured
+        if configured is not None
+        else BrowserAuthentication(passive_renewal=AccessPolicy().remote)
+    )
 
 
 class Permit:
@@ -59,4 +81,3 @@ class Permit:
 
     def __repr__(self):
         return f"Permit({self.credentials!r}, used={self.used})"
-

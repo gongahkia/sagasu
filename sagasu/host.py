@@ -106,29 +106,6 @@ def fingerprint(settings):
     return _fingerprint(identity_parts(settings))
 
 
-def saved_sign_in(settings, listener):
-    """The person's saved sign-in store, or None when this copy cannot keep one.
-
-    Off unless the key file is set and readable at start-up: a copy without a
-    key behaves exactly as before (the person signs in on the page; agents
-    cannot sign in).
-    """
-    if not getattr(listener, "sign_in_key_file", None):
-        return None
-    from .observability import event
-    from .hosted.saved_sign_in import SavedSignIn
-
-    store = SavedSignIn(
-        settings.preferences.parent,
-        listener.sign_in_key_file,
-        account=getattr(listener, "smu_account", None),
-    )
-    if not store.available:
-        event("saved_sign_in.unavailable", level=30)
-        return None
-    return store
-
-
 def recovery_state(service):
     from .action_journal import JournalError
 
@@ -654,28 +631,11 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                         pass
                 listener = settings.http
                 if listener is not None and runtime.status()["operational"]:
-                    from .mcp_server import RemoteAccess
-                    from .hosted.remote import LABEL_HEADER, RemoteHTTP
+                    from .hosted.runtime import start_listener
 
-                    service.saved_sign_in = saved_sign_in(settings, listener)
-                    remote_http = RemoteHTTP(
-                        listener,
-                        create_server(
-                            service,
-                            configuration_provider=runtime.status,
-                            allow_agent_submission=listener.writes,
-                            remote=RemoteAccess(
-                                writes=listener.writes,
-                                # The gate in front of /mcp names the key it
-                                # accepted, whether sent directly or as a token.
-                                caller=lambda headers: headers.get(LABEL_HEADER),
-                                saved_sign_in=service.saved_sign_in is not None,
-                            ),
-                        ),
-                        oauth_store=settings.preferences.with_name("oauth.sqlite3"),
-                        service=service,
+                    remote_http = await start_listener(
+                        settings, service, runtime.status
                     )
-                    await remote_http.start()
             # The server context manager waits for all accepted transports on
             # exit, so perform shutdown explicitly in the required order below.
             await stopped.wait()
@@ -711,3 +671,11 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                     path.unlink()
             except FileNotFoundError:
                 pass
+
+
+def __getattr__(name):
+    if name == "saved_sign_in":
+        from .hosted.runtime import saved_sign_in
+
+        return saved_sign_in
+    raise AttributeError(name)
