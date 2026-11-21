@@ -368,6 +368,26 @@ if [[ $LEAVE_GATEWAY_STOPPED -eq 0 ]]; then
     fi
 fi
 
+# The action history now keeps who started each write (the person at the
+# server, or an agent through the remote listener), and a remote caller sees
+# only agents' writes. Writes recorded before that have no origin and would
+# count as made at the server, hiding them from the agents that made them. On a
+# server they all came from agents, so mark them so, once, with a backup.
+mark_history_remote() {
+    local user=$1 db=$2
+    [[ -f $db ]] || return 0
+    [[ -e $db.before-origins ]] || cp -p "$db" "$db.before-origins" || true
+    runuser -u "$user" -- /opt/sagasu/venv/bin/python -c \
+        'import sys; from sagasu.action_journal import ActionJournal; n = ActionJournal(sys.argv[1]).mark_unrecorded("remote"); n and print(f"{sys.argv[1]}: {n} earlier write(s) marked as made by agents")' \
+        "$db" || true
+}
+mark_history_remote sagasu /var/lib/sagasu/actions.sqlite3
+for instance in /etc/sagasu/instances/*; do
+    copy=${instance##*/}
+    [[ -f $instance && $copy =~ ^[a-z][a-z0-9]{1,15}$ ]] || continue
+    mark_history_remote "sagasu-$copy" "/var/lib/sagasu-$copy/actions.sqlite3"
+done
+
 # Teammates' copies come back whatever the owner chose for their own.
 for unit in "${COPIES[@]}"; do
     systemctl restart "sagasu-xvfb@${unit#sagasu@}" || true

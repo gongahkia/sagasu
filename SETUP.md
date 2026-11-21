@@ -307,6 +307,10 @@ In short:
 
 1. Get an Ubuntu server with a public address and a host name that resolves to
    it. Without a domain, `A-B-C-D.sslip.io` resolves to the address `A.B.C.D`.
+   Each friend's SMU sign-in page is on their own `NAME.HOST` (the links their
+   agent gives them lead there). With your own domain, add a wildcard DNS
+   record (`*.HOST`) or one per friend; sslip.io needs none. See
+   [DNS for each copy's sign-in address](deploy/server/README.md#dns-for-each-copys-sign-in-address).
 2. Create your API key on your own computer, copy the source tree to the
    server, and run `deploy/server/install.sh --host HOST --key owner:<digest>`.
    Then allow inbound TCP 443 in the cloud provider's firewall.

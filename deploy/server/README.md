@@ -20,7 +20,7 @@ This is separate from `deploy/linux`, which installs a headless runtime for an a
 
 Remote tools are removed from the tool list, not merely refused, so an agent never sees what it cannot use. The full lists are `REMOTE_HIDDEN_TOOLS` and `REMOTE_WRITE_TOOLS` in `sagasu/mcp_server.py`.
 
-Every operation and review records whether a remote call or the person at the server created it. A remote caller is shown, and can address, only what remote calls created; the owner sees everything.
+Every operation and review records whether a remote call or the person at the server created it. A remote caller (any key, the owner's included) is shown, and can address, only what remote calls created; the person at the server sees everything. For writes the origin is also kept in the action history (`action_origins` in `actions.sqlite3`). So the same rule holds for `action_history` and for results recovered after a restart or once a job has left memory. A remote caller cannot list, read or reconcile a write made at the server. Writes recorded before origins were kept would count as made at the server. On a server they all came from agents, so `install.sh --update` marks them as remote once, after copying each history to `actions.sqlite3.before-origins`.
 
 When the FBS session has lapsed, a remote call first waits up to 25 seconds for Microsoft's own single sign-on redirect. If Microsoft asks for more, what happens depends on whether the person saved their SMU sign-in on the copy ("Saved sign-in" below). With one saved, the copy signs in with it and the call's result shows the number to enter in Microsoft Authenticator. Without one, a remote call never types or clicks on a Microsoft page: it fails with `sign_in_setup_needed` (or `sign_in_required_on_host` where saving is off), and further remote FBS requests are refused without loading the sign-in page again until the person signs in. Multi-date planning calls stop at the first date that needs the person.
 
@@ -159,7 +159,24 @@ sudo sagasu-ctl --instance alex status                    # any copy command, fo
 sudo sagasu-ctl instance-remove alex --yes                # the copy, its sign-in and data
 ```
 
-`instance-add` creates a separate account (`sagasu-alex`), state folder, virtual display, socket, settings file and Caddy site, and one API key, printed once. The host name is the owner's with the copy's name in front, so with sslip.io it needs no DNS change. The copy starts with OAuth on and booking on (`--read-only` keeps booking off). The optional email locks the copy to that teammate's SMU account. Send the teammate the address and the key. They connect their app, save their SMU sign-in on the page that opens, and approve one sign-in; after that their agent signs them in from chat. They never need the server itself.
+`instance-add` creates a separate account (`sagasu-alex`), state folder, virtual display, socket, settings file and Caddy site, and one API key, printed once. The host name is the owner's with the copy's name in front (`alex.HOST`). With sslip.io that needs no DNS change; with your own domain it needs a DNS record first (next section). The copy starts with OAuth on and booking on (`--read-only` keeps booking off). The optional email locks the copy to that teammate's SMU account. Send the teammate the address and the key. They connect their app. The first time SMU needs them, their agent gives them a link to their copy's sign-in page (`https://alex.HOST/sign-in`), where they save their SMU sign-in and approve one sign-in. After that their agent signs them in from chat. They never need the server itself.
+
+### DNS for each copy's sign-in address
+
+While the gateway runs with app sign-in on, agents connect to the shared address, `https://HOST/mcp`, and apps sign in (OAuth) there too. Without the gateway, `instance-add` prints the copy's own `https://NAME.HOST/mcp`, and that name must resolve for the agent as well. Either way, a teammate's SMU sign-in page is on their own copy, at `https://NAME.HOST/sign-in` (e.g. `alex.booking.example.org`). The one-time links their agent gives them lead there, and so does an app that connects straight to `https://NAME.HOST/mcp`. The owner's page is `https://HOST/sign-in`. Caddy gets a separate certificate for each copy's name, so each one must resolve to the server.
+
+- **sslip.io** (`HOST` is `A-B-C-D.sslip.io`): nothing to do. `alex.A-B-C-D.sslip.io` already resolves to `A.B.C.D`.
+- **Your own domain** (`HOST` is `booking.example.org`): besides the record for `HOST` itself, add one wildcard record (it covers every friend you add later), or one record per copy:
+
+| Type | Name | Value | Needed |
+| --- | --- | --- | --- |
+| `A` | `booking.example.org` | the server's IPv4 address | Always (the shared address) |
+| `A` | `*.booking.example.org` | the same IPv4 address | For every copy; or instead `alex.booking.example.org`, one per copy |
+| `AAAA` | `booking.example.org` and `*.booking.example.org` (or per copy) | the server's IPv6 address | Only if the server has IPv6 and TCP 443 is open on it over IPv6. `install.sh` opens 443 only in the IPv4 firewall, so open it in ip6tables and in the cloud firewall's IPv6 rules yourself. A broken AAAA record stops Caddy's certificates. |
+
+A wildcard record does not need a wildcard certificate: Caddy still gets an ordinary certificate per name. If the domain has CAA records, they must allow Let's Encrypt (`letsencrypt.org`), Caddy's default issuer. To keep Caddy's ZeroSSL fallback usable, also allow `sectigo.com`, the CA that issues ZeroSSL's certificates. Whether Caddy uses that fallback depends on its version and on an email being configured.
+
+Add the record before `instance-add`, and check it resolves (`dig +short alex.booking.example.org` prints the server's address). If the copy was added first, Caddy retries the certificate on its own, but the gaps between attempts grow from minutes to hours. Once `dig` shows the right address, run `sudo systemctl reload caddy` so it tries again straight away. Until the certificate is issued, that friend's sign-in link fails: first with a DNS error while the name does not resolve, then with a TLS or connection error. Their agent still reaches the shared address meanwhile.
 
 Optionally, `access-add alex 'ssh-ed25519 AAAA...'` gives a teammate an SSH login instead, and `access-remove alex` takes it away. `access-add` creates a login, `fbs-alex`, that has no password and accepts only that key. The key can run only `sagasu-self alex`, which accepts a fixed list of commands for that copy (`signin`, `status`, `key-add`, `key-remove`, `connections`, `writes`, `oauth`, `restart`, `forget-sign-in`, `help`). It can forward only to that copy's own sign-in view ports. There is no shell, no other forwarding, and no access to other copies. The teammate signs in with:
 

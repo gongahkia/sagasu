@@ -674,6 +674,11 @@ class AgentService:
             )
         if operation_id not in self.jobs:
             saved = self.journal.get(operation_id) if self.journal else None
+            if saved and is_remote() and saved.get("origin") != "remote":
+                # After a restart or expiry the same rule as in memory: a
+                # remote caller never sees what the person at the host did.
+                # Actions recorded before origins were kept count as local.
+                saved = None
             if saved and saved["status"] in {
                 "succeeded",
                 "failed",
@@ -700,6 +705,7 @@ class AgentService:
                     recovered=True,
                     summary=saved["summary"],
                     reconciliation=saved.get("reconciliation"),
+                    remote=saved.get("origin") == "remote",
                 )
             raise AgentError(
                 "Unknown or expired operation. Read operations expire on restart; inspect action_history and FBS before repeating a write."
@@ -751,6 +757,10 @@ class AgentService:
                             "action_outcome_verified"
                         )
                     ):
+                        if is_remote() and not previous.remote:
+                            raise AgentError(
+                                "A matching action started at the host is active or unresolved. The person at the host must reconcile it before another can be submitted."
+                            )
                         raise AgentError(
                             "A matching action is active or unresolved. Inspect/reconcile operation "
                             + previous.id
@@ -794,11 +804,20 @@ class AgentService:
             for job in self.jobs.values()
             if job.kind == "booking_watch" and not job.terminal
         ]
+        remote = is_remote()
         for job in active:
-            if job.summary.get("reference_number") == reference:
+            # Each side reuses only its own watchers: a remote caller never
+            # gets the host's, and the host's watch never depends on one a
+            # remote caller could cancel.
+            if (
+                job.summary.get("reference_number") == reference
+                and job.remote == remote
+            ):
                 return job.public()
         if len(active) >= 4:
-            raise AgentError("At most four booking watches may run at once.")
+            raise AgentError(
+                "At most four booking watches may run at once on this server."
+            )
         started = self.start(
             "booking_watch",
             {
@@ -817,7 +836,9 @@ class AgentService:
                     "Action history is unavailable in diagnostic mode. Preserve existing data; read configuration_status and reconnect after correcting setup."
                 )
             raise AgentError("Durable action history is not configured.")
-        return self.journal.history(offset, limit)
+        return self.journal.history(
+            offset, limit, origin="remote" if is_remote() else None
+        )
 
     def reconcile_operation(self, operation_id):
         original = self.get(operation_id)
