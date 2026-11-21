@@ -86,8 +86,9 @@ def identity_parts(settings):
         if settings.values.get(key):
             effective[key] = settings.values[key]
     code = hashlib.sha256()
-    for path in sorted((Path(__file__).parent).glob("*.py")):
-        code.update(path.name.encode())
+    code_root = Path(__file__).parent
+    for path in sorted(code_root.rglob("*.py")):
+        code.update(path.relative_to(code_root).as_posix().encode())
         code.update(path.read_bytes())
     return {
         "configuration": hashlib.sha256(
