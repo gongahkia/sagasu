@@ -320,6 +320,9 @@ In short:
 4. Updating restarts every copy and ends everyone's SMU session. Each person
    then approves one Microsoft Authenticator number on their next request.
 
+Earlier writes without a recorded origin stay private to the host after an
+update. Inspect or reconcile those through the local MCP on the server.
+
 Saved SMU passwords are encrypted on disk, but whoever administers the server
 can read them. Only host copies for people who trust you.
 

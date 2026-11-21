@@ -616,8 +616,12 @@ class SavedPageScriptTests(SavedDeskCase):
             uvicorn.Config(self.app, host="127.0.0.1", port=port, log_level="error")
         )
         serving = asyncio.create_task(server.serve())
-        self.addAsyncCleanup(lambda: asyncio.gather(serving, return_exceptions=True))
-        self.addCleanup(setattr, server, "should_exit", True)
+
+        async def stop_server():
+            server.should_exit = True
+            await asyncio.wait_for(serving, 5)
+
+        self.addAsyncCleanup(stop_server)
         while not server.started:
             await asyncio.sleep(0.02)
         async with async_playwright() as playwright:
