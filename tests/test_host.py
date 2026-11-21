@@ -67,6 +67,59 @@ class SharedHostTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(self.backend.calls), 1)
         self.assertEqual(socket_path(self.settings).stat().st_mode & 0o777, 0o600)
 
+    async def test_booking_watch_survives_client_disconnect_and_keeps_host_busy(self):
+        from tests.test_mcp import ROW
+
+        sleeping = asyncio.Event()
+        resume = asyncio.Event()
+        original_run = self.backend.run
+        reads = 0
+
+        async def run(kind, payload, progress, notify):
+            nonlocal reads
+            if kind == "bookings":
+                reads += 1
+                return {
+                    "complete": True,
+                    "bookings": [
+                        {
+                            **ROW,
+                            "fbs_status": (
+                                "Pending Confirmation"
+                                if reads == 1
+                                else "Pending Approval"
+                            ),
+                        }
+                    ],
+                }
+            return await original_run(kind, payload, progress, notify)
+
+        async def sleep(seconds):
+            sleeping.set()
+            await resume.wait()
+
+        self.backend.run = run
+        with patch("sagasu.booking_watch.sleep", side_effect=sleep):
+            async with client_session(self.settings) as first:
+                job = await self.call(
+                    first,
+                    "watch_booking",
+                    {"reference_number": ROW["reference_number"]},
+                )
+                await asyncio.wait_for(sleeping.wait(), 2)
+            refusal = await control(self.settings, "stop")
+            self.assertTrue(refusal["busy"])
+            self.assertFalse(refusal["stopping"])
+            async with client_session(self.settings) as second:
+                resume.set()
+                result = await self.call(
+                    second,
+                    "wait_operation",
+                    {"operation_id": job["operation_id"], "timeout": 2},
+                )
+                self.assertTrue(result["result"]["target_status_observed"])
+                self.assertEqual(reads, 2)
+
     async def test_two_clients_have_independent_sessions_and_one_queue(self):
         async with (
             client_session(self.settings) as first,

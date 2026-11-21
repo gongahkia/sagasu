@@ -5,7 +5,7 @@
     "retrieve": "operation_receipt(operation_id, failure=true)",
     "capture": "First observed browser failure before cleanup and browser queue release; never navigates or signs in to get an image",
     "privacy": "Form controls and unrelated frames are masked; authentication pages are refused. Other visible FBS text may contain private booking data, so images are separate from redacted support bundles.",
-    "limits": "One image up to 4 MiB per failed/unknown operation, bounded by the existing operation count/TTL. No image is promised when no browser exists, the page changes, capture fails or authentication is present. No images survive restart. Screenshot failures do not alter write outcomes or trigger retries."
+    "limits": "One image up to 4 MiB per operation with an observed browser failure, including recovery or watch retries, bounded by the existing operation count/TTL. No image is promised when no browser exists, the page changes, capture fails or authentication is present. No images survive restart. Screenshot failures do not alter write outcomes or trigger retries."
   },
   "support_bundle": {
     "tool": "support_bundle(operation_id)",
@@ -13,6 +13,14 @@
     "excluded": "Raw log files, raw exception messages, URLs, configuration values/paths, credentials, cookies, MFA prompts, booking references/details/purpose, contacts, screenshots and amendment comparison keys",
     "retention": "Traces follow existing in-memory operation retention. Recovered write history has no historical trace or image.",
     "interpretation": "The bundle is diagnostic evidence, not proof of success, empty availability or safe retry. Reconcile uncertain writes."
+  },
+  "internal_audit_2026_11_21": {
+    "finding": "Booking watches bypassed diagnostic_scope, losing backend step traces and automatic failure images; successful retries also discarded normal-operation failure images.",
+    "implemented": "Per-check watcher scopes with queue/read spans, bounded latest-failed-check traces, 20 recent check summaries, 100 recent events, retained first failure image with its check number, backend attempt/selection markers, safe pagination counts/navigation events and exception chains.",
+    "dogfood": "A headless live read reproduced LayoutChanged in collect_pages while the FBS screenshot showed a Loading overlay. The MCP support bundle retained API/browser attempts and failing code locations; operation_receipt returned the masked historical PNG. This suggests a pagination timing problem but does not establish its root cause or change pagination behavior.",
+    "screenshot_status": "Support bundles explain whether capture was attempted, refused for authentication/cancellation, lacked a browser page, failed, returned no image, exceeded the size limit or succeeded. failure_image contains metadata only; retrieve PNG separately through operation_receipt(failure=true).",
+    "pagination_fix": "Reproduced idle returning during an active postback that began in its 250 ms settling pause. The idle helper now rechecks postback/progress state after settling, repeating within a 60-second deadline. A delayed-postback browser fixture failed before the change and passed after; three consecutive live reads returned the complete 11-item/two-page listing.",
+    "limits": "No raw DOM, page text, network bodies, secrets or URLs are added to bundles. Screenshots may still contain visible private FBS text. Retention is bounded and in memory; a restart loses diagnostics. Diagnostics never replay actions or change watch targets or FBS write outcomes."
   },
   "backend_regression_comparison": {
     "command": "python -m benchmarks.compare baseline.json candidate.json --output comparison.json",

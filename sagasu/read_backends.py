@@ -13,6 +13,7 @@ from .fbs_account import read_bookings, read_task_list
 from .fbs_api import FBSReadAPI
 from .fbs_client import AuthenticationRequired, FBSApplicationError
 from .fbs_http import HTTPReadUnavailable
+from .observability import event
 
 READ_MODES = {"auto", "browser", "api"}
 READ_FAILURES = (
@@ -115,6 +116,7 @@ class HybridReads:
 
     @staticmethod
     def _result(result, backend, reason=None, verification=None):
+        event("read.backend_selected", backend=backend)
         return {
             **result,
             "read_backend": {

@@ -1650,19 +1650,23 @@ class FBSClient:
         await self._wait_for_idle(frame)
 
     async def _wait_for_idle(self, frame: Frame) -> None:
-        await frame.wait_for_function(
-            """() => {
-                const manager = window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager;
-                if (manager && manager.getInstance().get_isInAsyncPostBack()) return false;
-                return [...document.querySelectorAll('#__updateProgress__')].every((el) => {
+        idle = """() => {
+            const manager = window.Sys && Sys.WebForms && Sys.WebForms.PageRequestManager;
+            if (manager && manager.getInstance().get_isInAsyncPostBack()) return false;
+            return [...document.querySelectorAll('#__updateProgress__')].every((el) => {
                 const style = window.getComputedStyle(el);
                 return style.display === 'none' || style.visibility === 'hidden' ||
                     style.pointerEvents === 'none' || el.getBoundingClientRect().height === 0;
-                });
-            }""",
-            timeout=60000,
-        )
-        await frame.wait_for_timeout(250)
+            });
+        }"""
+        async with asyncio.timeout(60):
+            while True:
+                await frame.wait_for_function(idle, timeout=60000)
+                # FBS can start a deferred postback during the settling interval.
+                # Recheck after settling instead of returning with an active request.
+                await frame.wait_for_timeout(250)
+                if await frame.evaluate(idle):
+                    return
 
     async def _room_names(self, frame: Frame) -> list[str]:
         result = []

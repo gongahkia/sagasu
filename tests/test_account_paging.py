@@ -124,6 +124,34 @@ class AccountPagingTests(unittest.IsolatedAsyncioTestCase):
 
         return read
 
+    async def test_delayed_postback_during_idle_settle_does_not_repeat_previous_page(
+        self,
+    ):
+        from sagasu.fbs_client import FBSClient
+
+        read = await self.setup_grid([["A"], ["B"]])
+        await self.page.evaluate(
+            """() => {
+            window.busy = false;
+            window.Sys = {WebForms: {PageRequestManager: {getInstance: () => ({get_isInAsyncPostBack: () => window.busy})}}};
+            document.getElementById('next').onclick = () => {
+                setTimeout(() => {window.busy = true;}, 100);
+                setTimeout(() => {index++; render(); window.busy = false;}, 800);
+            };
+        }"""
+        )
+
+        async def idle(frame):
+            await FBSClient._wait_for_idle(self.client, frame)
+
+        self.client._wait_for_idle = idle
+        result = await collect_pages(self.client, self.page, "Grid", "bookings", read)
+        self.assertTrue(result["complete"])
+        self.assertEqual(
+            [row["reference_number"] for row in result["bookings"]], ["A", "B"]
+        )
+        self.assertFalse(await self.page.evaluate("window.busy"))
+
     async def test_collects_all_pages_and_preserves_totals(self):
         read = await self.setup_grid([["A", "B"], ["C"], ["D", "E"]])
         result = await collect_pages(self.client, self.page, "Grid", "bookings", read)
