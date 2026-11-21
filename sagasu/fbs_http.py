@@ -321,6 +321,9 @@ def parse_account_document(kind, html):
                 and len(checkboxes) == 1
             )
             item["can_view"] = len(_actions(row, "_BtnView")) == 1
+            from .fbs_tasks import confirmable
+
+            item["can_confirm"] = confirmable(item)
     else:
         bookings = []
         for row, cells in zip(rows, values):

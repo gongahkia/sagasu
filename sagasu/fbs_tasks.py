@@ -3,12 +3,15 @@
 No disappearing-row-only success, bulk approvals, automatic retries, or rejection.
 """
 
+import asyncio
 import re
+from urllib.parse import urlsplit
+
 from .action_journal import checkpoint_verified
 
 from playwright.async_api import Error as PlaywrightError
 
-from .fbs_client import FBSError, FBSClient, LayoutChanged
+from .fbs_client import AuthenticationRequired, FBSError, FBSClient, LayoutChanged
 from .fbs_account import (
     TASK_SNAPSHOT,
     capture_booking_evidence,
@@ -21,6 +24,27 @@ from .observability import event, observed_operation, observed_step
 IDENTITY = ("reference_number", "date_time", "room", "request_type", "requested_by")
 CHECKBOX = 'input[type="checkbox"]:visible:not(:disabled)'
 VIEW = 'a[id$="_BtnView"]:visible'
+
+# A co-booker confirms on the task's own page (VIEW), with FBS's workflow
+# buttons "Confirm" and "Reject", seen on the page FBS served on 21 Nov 2026.
+# The Task List's "Approve Selected" stays hidden until a row is ticked.
+DETAILS_PATH = "/modules/homenavigation/bookingenquirytask.aspx"
+DETAIL_REFERENCE = '[id$="bookingFormControl1_ObjectNumber"]:visible'
+WORKFLOW_BUTTON = (
+    'a[id^="panel_datalistWorkflowButtons_"][id$="_buttonWorkflowAction"]:visible'
+)
+CONFIRM_PAGE_SECONDS = 45
+CONFIRM_SUBMIT_MS = 45000
+CONFIRM_CHECKS = 4
+
+
+def confirmable(task):
+    """A co-booking awaiting this account's confirmation, with a page to confirm on."""
+    return (
+        task.get("can_view") is True
+        and " ".join(str(task.get("status", "")).split()).casefold()
+        == "pending confirmation"
+    )
 
 
 class TaskUnavailable(FBSError):
@@ -63,6 +87,7 @@ async def add_task_capabilities(frame, result):
             and await row.locator(CHECKBOX).count() == 1
         )
         task["can_view"] = await row.locator(VIEW).count() == 1
+        task["can_confirm"] = confirmable(task)
 
 
 async def locate_reviewed_task(client, expected):
@@ -326,6 +351,168 @@ async def capture_approval_receipt(client, frame, outcome):
             )
 
 
+async def open_confirmation_page(client, current, row):
+    """VIEW the exact task; return (frame, its one visible Confirm button)."""
+    await client.progress("opening the exact task's page to confirm it")
+    await row.locator(VIEW).click()
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + CONFIRM_PAGE_SECONDS
+    problem = "FBS did not open the task's page"
+    while loop.time() < deadline:
+        frame = client.page.frame(name="frameContent")
+        try:
+            if frame and urlsplit(frame.url).path.casefold() == DETAILS_PATH:
+                refs = frame.locator(DETAIL_REFERENCE)
+                if await refs.count():
+                    await client._wait_for_idle(frame)
+                    shown = [
+                        " ".join(text.split())
+                        for text in await refs.locator(".control").all_inner_texts()
+                    ]
+                    if shown != [current["reference_number"]]:
+                        raise TaskUnavailable(
+                            "FBS opened a different booking. No confirmation was submitted."
+                        )
+                    buttons = frame.locator(WORKFLOW_BUTTON)
+                    confirms = []
+                    for index in range(await buttons.count()):
+                        button = buttons.nth(index)
+                        label = " ".join((await button.inner_text()).split())
+                        shadow = await button.evaluate(
+                            "el => !!el.closest('#panel_buttonShadow')"
+                        )
+                        if label.casefold() == "confirm" and not shadow:
+                            confirms.append(button)
+                    if len(confirms) == 1:
+                        return frame, confirms[0]
+                    # Still loading, or FBS offers no single Confirm: keep
+                    # looking until the deadline, then refuse unsubmitted.
+                    problem = "FBS does not offer one Confirm action for this task"
+        except PlaywrightError:
+            if frame is None or not frame.is_detached():
+                raise
+        await client.page.wait_for_timeout(250)
+    raise TaskUnavailable(problem + ". No confirmation was submitted.")
+
+
+POSITIVE_STATUS = re.compile(r"approved|confirmed|completed", re.I)
+
+
+async def verify_confirmed(client, current):
+    """Fresh Task List reads: the exact task Confirmed/Approved/Completed, or
+    no row with its reference left on a complete listing."""
+    reference = current["reference_number"]
+    for attempt in range(CONFIRM_CHECKS):
+        if attempt:
+            await client.page.wait_for_timeout(2000)
+        listing = await read_task_list(client, reference=reference)
+        same = [t for t in listing["tasks"] if t.get("reference_number") == reference]
+        found = [t for t in same if all(t.get(k) == current[k] for k in IDENTITY)]
+        if len(found) > 1:
+            break
+        if found:
+            status = " ".join(str(found[0]["status"]).split())
+            if POSITIVE_STATUS.fullmatch(status):
+                return status
+            if not pending_status(status):
+                break  # e.g. Rejected or Cancelled: never a confirmation
+            continue
+        if not same and listing.get("complete") is True:
+            return "Confirmed (left the Task List)"
+    raise LayoutChanged("A confirmed task was not observed in Task List")
+
+
+@observed_step("tasks.confirm")
+async def confirm_task(client, expected):
+    """Confirm one co-booking on its own page. Only a pressed Confirm is uncertain."""
+    from .fbs_prompts import PromptDeclined, expected_prompt
+
+    try:
+        _, current, row = await locate_reviewed_task(client, expected)
+        if not confirmable(current):
+            raise TaskUnavailable(
+                "FBS does not offer confirmation for this task in your account."
+            )
+        frame, button = await open_confirmation_page(client, current, row)
+        try:
+            if expected_prompt(await button.get_attribute("onclick")) is not None:
+                raise PromptDeclined("FBS now asks a question before confirming")
+        except PromptDeclined as declined:
+            raise TaskUnavailable(
+                f"{declined}. No confirmation was submitted."
+            ) from None
+    except (TaskUnavailable, AuthenticationRequired):
+        raise
+    except Exception as error:
+        # Confirm was never pressed, so FBS received nothing.
+        event("tasks.confirmation_not_submitted", error_type=type(error).__name__)
+        raise TaskUnavailable(
+            "The confirmation could not be prepared. No confirmation was submitted."
+        ) from error
+    try:
+        async with client.page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.frame is frame
+            and urlsplit(response.url).path.casefold() == DETAILS_PATH,
+            timeout=CONFIRM_SUBMIT_MS,
+        ) as pending:
+            event("tasks.confirmation_submitting")
+            await client.progress("submitting the confirmed co-booking")
+            await button.click()  # Exactly once. Any later failure is uncertain.
+        await (await pending.value).finished()
+        # What FBS showed right after Confirm, before the Task List is read again.
+        after = client.page.frame(name="frameContent") or frame
+        after_png, acknowledged = None, False
+        try:
+            await client._wait_for_idle(after)
+            label = after.locator("#MessagePanel:visible #MessageLabel:visible")
+            acknowledged = await label.count() == 1 and approval_acknowledged(
+                await label.inner_text(), current["reference_number"]
+            )
+            after_png = await after.locator("body").screenshot(
+                type="png", animations="disabled"
+            )
+        except Exception as error:
+            event("tasks.confirmation_page_unread", error_type=type(error).__name__)
+        status = await verify_confirmed(client, current)
+        outcome = {
+            "status": "approved",
+            "reference_number": current["reference_number"],
+            "task": dict(current),
+            "task_status": status,
+            "booking_status_verified": False,
+        }
+        event("tasks.confirmation_verified", acknowledged=bool(acknowledged))
+        checkpoint_verified(outcome)
+        try:
+            outcome["receipt_png"] = await capture_booking_evidence(
+                client, outcome["reference_number"]
+            )
+            outcome["receipt_kind"] = "booking_details"
+        except Exception as error:
+            event(
+                "tasks.confirmation_details_unavailable",
+                error_type=type(error).__name__,
+            )
+            if after_png:
+                outcome["receipt_png"] = after_png
+                outcome["receipt_kind"] = "confirmation_page"
+            else:
+                outcome["receipt_error"] = (
+                    "Confirmation verified, but its screenshot could not be captured. Check FBS before retrying any action."
+                )
+        return outcome
+    except Exception as error:
+        event(
+            "tasks.confirmation_outcome_unknown",
+            level=40,
+            error_type=type(error).__name__,
+        )
+        raise TaskApprovalOutcomeUnknown(
+            "Confirmation was submitted but could not be verified. Check FBS Task List and the booking before trying again."
+        ) from None
+
+
 @observed_operation("backend.task_action")
 async def execute_task_action(
     expected, *, approve=False, auth_notify=None, progress=None, interactive=True
@@ -335,7 +522,11 @@ async def execute_task_action(
             auth_notify=auth_notify, progress=progress, interactive=interactive
         ) as client:
             if approve:
-                return await approve_task(client, expected)
+                # Approvers use Approve Selected; a co-booker confirms on the
+                # task's own page.
+                if expected.get("can_approve") or not expected.get("can_confirm"):
+                    return await approve_task(client, expected)
+                return await confirm_task(client, expected)
             return await capture_task_details(client, expected)
     except FBSError:
         raise

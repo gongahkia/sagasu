@@ -25,6 +25,7 @@ def checkpoint_verified(result):
 
 
 SUMMARY_KEYS = {
+    "status",  # a task's status when its approval was reviewed
     "room",
     "date",
     "start_time",
@@ -287,6 +288,7 @@ class ActionJournal:
             "pending_confirmation",
             "cancelled",
             "not_cancelled",
+            "not_approved",
             "approved",
             "amended",
             "matching_booking_found",
@@ -318,6 +320,7 @@ class ActionJournal:
                 "pending_confirmation",
                 "cancelled",
                 "not_cancelled",
+                "not_approved",
                 "approved",
                 "amended",
             }
@@ -325,7 +328,7 @@ class ActionJournal:
         )
         # Only a verified "did not take effect" makes a retry safe.
         data["safe_to_retry"] = (
-            state == "not_cancelled"
+            state in {"not_cancelled", "not_approved"}
             and data["action_outcome_verified"]
             and result.get("safe_to_retry") is True
         )
@@ -335,8 +338,14 @@ class ActionJournal:
             ).fetchone()
             if not original:
                 raise JournalError("The original action history entry is unavailable.")
-            if state == "not_cancelled" and original[0] != "cancel":
-                # Only a cancel can be shown not to have taken effect.
+            if (state, original[0]) in {
+                ("not_cancelled", "approve_task"),
+                ("not_approved", "cancel"),
+            } or (
+                state in {"not_cancelled", "not_approved"}
+                and original[0] not in {"cancel", "approve_task"}
+            ):
+                # "Did not take effect" counts only for its own kind of action.
                 data["action_outcome_verified"] = data["safe_to_retry"] = False
             db.execute(
                 "INSERT INTO reconciliations VALUES(?,?,?) ON CONFLICT(operation_id) DO UPDATE SET observed_at=excluded.observed_at,evidence=excluded.evidence",
