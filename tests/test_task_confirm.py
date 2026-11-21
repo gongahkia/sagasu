@@ -10,7 +10,8 @@ The stand-in is shaped like the pages FBS served on 21 Nov 2026 (sanitised):
   shows the Ref Number and FBS's workflow buttons, Reject and Confirm, with a
   CSS-hidden duplicate under #panel_buttonShadow. Confirm posts the page back to
   itself with no confirm() prompt. What FBS shows afterwards is not known; here
-  it takes the task off the Task List and returns there.
+  it takes the task off the Task List and returns there. A separate My Bookings
+  read supplies the positive evidence needed when the task disappears.
 
 The contract held here: a refusal before Confirm is pressed is TaskUnavailable
 and FBS receives no POST; after the one press, anything short of Task List
@@ -291,6 +292,14 @@ class ConfirmStandIn:
         self.details_base = BASE + DETAILS_PATH
         self.drop_post = False
         self.after_confirm = "remove"
+        self.bookings = [
+            {
+                "reference_number": ROW["reference_number"],
+                "room": ROW["room"],
+                "date_time": ROW["date_time"],
+                "fbs_status": "Pending Confirmation",
+            }
+        ]
         self.incomplete_after_post = False
         # The confirm route is for tasks without Approve Selected; the
         # capability tests switch the real page's button back on.
@@ -322,6 +331,7 @@ class ConfirmStandIn:
         self.evidence = AsyncMock(return_value=PNG)
         for target, value in (
             ("sagasu.fbs_tasks.read_task_list", self.read),
+            ("sagasu.fbs_account.read_bookings", self.read_bookings),
             ("sagasu.fbs_tasks.capture_booking_evidence", self.evidence),
             ("sagasu.fbs_tasks.CONFIRM_PAGE_SECONDS", 10),
             ("sagasu.fbs_tasks.CONFIRM_SUBMIT_MS", 10000),
@@ -384,6 +394,10 @@ class ConfirmStandIn:
     def listing(self):
         body, self.rendered = task_list(self.tasks, self.approve_link)
         return body
+
+    async def read_bookings(self, client, *, reference=None):
+        rows = copy.deepcopy(self.bookings if self.posts else [])
+        return {"bookings": rows, "total": len(rows), "complete": True}
 
     def task_page(self, task):
         buttons = workflow_buttons(self.labels, self.confirm_prompt)
@@ -672,8 +686,8 @@ class BrowserConfirmTests(StandInCase):
         self.assertEqual(self.s.posts, CONFIRMED)
         self.assertEqual((self.s.bulk, self.s.dialogs, self.s.unexpected), ([], [], []))
         self.assertEqual(self.s.tasks, [])
-        # One read to find the task, one fresh read that no longer lists it.
-        self.assertEqual(self.s.reads, 2)
+        # Find the task, then verify absence and cross-check it against My Bookings.
+        self.assertEqual(self.s.reads, 3)
         self.assertEqual(self.s.listings[-1]["tasks"], [])
         self.assertIn("submitting the confirmed co-booking", self.progress())
 
@@ -844,7 +858,7 @@ class BrowserUnknownOutcomeTests(StandInCase):
     async def test_a_rejected_task_is_not_reported_as_confirmed(self):
         # Regression: any status without "pending"/"awaiting" used to count as
         # success, so a task FBS then listed as Rejected came back "approved".
-        # Only Approved/Confirmed/Completed (or the reference gone) verify.
+        # Absence alone is also insufficient without positive evidence.
         self.s.after_confirm = "Rejected"
         await self.unknown()
 

@@ -658,9 +658,9 @@ async def open_confirmation_page(client, current, row):
 POSITIVE_STATUS = re.compile(r"approved|confirmed|completed", re.I)
 
 
-async def verify_confirmed(client, current):
+async def verify_confirmed(client, current, *, acknowledged=False):
     """Fresh Task List reads: the exact task Confirmed/Approved/Completed, or
-    no row with its reference left on a complete listing."""
+    its absence backed by an acknowledgement or an accepted My Bookings row."""
     reference = current["reference_number"]
     for attempt in range(CONFIRM_CHECKS):
         if attempt:
@@ -668,7 +668,7 @@ async def verify_confirmed(client, current):
         listing = await read_task_list(client, reference=reference)
         same = [t for t in listing["tasks"] if t.get("reference_number") == reference]
         found = [t for t in same if all(t.get(k) == current[k] for k in IDENTITY)]
-        if len(found) > 1:
+        if len(same) > 1:
             break
         if found:
             status = " ".join(str(found[0]["status"]).split())
@@ -678,7 +678,9 @@ async def verify_confirmed(client, current):
                 break  # e.g. Rejected or Cancelled: never a confirmation
             continue
         if not same and listing.get("complete") is True:
-            return "Confirmed (left the Task List)"
+            if acknowledged or await left_tasks_and_listed(client, current) is not None:
+                return "Confirmed (left the Task List)"
+            break
     raise LayoutChanged("A confirmed task was not observed in Task List")
 
 
@@ -734,7 +736,7 @@ async def confirm_task(client, expected):
             )
         except Exception as error:
             event("tasks.confirmation_page_unread", error_type=type(error).__name__)
-        status = await verify_confirmed(client, current)
+        status = await verify_confirmed(client, current, acknowledged=acknowledged)
         outcome = {
             "status": "approved",
             "reference_number": current["reference_number"],

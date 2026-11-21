@@ -48,19 +48,52 @@ def client():
 
 
 class VerifyConfirmedTests(unittest.IsolatedAsyncioTestCase):
-    async def verify(self, *reads):
-        with patch.object(
-            fbs_tasks, "read_task_list", AsyncMock(side_effect=list(reads))
+    async def verify(self, *reads, acknowledged=False, bookings=()):
+        with (
+            patch.object(
+                fbs_tasks, "read_task_list", AsyncMock(side_effect=list(reads))
+            ),
+            patch(
+                "sagasu.fbs_account.read_bookings",
+                new=AsyncMock(
+                    return_value={"bookings": list(bookings), "complete": True}
+                ),
+            ),
         ):
-            return await verify_confirmed(client(), TASK)
+            return await verify_confirmed(client(), TASK, acknowledged=acknowledged)
 
-    async def test_only_positive_statuses_or_a_vanished_reference_verify(self):
+    async def test_positive_task_statuses_verify(self):
         for status in ("Confirmed", "Approved", "Completed"):
             with self.subTest(status=status):
                 self.assertEqual(
                     await self.verify(listing({**TASK, "status": status})), status
                 )
-        self.assertEqual(await self.verify(listing()), "Confirmed (left the Task List)")
+
+    async def test_vanished_reference_needs_positive_evidence(self):
+        with self.assertRaises(LayoutChanged):
+            await self.verify(listing(), listing())
+        self.assertEqual(
+            await self.verify(listing(), acknowledged=True),
+            "Confirmed (left the Task List)",
+        )
+        self.assertEqual(
+            await self.verify(
+                listing(),
+                listing(),
+                bookings=[
+                    {
+                        "reference_number": TASK["reference_number"],
+                        "fbs_status": "Confirmed",
+                    }
+                ],
+            ),
+            "Confirmed (left the Task List)",
+        )
+
+    async def test_duplicate_reference_with_changed_identity_is_ambiguous(self):
+        moved = {**TASK, "date_time": "22-Nov-2099 11:00 - 13:00", "status": "Rejected"}
+        with self.assertRaises(LayoutChanged):
+            await self.verify(listing({**TASK, "status": "Confirmed"}, moved))
 
     async def test_rejected_or_cancelled_is_never_a_confirmation(self):
         for status in ("Rejected", "Cancelled", "Withdrawn", "Not Confirmed"):
