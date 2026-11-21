@@ -25,6 +25,9 @@ def saved_sign_in(settings, listener):
 
 
 async def start_listener(settings, service, configuration_provider):
+    from . import require_dependencies
+
+    require_dependencies()
     listener = settings.http
     from ..mcp_server import create_server
     from .mcp_adapter import RemoteAccess
@@ -41,7 +44,7 @@ async def start_listener(settings, service, configuration_provider):
             service,
             configuration_provider=configuration_provider,
             allow_agent_submission=listener.writes,
-            remote=RemoteAccess(
+            adapter=RemoteAccess(
                 writes=listener.writes,
                 # The gate in front of /mcp names the key it
                 # accepted, whether sent directly or as a token.

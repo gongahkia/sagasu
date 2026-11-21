@@ -646,6 +646,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="python -m sagasu.gateway")
     parser.add_argument("--config", required=True)
     args = parser.parse_args(argv)
+    from . import require_dependencies
+
+    require_dependencies()
     from dotenv import dotenv_values
 
     settings = {
