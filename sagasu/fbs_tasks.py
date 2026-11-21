@@ -262,6 +262,142 @@ async def select_only_task(frame, row):
         )
 
 
+# After Approve Selected, FBS opens an in-page box and approves nothing until
+# its CONFIRM is pressed. Read from the live page on 21 Nov 2026:
+#   #popupDialog > ... > div.dialog
+#     span#popupDialog_l1.title          "Approve Selected"
+#     a#popupDialog_bc                   "[x close]"   (postback)
+#     textarea#textComments_c1           "Comments:"   (optional)
+#     a#popupDialog_b1                   "Confirm"     (postback, no prompt)
+# Closing it removes #popupDialog and leaves the task pending.
+APPROVE_BOX = "#popupDialog div.dialog:visible"
+APPROVE_BOX_TITLE = "#popupDialog #popupDialog_l1"
+APPROVE_BOX_CONFIRM = "#popupDialog a#popupDialog_b1:visible"
+APPROVE_BOX_CLOSE = "#popupDialog a#popupDialog_bc:visible"
+APPROVE_BOX_BUTTONS = (
+    "#popupDialog .dlgbuttons a:visible, #popupDialog .dlgbuttons button:visible, "
+    '#popupDialog .dlgbuttons input[type="button"]:visible, '
+    '#popupDialog .dlgbuttons input[type="submit"]:visible'
+)
+ACCEPTED_STATUSES = {
+    "confirmed",
+    "approved",
+    "pending confirmation",  # other co-bookers have yet to confirm
+    "pending approval",
+}
+QUIET_CHECKS = 4  # loop passes to wait for FBS's acknowledgement first
+
+
+async def approval_box(frame):
+    """The CONFIRM button of FBS's open "Approve Selected" box, or None.
+
+    That box is FBS asking before it approves, so a refusal while it is open
+    (TaskUnavailable) submits nothing. Any other box is not understood, and
+    what FBS did is then unknown (LayoutChanged).
+    """
+    if not await frame.locator(APPROVE_BOX).count():
+        return None
+    from .fbs_prompts import PromptDeclined, expected_prompt
+
+    titles = [
+        " ".join(text.split()).casefold()
+        for text in await frame.locator(APPROVE_BOX_TITLE).all_inner_texts()
+    ]
+    confirm = frame.locator(APPROVE_BOX_CONFIRM)
+    labels = [
+        " ".join(text.split()).casefold() for text in await confirm.all_inner_texts()
+    ]
+    # The observed box has one button in its bar. Any other button there
+    # (FBS numbers them popupDialog_b1, _b2, ...) makes it a different box.
+    buttons = await frame.locator(APPROVE_BOX_BUTTONS).count()
+    if (
+        await frame.locator(APPROVE_BOX).count() != 1
+        or titles != ["approve selected"]
+        or labels != ["confirm"]
+        or buttons != 1
+    ):
+        raise LayoutChanged("FBS opened a box Sagasu does not recognise")
+    try:
+        prompt = expected_prompt(await confirm.get_attribute("onclick"))
+    except PromptDeclined:
+        prompt = "unexpected"
+    if prompt is not None:
+        raise TaskUnavailable(
+            "FBS now asks a question before approving. No approval was submitted."
+        )
+    return confirm
+
+
+async def reviewed_task_is_the_one_ticked(frame, current):
+    """With FBS's box open: the list still shows the reviewed task, unchanged,
+    and that row, and only that row, is ticked. The page FBS returns with the
+    box is the first view of what the server will approve."""
+    same = [
+        (task, row)
+        for task, row in await task_rows(frame)
+        if all(task.get(key) == current[key] for key in IDENTITY)
+        and task.get("status") == current["status"]
+    ]
+    return (
+        len(same) == 1
+        and await same[0][1].locator('input[type="checkbox"]').count() == 1
+        and await same[0][1].locator('input[type="checkbox"]').is_checked()
+        and await only_one_task_selected(frame)
+    )
+
+
+async def close_approval_box(frame):
+    """Best effort: leave FBS without an open box after a refusal."""
+    try:
+        close = frame.locator(APPROVE_BOX_CLOSE)
+        if await close.count() == 1:
+            await close.click()
+    except Exception as error:
+        event("tasks.approval_box_left_open", error_type=type(error).__name__)
+
+
+async def left_tasks_and_listed(client, current):
+    """Proof after CONFIRM when FBS shows no acknowledgement Sagasu knows.
+
+    Only for a co-booking that awaited this account's confirmation: seen live,
+    such a booking is not in My Bookings until it is accepted. The exact
+    reference must have left a complete Task List and be listed once in My
+    Bookings with a status seen after acceptance. Returns that status, else
+    None. For any other task a vanished row proves nothing.
+    """
+    from .fbs_account import read_bookings
+
+    if " ".join(str(current.get("status", "")).split()).casefold() != (
+        "pending confirmation"
+    ):
+        return None
+    reference = current["reference_number"]
+    listing = await read_task_list(client, reference=reference)
+    if listing.get("complete") is not True or any(
+        task.get("reference_number") == reference for task in listing["tasks"]
+    ):
+        return None
+    bookings = await read_bookings(client, reference=reference)
+    rows = [
+        row for row in bookings["bookings"] if row.get("reference_number") == reference
+    ]
+    if len(rows) != 1:
+        return None
+    status = " ".join(str(rows[0].get("fbs_status", "")).split())
+    return status if status.casefold() in ACCEPTED_STATUSES else None
+
+
+def page_is_loading(error):
+    """A read cut short because the frame is loading a new page: read again."""
+    return bool(
+        re.search(
+            r"execution context was destroyed|navigat|frame was detached",
+            str(error),
+            re.I,
+        )
+    )
+
+
 @observed_step("tasks.approve")
 async def approve_task(client, expected):
     frame, current, row = await locate_reviewed_task(client, expected)
@@ -316,6 +452,7 @@ async def approve_task(client, expected):
             await dialog.dismiss()
 
     client.page.on("dialog", handle_dialog)
+    confirmed, quiet, look_elsewhere = False, 0, False
     try:
         event("tasks.approval_submitting")
         await client.progress("submitting the confirmed task approval")
@@ -327,6 +464,30 @@ async def approve_task(client, expected):
             if frame:
                 try:
                     await client._wait_for_idle(frame)
+                    if not confirmed:
+                        # Real FBS asks again in its own box; nothing is
+                        # approved until that box's CONFIRM is pressed.
+                        try:
+                            box_confirm = await approval_box(frame)
+                            if box_confirm is not None and not (
+                                await reviewed_task_is_the_one_ticked(frame, current)
+                            ):
+                                raise TaskUnavailable(
+                                    "The task or its selection changed before confirmation. No approval was submitted."
+                                )
+                        except TaskUnavailable:
+                            await close_approval_box(frame)
+                            raise
+                        if box_confirm is not None:
+                            event("tasks.approval_confirming")
+                            confirmed = True
+                            await box_confirm.click()  # Exactly once.
+                            await client.page.wait_for_timeout(500)
+                            continue
+                    if not await frame.locator("#GridViewTask_content").is_visible():
+                        # FBS serves the page hidden until its script runs.
+                        await client.page.wait_for_timeout(500)
+                        continue
                     result = parse_tasks(await frame.evaluate(TASK_SNAPSHOT))
                     found = [
                         task
@@ -365,12 +526,51 @@ async def approve_task(client, expected):
                         checkpoint_verified(outcome)
                         await capture_approval_receipt(client, frame, outcome)
                         return outcome
-                except PlaywrightError:
-                    if not frame.is_detached():
+                    if (
+                        confirmed
+                        and not found
+                        and not await frame.locator(APPROVE_BOX).count()
+                    ):
+                        # CONFIRM was pressed and the task left this page, but
+                        # FBS showed no acknowledgement Sagasu knows. Give it a
+                        # moment, then look for proof in fresh listings.
+                        quiet += 1
+                        if quiet >= QUIET_CHECKS:
+                            look_elsewhere = True
+                            break
+                except PlaywrightError as error:
+                    # Reads are safe to repeat; CONFIRM is never pressed twice.
+                    if not frame.is_detached() and not page_is_loading(error):
                         raise
             await client.page.wait_for_timeout(500)
-        raise LayoutChanged("A positive task approval outcome was not observed")
+        if not look_elsewhere:
+            raise LayoutChanged("A positive task approval outcome was not observed")
+        # Once, outside the loop: any error here is an uncertain outcome.
+        listed = await left_tasks_and_listed(client, current)
+        if listed is None:
+            raise LayoutChanged("The approved task was not found in My Bookings")
+        outcome = {
+            "status": "approved",
+            "reference_number": current["reference_number"],
+            "task": dict(current),
+            "task_status": "Left the Task List; My Bookings shows " + listed,
+            "booking_status_verified": False,
+        }
+        event(
+            "tasks.approval_verified",
+            verification="left_task_list_and_listed_in_my_bookings",
+        )
+        checkpoint_verified(outcome)
+        await capture_approval_receipt(
+            client, client.page.frame(name="frameContent") or frame, outcome
+        )
+        return outcome
     except Exception as error:
+        if isinstance(error, TaskUnavailable) and not confirmed:
+            # Raised only with FBS's "Approve Selected" box open and its
+            # CONFIRM not pressed: nothing was approved, so a retry is safe.
+            event("tasks.approval_not_submitted")
+            raise
         event(
             "tasks.approval_outcome_unknown", level=40, error_type=type(error).__name__
         )
