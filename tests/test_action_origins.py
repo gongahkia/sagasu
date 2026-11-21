@@ -1,6 +1,6 @@
 """Who started each write, kept in SQLite (action_origins): upstream compatibility,
 history filtering, marking earlier writes, atomic recording, and the install.sh
-step that marks a hosted copy's earlier writes as remote. Only temporary SQLite
+step that keeps a hosted copy's unknown history private. Only temporary SQLite
 files, fixtures and local subprocesses; nothing contacts FBS or Microsoft, needs
 root or changes the system."""
 
@@ -628,17 +628,17 @@ class AtomicOriginServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(origins(path), {submitted["operation_id"]: "remote"})
 
 
-# install.sh: the step that marks a hosted copy's earlier writes as remote.
-STEP_START = INSTALL.index("mark_history_remote() {")
+# install.sh: the step that keeps a hosted copy's unknown history private.
+STEP_START = INSTALL.index("mark_history_local() {")
 STEP_END = INSTALL.index("# Teammates' copies come back", STEP_START)
 STEP = INSTALL[STEP_START:STEP_END]
 FUNCTION = re.search(
-    r"^mark_history_remote\(\) \{\n.*?^\}\n", INSTALL, re.S | re.M
+    r"^mark_history_local\(\) \{\n.*?^\}\n", INSTALL, re.S | re.M
 ).group(0)
 ONE_LINER = re.search(r"-c \\\n\s+'([^']+)'", FUNCTION).group(1)
 NAME_TEST = "[[ -f $instance && $copy =~ ^[a-z][a-z0-9]{1,15}$ ]] || continue"
-OWNER_CALL = "mark_history_remote sagasu /var/lib/sagasu/actions.sqlite3"
-COPY_CALL = 'mark_history_remote "sagasu-$copy" "/var/lib/sagasu-$copy/actions.sqlite3"'
+OWNER_CALL = "mark_history_local sagasu /var/lib/sagasu/actions.sqlite3"
+COPY_CALL = 'mark_history_local "sagasu-$copy" "/var/lib/sagasu-$copy/actions.sqlite3"'
 
 
 class InstallStepStaticTests(unittest.TestCase):
@@ -651,9 +651,9 @@ class InstallStepStaticTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_step_is_defined_once_and_called_for_the_owner_and_every_copy(self):
-        self.assertEqual(INSTALL.count("mark_history_remote() {"), 1)
+        self.assertEqual(INSTALL.count("mark_history_local() {"), 1)
         self.assertEqual(
-            re.findall(r"^mark_history_remote .*$", INSTALL, re.M), [OWNER_CALL]
+            re.findall(r"^mark_history_local .*$", INSTALL, re.M), [OWNER_CALL]
         )
         loop = re.search(
             r"^for instance in /etc/sagasu/instances/\*; do\n(.*?)^done$",
@@ -672,7 +672,7 @@ class InstallStepStaticTests(unittest.TestCase):
         self.assertIn(
             'runuser -u "$user" -- /opt/sagasu/venv/bin/python -c \\', FUNCTION
         )
-        self.assertIn('mark_unrecorded("remote")', ONE_LINER)
+        self.assertIn('mark_unrecorded("local")', ONE_LINER)
         self.assertIn("ActionJournal(sys.argv[1])", ONE_LINER)
         self.assertEqual(ONE_LINER.count("mark_unrecorded("), 1)
         self.assertRegex(FUNCTION, r"\n\s+\"\$db\" \|\| true\n\}")
@@ -760,9 +760,9 @@ class InstallOneLinerTests(JournalCase):
         first = self.run_one_liner(self.path)
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(
-            first.stdout, f"{self.path}: 2 earlier write(s) marked as made by agents\n"
+            first.stdout, f"{self.path}: 2 earlier write(s) kept private to the host\n"
         )
-        self.assertEqual(origins(self.path), {"old1": "remote", "old2": "remote"})
+        self.assertEqual(origins(self.path), {"old1": "local", "old2": "local"})
         second = self.run_one_liner(self.path)
         self.assertEqual((second.returncode, second.stdout), (0, ""), second.stderr)
 
@@ -834,6 +834,30 @@ class InstallStepRunTests(unittest.TestCase):
         )
         return result, self.log.read_text().splitlines()
 
+    def test_update_keeps_unknown_history_private_and_known_remote_history_visible(
+        self,
+    ):
+        path = self.history("sagasu", upstream_row("legacy-host-write"))
+        journal = ActionJournal(path)
+        journal.reserve(job("remote-write", remote=True), "remote-review", slot("R"))
+        journal.recover(200)
+
+        result, _ = self.run_step()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        service = AgentService(backend=FakeBackend(), journal=ActionJournal(path))
+        with remote_origin():
+            history = service.action_history()
+            self.assertEqual(history["total"], 1)
+            self.assertEqual(
+                [row["operation_id"] for row in history["actions"]], ["remote-write"]
+            )
+            with self.assertRaises(AgentError):
+                service.get("legacy-host-write")
+            with self.assertRaises(AgentError):
+                service.reconcile_operation("legacy-host-write")
+            self.assertTrue(service.get("remote-write").remote)
+        self.assertEqual(service.action_history()["total"], 2)
+
     def test_marks_owner_and_valid_copies_once_with_one_backup_each(self):
         owner = self.history(
             "sagasu", upstream_row("o1", room="A"), upstream_row("o2", room="B")
@@ -858,13 +882,13 @@ class InstallStepRunTests(unittest.TestCase):
         self.assertEqual(
             result.stdout.splitlines(),
             [
-                f"{owner}: 2 earlier write(s) marked as made by agents",
-                f"{alice}: 1 earlier write(s) marked as made by agents",
+                f"{owner}: 2 earlier write(s) kept private to the host",
+                f"{alice}: 1 earlier write(s) kept private to the host",
                 "reached-the-restart",
             ],
         )
-        self.assertEqual(origins(owner), {"o1": "remote", "o2": "remote"})
-        self.assertEqual(origins(alice), {"a1": "remote", "a-host": "local"})
+        self.assertEqual(origins(owner), {"o1": "local", "o2": "local"})
+        self.assertEqual(origins(alice), {"a1": "local", "a-host": "local"})
         # The owner's backup is the file as it was, before origins existed.
         owner_backup = Path(f"{owner}.before-origins")
         self.assertEqual(tables(owner_backup), {"actions", "reconciliations"})

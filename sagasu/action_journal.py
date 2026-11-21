@@ -366,9 +366,9 @@ class ActionJournal:
     def mark_unrecorded(self, origin):
         """Give every action recorded without an origin this one; returns how many.
 
-        For hosted copies only (deploy/server/install.sh): there every earlier
-        write came from agents through the remote listener. Nothing calls this
-        on the local path, where such rows rightly count as local.
+        Missing origins count as local. The hosted installer records that
+        conservative classification; remote classification requires independent
+        evidence of the earlier writes' origin.
         """
         if origin not in {"local", "remote"}:
             raise JournalError("Unknown action origin.")
