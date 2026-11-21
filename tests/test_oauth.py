@@ -84,7 +84,7 @@ class SettingsTests(unittest.TestCase):
             "https://chatgpt.com:8443/cb",
             "https://evil.chatgpt.com/cb",
             "https://chatgpt.com.evil.example/cb",
-            "https://user@chatgpt.com/cb",
+            "https://user@chatgpt.com/cb",  # ggignore: user info in a redirect URI must be refused
             "https://chatgpt.com/cb#fragment",
             "https://example.org/cb",
             "javascript:alert(1)",

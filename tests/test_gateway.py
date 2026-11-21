@@ -47,13 +47,20 @@ HOST = "sagasu.test"
 METADATA = (
     f'resource_metadata="https://{HOST}/.well-known/oauth-protected-resource/mcp"'
 )
-ALEX_KEY = "sgs_alex_phone_Vq3Lw8Zr1Tn6Yb0Kc5Jm2Hx7Pd4Gs9Fe"
-SPARE_KEY = "sgs_alex_spare_Rk2Wn7Bq4Zt9Lc1Xm6Jh3Py8Dv5Gs0Ua"
-BLAIR_KEY = "sgs_blair_tablet_Ne5Qa2Wz8Kr3Tm7Xc1Lp6Hy4Bv9Jd0"
-OWNER_SETUP_KEY = "sgs_owner_setup_Zq8Wc3Nv6Lb1Ht4Kx9Pm2Rd7Gy5Js0"
-DANA_KEY = "sgs_dana_laptop_Bw6Mz1Qx4Kd9Lr3Tn8Vc2Hp7Jy5Gs0F"
-ERIN_KEY = "sgs_erin_laptop_Tc4Hq9Zw2Lm7Rx1Kv6Bn3Pd8Js5Gy0A"
-UNKNOWN = "sgs_nobody_Ho4Zs9Mx2Qc7Wa1Rk6Tb3Yn8Lv5Jp0Gd"
+
+
+def fake_key(label):
+    """A key for these tests only: plainly fake, so secret scanners stay quiet."""
+    return f"sgs_test_{label}_" + "0" * 24
+
+
+ALEX_KEY = fake_key("alex_phone")
+SPARE_KEY = fake_key("alex_spare")
+BLAIR_KEY = fake_key("blair_tablet")
+OWNER_SETUP_KEY = fake_key("owner_setup")
+DANA_KEY = fake_key("dana_laptop")
+ERIN_KEY = fake_key("erin_laptop")
+UNKNOWN = fake_key("nobody")
 CALL = b'{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}'
 FORM = ("content-type", "application/x-www-form-urlencoded")
 
