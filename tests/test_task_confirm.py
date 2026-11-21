@@ -177,8 +177,11 @@ def task_row(ctl, task):
     return '<tr class="row">' + "".join(f"<td>{cell}</td>" for cell in cells) + "</tr>"
 
 
-def task_list(tasks):
-    """The Task List page for these tasks: (html, {row control: task key})."""
+def task_list(tasks, approve_link=True):
+    """The Task List page for these tasks: (html, {row control: task key}).
+
+    The real page carries Approve Selected in the tick-to-show toolbar;
+    approve_link=False drops it, so a task can only be confirmed on its page."""
     rendered, rows = {}, []
     for index, task in enumerate(tasks):
         ctl = f"ctl{index + 2:02d}"
@@ -188,9 +191,13 @@ def task_list(tasks):
         rows.append('<tr class="row"><td colspan="9">No items</td></tr>')
     toolbar = (
         '<span id="GridViewTask_actsonitems" class="actsonitems" style="display:none;">'
-        + f'<a id="GridViewTask_ctl13" onclick="{postback("GridViewTask$ctl13$ctl00")}" '
-        + 'onkeypress="return btn.kp();" href="javascript:v();" class="btnblue">'
-        + "<span><img align='absmiddle' src='/images/tick2.png' />&nbsp;Approve Selected</span></a>"
+        + (
+            f'<a id="GridViewTask_ctl13" onclick="{postback("GridViewTask$ctl13$ctl00")}" '
+            + 'onkeypress="return btn.kp();" href="javascript:v();" class="btnblue">'
+            + "<span><img align='absmiddle' src='/images/tick2.png' />&nbsp;Approve Selected</span></a>"
+            if approve_link
+            else ""
+        )
         + f'<a id="GridViewTask_ctl14" onclick="{postback("GridViewTask$ctl14$ctl00")}" '
         + 'onkeypress="return btn.kp();" href="javascript:v();" class="btnblue">'
         + "<span><img align='absmiddle' src='/images/cross2.png' />&nbsp;Reject Selected</span></a>"
@@ -285,6 +292,9 @@ class ConfirmStandIn:
         self.drop_post = False
         self.after_confirm = "remove"
         self.incomplete_after_post = False
+        # The confirm route is for tasks without Approve Selected; the
+        # capability tests switch the real page's button back on.
+        self.approve_link = False
         self.posts, self.views, self.bulk, self.dialogs = [], [], [], []
         self.unexpected, self.listings, self.contexts = [], [], []
         self.reads = 0
@@ -372,7 +382,7 @@ class ConfirmStandIn:
         return result
 
     def listing(self):
-        body, self.rendered = task_list(self.tasks)
+        body, self.rendered = task_list(self.tasks, self.approve_link)
         return body
 
     def task_page(self, task):
@@ -542,21 +552,19 @@ class ConfirmableTests(unittest.TestCase):
 class HTTPCapabilityTests(unittest.TestCase):
     """parse_account_document('tasks', ...) on the real-shaped Task List."""
 
-    def test_co_booking_row_offers_confirm_not_approve(self):
+    def test_co_booking_row_offers_approve_and_confirm(self):
+        # FBS hides Approve Selected until a row is ticked (gridv.acton) and
+        # serves form1 hidden until its script runs: neither hides the button.
         page, _ = task_list([dict(ROW, key=KEY)])
         result = parse_account_document("tasks", page)
         self.assertEqual((result["total"], result["complete"]), (1, True))
         (task,) = result["tasks"]
-        self.assertEqual(task, TASK)
+        self.assertEqual(task, {**TASK, "can_approve": True})
 
-    def test_the_hidden_toolbar_is_why_approve_is_off(self):
-        page, _ = task_list([dict(ROW, key=KEY)])
-        shown = page.replace(
-            'class="actsonitems" style="display:none;"', 'class="actsonitems"'
-        )
-        (task,) = parse_account_document("tasks", shown)["tasks"]
-        self.assertTrue(task["can_approve"])  # pending + one checkbox + visible
-        self.assertTrue(task["can_confirm"])
+    def test_without_approve_selected_only_confirm_is_offered(self):
+        page, _ = task_list([dict(ROW, key=KEY)], approve_link=False)
+        (task,) = parse_account_document("tasks", page)["tasks"]
+        self.assertEqual(task, TASK)
 
     def test_confirm_needs_pending_confirmation_and_a_visible_view(self):
         page, _ = task_list([dict(ROW, key=KEY, status="Pending Approval")])
@@ -623,14 +631,19 @@ class ConfirmReviewTests(ServiceCase):
 
 
 class BrowserCapabilityTests(StandInCase):
-    async def test_real_shaped_task_list_offers_confirm_not_approve(self):
+    async def test_real_shaped_task_list_offers_approve_and_confirm(self):
+        self.s.approve_link = True
         result = await self.s.read(self.s.client)
         self.assertEqual((result["total"], result["complete"]), (1, True))
+        self.assertEqual(result["tasks"], [{**TASK, "can_approve": True}])
+
+    async def test_without_approve_selected_only_confirm_is_offered(self):
+        result = await self.s.read(self.s.client)
         self.assertEqual(result["tasks"], [TASK])
 
     async def test_ticking_the_row_reveals_approve_selected(self):
-        # Why the live row said can_approve=false: the toolbar is hidden until
-        # a row is ticked. A read taken with a row ticked would say true.
+        # The toolbar is hidden until a row is ticked; either way it counts.
+        self.s.approve_link = True
         await self.s.read(self.s.client)
         frame = self.s.frame()
         await frame.locator("#GridViewTask_gv_ctl02_checkMultiple").check()
@@ -890,8 +903,8 @@ class BrowserRoutingTests(StandInCase):
         self.assertEqual(self.s.contexts[0]["interactive"], False)
 
     async def test_a_claimed_approval_on_this_row_presses_nothing(self):
-        # Routed to approve_task, which re-reads the row: Approve Selected is
-        # hidden, so it refuses, and Confirm is never reached.
+        # Routed to approve_task, which re-reads the row: this page has no
+        # Approve Selected, so it refuses, and Confirm is never reached.
         with patch("sagasu.fbs_tasks.FBSClient", self.s.context):
             with self.assertRaises(TaskUnavailable):
                 await execute_task_action(

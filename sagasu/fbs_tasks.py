@@ -55,8 +55,41 @@ class TaskApprovalOutcomeUnknown(FBSError):
     """Approval was attempted but not positively verified. Never auto-retry."""
 
 
+APPROVE_NAME = re.compile(r"^\s*Approve Selected\s*$", re.I)
+
+
 def approval_control(frame):
-    return frame.get_by_role("link", name=re.compile(r"^\s*Approve Selected\s*$", re.I))
+    return frame.get_by_role("link", name=APPROVE_NAME)
+
+
+async def approval_available(frame):
+    """FBS offers Approve Selected for this list.
+
+    FBS's grid script shows the Task List's row-action toolbar
+    (#GridViewTask_actsonitems) only while a row is ticked (gridv.acton) and
+    hides it on load. So the button counts when it is visible and enabled, or
+    when it is in that toolbar, hidden by nothing but the toolbar, and not
+    disabled. approve_task ticks the row and then requires it visible before
+    pressing it.
+    """
+    action = frame.get_by_role("link", name=APPROVE_NAME, include_hidden=True)
+    if await action.count() != 1:
+        return False
+    if await action.is_visible():
+        return await action.is_enabled()
+    return await action.evaluate(
+        """el => {
+            const bar = el.closest('#GridViewTask_actsonitems');
+            if (!bar || !bar.closest('#GridViewTask')) return false;
+            if (el.closest('[disabled]') || el.getAttribute('aria-disabled') === 'true'
+                || el.classList.contains('aspNetDisabled')) return false;
+            for (let node = el; node && node !== bar; node = node.parentElement) {
+                const style = getComputedStyle(node);
+                if (style.display === 'none' || style.visibility === 'hidden') return false;
+            }
+            return !bar.parentElement || bar.parentElement.checkVisibility();
+        }"""
+    )
 
 
 def pending_status(status):
@@ -74,12 +107,7 @@ async def task_rows(frame, result=None):
 
 
 async def add_task_capabilities(frame, result):
-    action = approval_control(frame)
-    available = (
-        await action.count() == 1
-        and await action.is_visible()
-        and await action.is_enabled()
-    )
+    available = await approval_available(frame)
     for task, row in await task_rows(frame, result):
         task["can_approve"] = (
             available
@@ -183,20 +211,52 @@ def approval_acknowledged(message, reference):
     )
 
 
+HEADER_BOX = '#GridViewTask_header input[type="checkbox"][id$="checkMultiple"]'
+ROW_BOX = '#GridViewTask_content input[type="checkbox"]'
+
+
+async def only_one_task_selected(frame):
+    """Exactly one data row is ticked, and nothing else but possibly the header.
+
+    FBS's grid script ticks the header's select-all itself once every row on
+    the page is ticked (gridv.acton), as it does for a person. That is allowed
+    only when the list holds a single task (one row, "1 ITEM(S) TOTAL"), so
+    "all" can only mean this task, never other rows or other pages.
+    """
+    ticked_rows = await frame.locator(ROW_BOX + ":checked").count()
+    header = await frame.locator(HEADER_BOX + ":checked").count()
+    ticked = await frame.locator('#GridViewTask input[type="checkbox"]:checked').count()
+    if ticked_rows != 1 or ticked != ticked_rows + header:
+        return False
+    if not header:
+        return True
+    rows = await frame.locator("#GridViewTask_content tr.row").count()
+    totals = re.findall(
+        r"(\d+)\s+ITEM\(S\)\s+TOTAL",
+        await frame.locator("#GridViewTask").inner_text(),
+        re.I,
+    )
+    return header == 1 and rows == 1 and set(totals) == {"1"}
+
+
 async def select_only_task(frame, row):
     # Clear the header's Select All and every checked data row before choosing one.
-    for checkbox in await frame.locator(
-        '#GridViewTask input[type="checkbox"]:checked'
-    ).all():
-        await checkbox.uncheck()
+    # Re-query each pass: unticking the header unticks every row (gridv),
+    # so a snapshot of locators would point at boxes that are already clear.
+    checked = frame.locator('#GridViewTask input[type="checkbox"]:checked')
+    for _ in range(50):
+        if not await checked.count():
+            break
+        await checked.first.uncheck()
+    if await checked.count():
+        raise TaskUnavailable(
+            "FBS kept other tasks selected. No approval was submitted."
+        )
     target = row.locator(CHECKBOX)
     if await target.count() != 1:
         raise TaskUnavailable("This task has no unique selectable checkbox.")
     await target.check()
-    if (
-        await frame.locator('#GridViewTask input[type="checkbox"]:checked').count() != 1
-        or not await target.is_checked()
-    ):
+    if not await only_one_task_selected(frame) or not await target.is_checked():
         raise TaskUnavailable(
             "FBS did not retain exactly one selected task. No approval was submitted."
         )
@@ -236,7 +296,7 @@ async def approve_task(client, expected):
         or not await action.is_enabled()
     ):
         raise TaskUnavailable("The FBS approval action changed. Refresh Task List.")
-    if await frame.locator('#GridViewTask input[type="checkbox"]:checked').count() != 1:
+    if not await only_one_task_selected(frame):
         raise TaskUnavailable(
             "The task selection changed before submission. No approval was submitted."
         )

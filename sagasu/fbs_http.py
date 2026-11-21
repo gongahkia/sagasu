@@ -66,10 +66,14 @@ class _Node:
             part.text() if isinstance(part, _Node) else part for part in self.children
         )
 
-    def visible(self):
+    def visible(self, revealed=None):
+        """Visible as served; `revealed(node)` names ancestors the page's own
+        script shows, whose served display:none therefore does not count."""
         node = self
         while node:
             style = re.sub(r"\s+", "", node.attrs.get("style", "").lower())
+            if revealed is not None and revealed(node):
+                style = re.sub(r"(?:^|;)display:none(?=[;!]|$)", ";", style)
             if (
                 "hidden" in node.attrs
                 or node.attrs.get("aria-hidden") == "true"
@@ -296,13 +300,24 @@ def parse_account_document(kind, html):
             raise HTTPReadUnavailable("unreadable_grid") from None
         from .fbs_tasks import pending_status
 
+        # FBS serves the Task List with its shell (form1) hidden until its
+        # script runs, and the Approve Selected toolbar (*_actsonitems) hidden
+        # until a row is ticked (gridv.acton). Read it as a browser shows it.
+        def page_shell(node):
+            return node.attrs.get("id") == "form1"
+
+        def shell_or_toolbar(node):
+            return (
+                page_shell(node) or node.attrs.get("id") == "GridViewTask_actsonitems"
+            )
+
         approvers = [
             n
             for n in document.root.nodes()
             if n.tag == "a"
             and ("href" in n.attrs or n.attrs.get("role") == "link")
             and re.fullmatch(r"Approve Selected", _text(n), re.I)
-            and n.visible()
+            and n.visible(shell_or_toolbar)
             and n.enabled()
         ]
         data_rows = [row for row, cells in zip(rows, values) if cells != ["No items"]]
@@ -312,7 +327,7 @@ def parse_account_document(kind, html):
                 for n in row.nodes()
                 if n.tag == "input"
                 and n.attrs.get("type", "").lower() == "checkbox"
-                and n.visible()
+                and n.visible(page_shell)
                 and n.enabled()
             ]
             item["can_approve"] = (
