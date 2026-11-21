@@ -35,6 +35,11 @@
     {"id": 47, "feature": "Benchmark comparisons and regression alerts"},
     {"id": 46, "feature": "Redacted support bundles"}
   ],
+  "pending_approval_watch": {
+    "implemented": "Explicit read-only watch_booking MCP operation for any reference; Pending Approval is an opt-in observation target, never a gate on co-booker actions",
+    "delivery": "MCP polling/result only; no external notification or persistent scheduling",
+    "lifetime": "Continues on the running shared host after client disconnect; stops at deadline, cancellation or host shutdown"
+  },
   "deferred_optional_scheduling": [
     {"id": 32, "feature": "Availability watches"},
     {"id": 33, "feature": "Pending-confirmation reminders"},

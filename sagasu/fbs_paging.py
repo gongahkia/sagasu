@@ -2,6 +2,7 @@
 
 import asyncio
 from .fbs_client import LayoutChanged
+from .observability import event
 
 # Only controls inside the requested account grid can be clicked. Do not execute
 # JavaScript from a table cell or assume a missing row means a cancelled booking.
@@ -30,10 +31,13 @@ async def move_page(client, frame, grid, direction):
     root = frame.locator("#" + grid)
     index = await root.evaluate(PAGER, direction)
     if not isinstance(index, int) or index < 0:
+        event("paging.control_unavailable", direction=direction)
         return False
     controls = root.locator("a,button,input[type=button],input[type=image]")
+    event("paging.move_started", direction=direction)
     await controls.nth(index).click()
     await client._wait_for_idle(frame)
+    event("paging.move_completed", direction=direction)
     return True
 
 
@@ -63,13 +67,22 @@ async def collect_pages(
             result = await read_page()
             if total is None:
                 total = result["total"]
+            event(
+                "paging.page_read",
+                page=page,
+                row_count=len(result[key]),
+                reported_total=result["total"],
+                records_read=len(records),
+            )
             if result["total"] != total:
+                event("paging.total_changed", page=page)
                 raise LayoutChanged(
                     "FBS account total changed during pagination; refresh the listing"
                 )
             rows = result[key]
             refs = tuple(row[identity_key] for row in rows)
             if refs in signatures or len(set(refs)) != len(refs):
+                event("paging.repeated_page_or_reference", page=page)
                 raise LayoutChanged(
                     "FBS account pagination repeated a page or reference"
                 )
@@ -77,6 +90,7 @@ async def collect_pages(
             for row in rows:
                 ref = row[identity_key]
                 if ref in records:
+                    event("paging.overlapping_reference", page=page)
                     raise LayoutChanged(
                         "FBS account references overlapped across pages; refresh the listing"
                     )

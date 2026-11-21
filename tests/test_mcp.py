@@ -252,6 +252,10 @@ class ServiceTests(ServiceCase):
         self.assertNotIn("receipt_png", self.service.result(job.id)["result"])
         self.assertEqual(job.result["fbs_status"], "Pending Confirmation")
         self.assertEqual([kind for kind, _ in self.backend.calls].count("book"), 1)
+        self.assertNotIn(
+            "booking_watch",
+            [operation.kind for operation in self.service.jobs.values()],
+        )
 
     async def test_review_expiry_and_discard_prevent_submission(self):
         review = await self.review()

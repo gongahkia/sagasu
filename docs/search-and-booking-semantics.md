@@ -108,3 +108,48 @@ evidence. `room_details(include_image=true)` can provide a native details-page
 screenshot through `operation_receipt` even when FBS exposes no photo. A page
 screenshot is not a verified photograph of the exact room; scrolling panels may
 be cropped, and an FBS photo may depict a facility type.
+
+## Pending Approval watcher
+
+`watch_booking(reference_number, interval_seconds=30, timeout_seconds=1800)`
+starts a read-only status watch for any exact booking reference. It uses fresh
+My Bookings reads through the existing backend; it never submits, approves,
+changes or cancels an FBS booking. This local monitoring operation is distinct
+from an FBS booking operation.
+
+Poll the returned operation ID with `wait_operation` or `operation_result`.
+Only `result.target_status_observed=true` means FBS's exact **Pending Approval**
+status was observed for that unique reference in a complete listing. Case and
+whitespace are normalized. Pending Confirmation, a missing/ambiguous reference,
+incomplete results, other statuses and read errors never produce that signal.
+This reports only a workflow status. A co-booker may be able to act while FBS
+still shows Pending Confirmation. Never gate their actions on this watcher.
+
+Progress includes the last valid FBS status, last successful read time, check
+count, latest read error and deadline. Transient read errors are retried;
+authentication/configuration failures stop with a corrective next tool. An MFA
+prompt is available only through `authentication_status`. All other statuses, including Confirmed, continue waiting for the target until
+the deadline or explicit cancellation. A timeout stops it without observing the target; `status=succeeded` means the watch
+finished, so always inspect `target_status_observed` and `outcome` before notifying.
+
+The interval is 15–300 seconds and the deadline is 15–86400 seconds. At most
+four watches can be active. Repeating an active reference returns its existing
+operation without resetting its deadline. The browser queue is held only during
+each read, not between checks. The deadline includes queue wait and FBS I/O.
+Use `cancel_operation` to stop watching without changing the booking.
+
+Delivery is **MCP result only**, with no external or desktop notification. The
+agent must keep polling and relay the observed-status result once to the user. The
+shared host keeps active watches alive after a client disconnect, but host
+shutdown/restart loses them; they are not durable schedules or push alerts.
+No watcher is created automatically by a booking submission. The agent starts
+one when the user requests waiting for Pending Approval.
+
+Watcher debugging uses the existing `support_bundle(operation_id)` and
+`operation_receipt(operation_id, failure=true)` tools. Each read has a task-local
+queue/read trace; the bundle retains 20 check summaries, 100 recent events and
+the latest failed check's bounded trace even after a successful retry. The first
+available failure image is retained with its check number, so it cannot be
+confused with a later failure's trace. Screenshot availability reasons and image
+metadata are included without image bytes or booking content. The bundle is
+available while watching and after timeout, success or cancellation.

@@ -168,6 +168,7 @@ class Backend:
                 interactive=self.interactive_auth,
             )
         if kind in {"search", "bookings", "tasks"} and self.reads.mode != "browser":
+            event("read.backend_attempt", backend="api")
             try:
                 return await self.reads.direct(kind, payload, progress)
             except READ_FAILURES as error:
@@ -190,6 +191,7 @@ class Backend:
                 return await self.run("search", config, progress, notify)
 
             payload = {**payload, **await directory_context(read, progress)}
+        event("read.backend_attempt", backend="browser")
         async with FBSClient(
             progress=progress,
             auth_notify=notify,
@@ -328,6 +330,9 @@ class Job:
     batch_members: list = field(default_factory=list, repr=False)
     diagnostic_events: list = field(default_factory=list, repr=False)
     diagnostic_dropped: int = 0
+    diagnostic_capture_status: str = "not_attempted"
+    diagnostic_checks: list = field(default_factory=list, repr=False)
+    diagnostic_last_failure: dict | None = field(default=None, repr=False)
     failure_screenshot: dict | None = field(default=None, repr=False)
     # Started by a call through the remote listener. A remote caller can see,
     # read and cancel only these; the owner at the host sees everything.
@@ -767,6 +772,44 @@ class AgentService:
         event("agent.operation_queued", agent_operation_id=job.id, kind=kind)
         return job.public()
 
+    def watch_booking(
+        self, reference_number, interval_seconds=30, timeout_seconds=1800
+    ):
+        if (
+            not isinstance(reference_number, str)
+            or not reference_number.strip()
+            or len(reference_number) > 100
+            or any(ord(char) < 32 for char in reference_number)
+        ):
+            raise AgentError("Use an exact booking reference (1–100 characters).")
+        for value, low, high, name in (
+            (interval_seconds, 15, 300, "interval_seconds"),
+            (timeout_seconds, 15, 86400, "timeout_seconds"),
+        ):
+            if type(value) is not int or not low <= value <= high:
+                raise AgentError(f"{name} must be an integer between {low} and {high}.")
+        reference = reference_number.strip()
+        active = [
+            job
+            for job in self.jobs.values()
+            if job.kind == "booking_watch" and not job.terminal
+        ]
+        for job in active:
+            if job.summary.get("reference_number") == reference:
+                return job.public()
+        if len(active) >= 4:
+            raise AgentError("At most four booking watches may run at once.")
+        started = self.start(
+            "booking_watch",
+            {
+                "reference_number": reference,
+                "interval_seconds": interval_seconds,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+        self.jobs[started["operation_id"]].summary = {"reference_number": reference}
+        return started
+
     def action_history(self, offset=0, limit=20):
         if self.journal is None:
             if getattr(self.backend, "configuration_unavailable", False):
@@ -838,6 +881,11 @@ class AgentService:
     @observed_operation("agent.operation")
     async def _run(self, job, payload):
         event("agent.operation_started", agent_operation_id=job.id, kind=job.kind)
+        if job.kind == "booking_watch":
+            from .booking_watch import run_watch
+
+            await run_watch(self, job, payload)
+            return
         if job.kind == "batch":
             from .batches import run_batch
 
@@ -1070,7 +1118,8 @@ class AgentService:
                 SAVED_CREDENTIALS.reset(permit_token)
             job.diagnostic_events = diagnostic.events
             job.diagnostic_dropped = diagnostic.dropped
-            if job.status in {"failed", "outcome_unknown"}:
+            job.diagnostic_capture_status = diagnostic.screenshot_status
+            if diagnostic.screenshot is not None:
                 job.failure_screenshot = diagnostic.screenshot
             scope.__exit__(None, None, None)
             VERIFIED_ACTION.reset(token)
