@@ -483,17 +483,34 @@ class RemoteJobTests(ServiceCase):
                 [r["review_id"] for r in self.service.visible_reviews()],
                 [mine["review_id"]],
             )
-            # Kinds whose tools are never offered remotely are refused outright.
-            for kind in ("approve_task", "batch"):
-                self.service.reviews[mine["review_id"]]["kind"] = kind
-                with self.subTest(kind=kind), self.assertRaises(AgentError):
-                    self.service.submit(mine["review_id"])
+            # A batch's tool is never offered remotely, and it is refused outright.
+            self.service.reviews[mine["review_id"]]["kind"] = "batch"
+            with self.assertRaises(AgentError):
+                self.service.submit(mine["review_id"])
             self.service.reviews[mine["review_id"]]["kind"] = "book"
             job = await self.finish(self.service.submit(mine["review_id"]))
             self.assertEqual(job.status, "succeeded")
-        self.assertFalse(any(k == "approve_task" for k, _ in self.backend.calls))
+        self.assertFalse(any(k == "batch" for k, _ in self.backend.calls))
         self.assertIn(local["review_id"], self.service.reviews)
         self.assertEqual(len(self.service.visible_reviews()), 1)
+
+    async def test_remote_caller_can_approve_one_task_it_reviewed(self):
+        # Accepting a co-booking from chat (owner's decision, 21 Nov 2026):
+        # one exact task, submitted once; replays return the same operation.
+        from tests.test_mcp import TASK
+
+        self.backend.tasks = [TASK]
+        with remote_origin():
+            tasks = await self.finish(self.service.start("tasks"))
+            review = self.service.review_task_approval(
+                tasks.id, TASK["reference_number"]
+            )
+            job = await self.finish(self.service.submit(review["review_id"]))
+            self.assertEqual(job.status, "succeeded")
+            again = self.service.submit(review["review_id"])
+            self.assertEqual(again["operation_id"], job.id)
+        approvals = [call for call in self.backend.calls if call[0] == "approve_task"]
+        self.assertEqual(len(approvals), 1)
 
     async def test_remote_caller_cannot_replace_verified_evidence(self):
         with remote_origin():

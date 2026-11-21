@@ -2216,10 +2216,9 @@ class AgentService:
     def confirm(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
-        if is_remote() and review["kind"] in {"approve_task", "batch"}:
-            raise AgentError(
-                "Task approvals and batches cannot be submitted over a remote connection."
-            )
+        if is_remote() and review["kind"] == "batch":
+            # Single task approvals are allowed remotely; batches are not.
+            raise AgentError("Batches cannot be submitted over a remote connection.")
         if review["kind"] == "amend":
             from .amendments import require_target
 

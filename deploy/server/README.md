@@ -13,7 +13,8 @@ This is separate from `deploy/linux`, which installs a headless runtime for an a
 | Change saved contacts, preferences, plans, templates | Only if `SAGASU_HTTP_WRITES=on` | Yes |
 | Sign in to SMU | Only with the person's own saved sign-in (below); the person approves on their phone | Yes |
 | See or answer an MFA prompt | Sees the number to enter, in results, on its own requests only | Yes |
-| Approve other people's requests, batch several actions | Never | Yes |
+| Approve one Task List item the person asks for (such as accepting a co-booking) | Only if `SAGASU_HTTP_WRITES=on` | Yes |
+| Batch several actions | Never | Yes |
 | See, read, cancel or submit anything started at the server | Never | Yes |
 | Stop, recover or inspect the host; take browser screenshots | Never | Yes |
 

@@ -55,7 +55,6 @@ REMOTE_HIDDEN_TOOLS = frozenset(
         "probe_read_backends",
         "smoke_check",
         "confirm_review",
-        "task_approval_review",
         "batch_review",
     }
 )
@@ -65,6 +64,9 @@ REMOTE_HIDDEN_TOOLS = frozenset(
 REMOTE_WRITE_TOOLS = frozenset(
     {
         "submit_review",
+        # One exact Task List item the person asked for, e.g. accepting a
+        # co-booking (owner's decision, 21 Nov 2026). Batches stay hidden.
+        "task_approval_review",
         "reconcile_operation",
         "booking_review",
         "planned_booking_review",
