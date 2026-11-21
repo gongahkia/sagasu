@@ -1,0 +1,20 @@
+[Unit]
+Description=Virtual display for the Sagasu copy %i
+After=local-fs.target systemd-tmpfiles-setup.service
+
+[Service]
+EnvironmentFile=/etc/sagasu/instances/%i
+User=sagasu-%i
+Group=sagasu-%i
+UMask=0077
+# A fresh access cookie on every start; only this copy's user can read it.
+ExecStartPre=/bin/sh -c 'rm -f /var/lib/sagasu-%i/.Xauthority && touch /var/lib/sagasu-%i/.Xauthority && xauth -f /var/lib/sagasu-%i/.Xauthority add :${DISPLAY_NUM} . "$(mcookie)"'
+ExecStart=/usr/bin/Xvfb :${DISPLAY_NUM} -screen 0 1600x1200x24 -nolisten tcp -auth /var/lib/sagasu-%i/.Xauthority
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

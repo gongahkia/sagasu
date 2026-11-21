@@ -7,7 +7,16 @@ from .action_journal import checkpoint_verified
 
 from playwright.async_api import Error as PlaywrightError
 
-from .fbs_client import FBSError, FBSApplicationError, LayoutChanged, FBSClient, FBS_URL
+from .fbs_client import (
+    AuthenticationRequired,
+    BookingUnavailable,
+    FBSError,
+    FBSApplicationError,
+    LayoutChanged,
+    FBSClient,
+    FBS_URL,
+)
+from .fbs_prompts import Answer, PromptDeclined, click_and_accept, expected_prompt
 from .observability import event, observed_operation, observed_step, step
 
 
@@ -204,6 +213,7 @@ async def _open_task_list(client):
         cookie = cookies[0]
         scope = {key: cookie[key] for key in ("name", "domain", "path")}
         interactive = client.interactive
+        may_sign_in = getattr(client, "may_sign_in", interactive)
         recovered = False
         try:
             # a fresh application session recovered the observed task error;
@@ -212,6 +222,7 @@ async def _open_task_list(client):
                 "renewing the FBS application session once for Task List"
             )
             client.interactive = False
+            client.may_sign_in = False
             await client.context.clear_cookies(**scope)
             await client.ensure_authenticated()
             frame = await open_account_tab(
@@ -229,6 +240,7 @@ async def _open_task_list(client):
             raise original from None
         finally:
             client.interactive = interactive
+            client.may_sign_in = may_sign_in
             if not recovered:
                 await client.context.clear_cookies(**scope)
                 await client.context.add_cookies([cookie])
@@ -271,6 +283,18 @@ async def read_task_list(client, *, reference=None):
 
 class CancellationOutcomeUnknown(FBSError):
     """Cancellation was attempted but FBS did not provide a verifiable result."""
+
+
+class CancellationUnavailable(BookingUnavailable):
+    """FBS offered no cancellation Sagasu could submit. Nothing was submitted."""
+
+    default_reason = "cancellation_unavailable"
+
+
+class CancellationPenalty(CancellationUnavailable):
+    """FBS would charge a penalty to cancel. Nothing was submitted."""
+
+    default_reason = "cancellation_penalty"
 
 
 async def booking_rows(frame):
@@ -358,142 +382,223 @@ async def read_booking_page(frame):
     }
 
 
-async def confirm_cancellation_dialog(frame, reference, reason):
-    """Only act on a uniquely identified cancellation confirmation for this ref."""
-    container = frame.locator('[role="dialog"]:visible')
-    if await container.count() != 1:
-        container = frame.locator("#FullPanel:visible")
-    if await container.count() != 1:
-        return False
-    text = await container.inner_text()
-    if not re.search(
-        r"cancel booking|booking cancellation|confirm cancellation|reason for cancellation",
-        text,
-        re.I,
-    ):
-        return False
-    if not await container.get_by_text(reference, exact=True).count():
-        return False
-    reasons = container.locator(
-        'textarea[id*="reason" i]:visible,input[id*="reason" i]:visible'
-    )
-    if await reasons.count() > 1:
-        raise LayoutChanged("Cancellation reason field is ambiguous")
-    if await reasons.count() == 1:
-        await reasons.fill(reason)
-    matches = []
-    for button in await container.locator(
-        'a:visible,button:visible,input[type="submit"]:visible,input[type="button"]:visible'
-    ).all():
-        label = await button.inner_text()
-        if not label.strip():
-            label = await button.get_attribute("value") or ""
-        if re.fullmatch(
-            r"confirm|yes|confirm cancellation|cancel booking", label.strip(), re.I
+# FBS's cancel is a two-step native flow: CANCEL in My Bookings opens the booking
+# form in cancel mode (nothing is submitted yet); its "Confirm Cancellation"
+# button asks the penalty prompt and then posts the form.
+EDIT_PATH = "/modules/bigspace/bookingmanagement/edit.aspx"
+CANCEL_FORM_SECONDS = 45
+CANCEL_SUBMIT_MS = 45000
+CANCEL_CHECKS = 4
+REASON_LIMIT = 255
+
+
+async def open_cancellation_form(client, reference):
+    """FBS's cancel form for exactly this reference: (frame, confirm, reason)."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + CANCEL_FORM_SECONDS
+    problem = "FBS did not open its cancellation form"
+    while loop.time() < deadline:
+        frame = client.page.frame(name="frameContent")
+        try:
+            if frame and urlsplit(frame.url).path.casefold() == EDIT_PATH:
+                number = frame.locator("#bookingFormControl1_ObjectNumber_c1")
+                if await number.count() == 1 and await number.is_visible():
+                    await client._wait_for_idle(frame)
+                    if (await number.inner_text()).strip() != reference:
+                        raise CancellationUnavailable(
+                            "FBS opened a different booking for cancellation"
+                        )
+                    confirm = frame.locator("a#panel_UIButton2:visible")
+                    reason = frame.locator("#bookingFormControl1_Remarks_c1:visible")
+                    caption = frame.locator("#bookingFormControl1_Remarks")
+                    if (
+                        await confirm.count() == 1
+                        and " ".join((await confirm.inner_text()).split()).casefold()
+                        == "confirm cancellation"
+                        and await reason.count() == 1
+                        and await caption.count() == 1
+                        and re.search(
+                            r"reason for cancel", await caption.inner_text(), re.I
+                        )
+                    ):
+                        return frame, confirm, reason
+                    # Still loading, or FBS changed the form: keep looking
+                    # until the deadline, then refuse without submitting.
+                    problem = "FBS's cancellation form has changed"
+        except PlaywrightError:
+            if frame is None or not frame.is_detached():
+                raise
+        await client.page.wait_for_timeout(250)
+    raise CancellationUnavailable(problem)
+
+
+async def verify_cancelled(client, expected):
+    """Read My Bookings again until the exact reference shows its new status."""
+    reference = expected["reference_number"]
+    for attempt in range(CANCEL_CHECKS):
+        if attempt:
+            await client.page.wait_for_timeout(2000)
+        listing = await read_bookings(client, reference=reference)
+        found = [
+            row for row in listing["bookings"] if row["reference_number"] == reference
+        ]
+        if len(found) != 1 or any(
+            found[0].get(key) != expected.get(key) for key in ("room", "date_time")
         ):
-            matches.append(button)
-    if len(matches) != 1:
-        raise LayoutChanged("Cancellation confirmation button is ambiguous")
-    with step("cancellation.confirm_dialog"):
-        await matches[0].click()
-    return True
+            continue
+        status = found[0]["fbs_status"]
+        if status.strip().casefold() == expected["fbs_status"].strip().casefold():
+            continue  # unchanged: not (yet) cancelled
+        for pattern, outcome in (
+            (r"cancell?ed", "cancelled"),
+            (r"pending\s+cancell?ation|cancell?ation\s+pending", "pending"),
+        ):
+            if re.fullmatch(pattern, status.strip(), re.I):
+                name = "verified" if outcome == "cancelled" else "pending"
+                event("cancellation." + name, fbs_status=status)
+                checkpoint_verified(
+                    {
+                        "status": outcome,
+                        "fbs_status": status,
+                        "reference_number": reference,
+                    }
+                )
+                return {"status": outcome, "fbs_status": status}
+    raise LayoutChanged("Cancelled status was not observed in My Bookings")
 
 
-@observed_step("cancellation.execute")
-async def cancel_booking(client, expected, reason):
-    await read_bookings(client, reference=expected["reference_number"])
+async def still_as_reviewed(client, expected):
+    """True only when My Bookings shows the reference exactly as reviewed."""
+    reference = expected["reference_number"]
+    try:
+        listing = await read_bookings(client, reference=reference)
+    except Exception:
+        return False
+    found = [row for row in listing["bookings"] if row["reference_number"] == reference]
+    return (
+        len(found) == 1
+        and found[0].get("can_cancel") is True
+        and all(
+            found[0].get(key) == expected.get(key)
+            for key in ("room", "date_time", "fbs_status")
+        )
+    )
+
+
+async def _cancel(client, expected, reason, state):
+    reference = expected["reference_number"]
+    await read_bookings(client, reference=reference)
     frame = client.page.frame(name="frameContent")
     matches = [
         (record, row)
         for record, row in await booking_rows(frame)
-        if record["reference_number"] == expected["reference_number"]
+        if record["reference_number"] == reference
     ]
     if len(matches) != 1:
-        raise FBSError(
+        raise CancellationUnavailable(
             "This booking is no longer uniquely visible. Refresh /bookings before cancelling."
         )
     current, row = matches[0]
     if any(
         current[key] != expected[key] for key in ("room", "date_time", "fbs_status")
     ):
-        raise FBSError(
+        raise CancellationUnavailable(
             "Booking details or status changed. Refresh /bookings and review again."
         )
     if not current["can_cancel"]:
-        raise FBSError(
+        raise CancellationUnavailable(
             "FBS does not offer cancellation for this booking in your account."
         )
-    rejected_dialog = False
-
-    async def handle_dialog(dialog):
-        nonlocal rejected_dialog
-        if (
-            dialog.type == "confirm"
-            and re.search(r"cancel", dialog.message, re.I)
-            and re.search(r"booking|reservation", dialog.message, re.I)
-        ):
-            await dialog.accept()
-        else:
-            rejected_dialog = True
-            await dialog.dismiss()
-
-    client.page.on("dialog", handle_dialog)
+    # FBS's maxlength counts UTF-16 units, as the browser does.
+    text = (
+        " ".join(reason.split())
+        .encode("utf-16-le")[: REASON_LIMIT * 2]
+        .decode("utf-16-le", errors="ignore")
+    )
+    if not text:
+        raise CancellationUnavailable("A cancellation reason is required")
+    # On 20 Nov this click only opened FBS's form; FBS asks again there.
+    await row.locator('a[id$="_BtnCancel"]:visible').click()
     try:
+        form, confirm, field = await open_cancellation_form(client, reference)
+    except asyncio.CancelledError:
+        state["submitted"] = True  # cannot check now; stay uncertain
+        raise
+    except Exception:
+        # No usable form: say "nothing submitted" only if the booking is
+        # provably untouched, in case FBS ever cancels from the grid itself.
+        if not await still_as_reviewed(client, expected):
+            state["submitted"] = True
+        raise
+    try:
+        message = expected_prompt(await confirm.get_attribute("onclick"))
+    except PromptDeclined as declined:
+        kind = CancellationPenalty if declined.penalty else CancellationUnavailable
+        raise kind(str(declined)) from None
+    if message is None:
+        # Both FBS write buttons asked the penalty prompt on 20 Nov. Without
+        # it the penalty cannot be checked, so do not submit.
+        raise CancellationUnavailable(
+            "FBS's cancellation form no longer asks to confirm"
+        )
+    await field.fill(text)
+    if await field.input_value() != text:
+        raise CancellationUnavailable("FBS did not keep the cancellation reason")
+    answer = state["answer"] = Answer(message)
+    async with client.page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.frame is form
+        and urlsplit(response.url).path.casefold() == EDIT_PATH,
+        timeout=CANCEL_SUBMIT_MS,
+    ) as pending:
+        try:
+            await click_and_accept(client.page, confirm, answer)
+        except BaseException:
+            # Only a dialog Sagasu dismissed proves the button posted nothing.
+            if not answer.declined:
+                state["submitted"] = True
+            raise
+        if answer.declined and not answer.accepted:
+            raise CancellationUnavailable(
+                "FBS asked something unexpected before cancelling"
+            )
+        # Answered OK, or no dialog at all: a post cannot be ruled out.
+        state["submitted"] = True
         event("cancellation.submitting")
-        # From this point a lost response is uncertain. Never automatically click
-        # CANCEL again, and never infer cancellation from a disappearing row.
-        await row.locator('a[id$="_BtnCancel"]:visible').click()
-        confirmed_dialog = False
-        for _ in range(60):
-            if rejected_dialog:
-                raise LayoutChanged("An unexpected FBS dialog was dismissed")
-            frame = client.page.frame(name="frameContent")
-            if frame:
-                try:
-                    records = await booking_rows(frame)
-                    found = [
-                        record
-                        for record, _ in records
-                        if record["reference_number"] == expected["reference_number"]
-                    ]
-                    if len(found) == 1:
-                        status = found[0]["fbs_status"]
-                        if re.match(r"cancelled\b|canceled\b", status, re.I):
-                            event("cancellation.verified", fbs_status=status)
-                            checkpoint_verified(
-                                {
-                                    "status": "cancelled",
-                                    "fbs_status": status,
-                                    "reference_number": expected["reference_number"],
-                                }
-                            )
-                            return {"status": "cancelled", "fbs_status": status}
-                        if re.search(r"pending.*cancel|cancel.*pending", status, re.I):
-                            event("cancellation.pending", fbs_status=status)
-                            checkpoint_verified(
-                                {
-                                    "status": "pending",
-                                    "fbs_status": status,
-                                    "reference_number": expected["reference_number"],
-                                }
-                            )
-                            return {"status": "pending", "fbs_status": status}
-                    if not confirmed_dialog:
-                        confirmed_dialog = await confirm_cancellation_dialog(
-                            frame, expected["reference_number"], reason
-                        )
-                except PlaywrightError:
-                    if not frame.is_detached():
-                        raise
-            await client.page.wait_for_timeout(500)
-        raise LayoutChanged("Cancelled status was not observed in My Bookings")
+    response = await pending.value
+    await response.finished()
+    event("cancellation.submitted", http_status=response.status)
+    after = client.page.frame(name="frameContent")
+    if after:
+        try:
+            await client._wait_for_idle(after)
+        except PlaywrightError:
+            pass  # verify_cancelled reopens My Bookings either way
+    return await verify_cancelled(client, expected)
+
+
+@observed_step("cancellation.execute")
+async def cancel_booking(client, expected, reason):
+    """Cancel through FBS's own form. Only a submitted cancellation is uncertain."""
+    state = {"submitted": False, "answer": None}
+    try:
+        return await _cancel(client, expected, reason, state)
     except Exception as error:
-        event("cancellation.outcome_unknown", level=40, error_type=type(error).__name__)
-        raise CancellationOutcomeUnknown(
-            "Cancellation was attempted but could not be verified. Check FBS My Bookings before retrying."
-        ) from None
-    finally:
-        client.page.remove_listener("dialog", handle_dialog)
+        if state["submitted"] or (state["answer"] and state["answer"].accepted):
+            event(
+                "cancellation.outcome_unknown",
+                level=40,
+                error_type=type(error).__name__,
+            )
+            raise CancellationOutcomeUnknown(
+                "Cancellation was submitted but could not be verified. Check FBS My Bookings before retrying."
+            ) from None
+        if isinstance(error, (CancellationUnavailable, AuthenticationRequired)):
+            raise
+        event("cancellation.not_submitted", level=30, error_type=type(error).__name__)
+        raise CancellationUnavailable(
+            "The cancellation could not be prepared; nothing was submitted"
+        ) from error
 
 
 @observed_operation("backend.bookings")

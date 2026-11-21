@@ -22,6 +22,9 @@ from typing import Awaitable, Callable, Iterable
 from urllib.parse import parse_qs, urlparse
 
 from .observability import event, observed_operation, observed_step, step
+from .origin import is_remote
+from .live_view import LIVE_VIEW
+from .saved_sign_in import SAVED_CREDENTIALS
 from .action_journal import checkpoint_verified
 from .personal_options import SCRAPE_PARAM_CHOICES
 from .personal import SMU_EMAIL_RE
@@ -44,6 +47,70 @@ except ImportError:
     from config import DEFAULT_ARTIFACTS, DEFAULT_PROFILE
 
 FBS_URL = "https://fbs.intranet.smu.edu.sg/home"
+FBS_HOST = "fbs.intranet.smu.edu.sg"
+# How long a remote read waits for Microsoft's own single sign-on redirect.
+SILENT_RENEWAL_SECONDS = 25
+# During a remote request, the browser may load Microsoft's pages only as
+# documents and their assets. A sign-on redirect needs nothing else, while an
+# approval prompt is sent by the page's own background calls (for example to
+# /SAS/BeginAuth), so blocking those means no request reaches anyone's phone.
+MICROSOFT_LOGIN = re.compile(
+    r"^https://(login\.microsoftonline\.com|login\.microsoft\.com|login\.windows\.net)/"
+)
+PASSIVE_RESOURCES = frozenset({"document", "stylesheet", "image", "font", "script"})
+# Microsoft pages that wait for a person. Anything else is a redirect in
+# progress or an error page, and says nothing about whether sign-in is needed.
+SIGN_IN_PROMPTS = frozenset(
+    {
+        "email",
+        "password",
+        "password_choice",
+        "method_picker",
+        "authenticator",
+        "stay_signed_in",
+        "account",
+        "webauthn",
+        "manual",
+        "failed",
+    }
+)
+# Failures that end a sign-in even with a person watching; anything else that
+# reads as "failed" (a mistyped password, a missed approval) they can retry.
+STOPPING_FAILURES = (
+    "too many times",
+    "account has been locked",
+    "sign-in was blocked",
+    "sign in was blocked",
+)
+PASSWORD_REJECTED = (
+    "password is incorrect",
+    "incorrect password",
+    "account or password is incorrect",
+)
+NOT_APPROVED = (
+    "you denied",
+    "request was denied",
+    "we didn't hear from you",
+    "we didn’t hear from you",
+)
+# How a sign-in with a saved email and password ended, when it did not finish.
+# Nobody watches the browser then: the person only approves on their phone.
+SAVED_SIGN_IN_REASONS = frozenset(
+    {
+        "saved_password_rejected",  # Microsoft refused the saved password
+        "sign_in_not_approved",  # denied, or no approval in time
+        "sign_in_blocked",  # locked out or blocked: stop, never retry
+        "sign_in_unfinished",  # stopped before the password was typed
+        "sign_in_needs_page",  # an extra step, or an unclear end after the password
+    }
+)
+# From the first Microsoft page to the approval. Microsoft's own request
+# expires sooner and its page then says so.
+SAVED_SIGN_IN_SECONDS = 180
+# What an agent sees while a saved sign-in runs. Fixed words, so nothing ever
+# suggests that the person should type or send a password.
+SIGNING_IN = "Signing in to SMU for you with your saved sign-in"
+FINISHING = "Approved; finishing SMU sign-in"
 PROFILE_PATH = DEFAULT_PROFILE
 AUTH_TIMEOUT_MS = 600000
 
@@ -99,6 +166,16 @@ class LayoutChanged(FBSError):
     """The live FBS DOM no longer matches the expected structure."""
 
     default_reason = "layout_changed"
+
+
+def stops_remote_job(error) -> bool:
+    """True when a remote caller met a sign-in problem only the owner can fix.
+
+    A loop that records a failed date and moves on must re-raise instead, or
+    every remaining date reloads Microsoft's sign-in page and the job still
+    reports success.
+    """
+    return is_remote() and isinstance(error, AuthenticationRequired)
 
 
 def resolve_facility_types(
@@ -492,7 +569,18 @@ class FBSClient:
         keep_alive: bool = True,
         profile_path: Path | None = None,
     ) -> None:
-        self.interactive = interactive
+        # A remote caller holds only an API key: it may wait for the existing
+        # Microsoft session to renew FBS, never steer a sign-in. When the
+        # person saved their own email and password on this copy, the job
+        # runner hands them over, and the client signs in with them alone.
+        self.silent_renewal = is_remote()
+        self.interactive = interactive and not self.silent_renewal
+        # Checks that promise never to sign in (session status, probes,
+        # reconciliation) pass interactive=False; they never use a permit.
+        self.may_sign_in = interactive
+        self.sign_in_permit = SAVED_CREDENTIALS.get()
+        self._unattended = False
+        self._guarding = False
         self.headless = (
             os.getenv("SAGASU_HEADLESS", "false").lower() in {"1", "true", "yes"}
             if headless is None
@@ -626,10 +714,16 @@ class FBSClient:
                 delete=False,
             ) as stream:
                 temporary = Path(stream.name)
-                json.dump(
-                    [cookie for cookie in cookies if cookie.get("expires") == -1],
-                    stream,
-                )
+                saved = [cookie for cookie in cookies if cookie.get("expires") == -1]
+                if os.getenv("SAGASU_SESSION_COOKIES", "all").lower() == "fbs":
+                    # Keep only what FBS itself receives; Microsoft's sign-in
+                    # session then lives in the running browser, not this file.
+                    saved = [
+                        cookie
+                        for cookie in saved
+                        if self._sent_to_fbs(cookie.get("domain"))
+                    ]
+                json.dump(saved, stream)
             temporary.replace(self.session_path)
         except Exception:
             raise FBSError(
@@ -639,8 +733,46 @@ class FBSClient:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
 
+    @staticmethod
+    def _sent_to_fbs(domain) -> bool:
+        """True for a cookie domain a browser would send to the FBS host."""
+        name = str(domain or "").lstrip(".").lower()
+        return name.endswith("smu.edu.sg") and (
+            name == FBS_HOST or FBS_HOST.endswith("." + name)
+        )
+
+    @staticmethod
+    async def _refuse_prompts(route) -> None:
+        request = route.request
+        # /SAS/ is Microsoft's endpoint family for starting and checking
+        # second-factor prompts; nothing on it is part of a sign-on redirect.
+        if request.resource_type not in PASSIVE_RESOURCES or "/SAS/" in request.url:
+            event("auth.prompt_blocked", resource=request.resource_type)
+            await route.abort()
+        else:
+            await route.fallback()
+
+    async def _guard_microsoft(self) -> None:
+        """Stop Microsoft's pages from starting an approval prompt.
+
+        Installed for remote requests only, for the life of this client, which
+        holds the shared browser exclusively until it exits.
+        """
+        if self.silent_renewal and not self._guarding and self.context is not None:
+            await self.context.route(MICROSOFT_LOGIN, self._refuse_prompts)
+            self._guarding = True
+
+    async def _release_microsoft(self) -> None:
+        if self._guarding and self.context is not None:
+            self._guarding = False
+            try:
+                await self.context.unroute(MICROSOFT_LOGIN, self._refuse_prompts)
+            except Exception:
+                pass
+
     async def __aexit__(self, exc_type, exc, traceback) -> None:
         try:
+            await self._release_microsoft()
             if exc is not None:
                 from .operation_diagnostics import capture_failure
 
@@ -660,6 +792,7 @@ class FBSClient:
         if not self.page:
             raise FBSError("Browser has not been started")
         await self.progress("opening FBS")
+        await self._guard_microsoft()
         try:
             await self.page.goto(FBS_URL, wait_until="domcontentloaded", timeout=60000)
         except PlaywrightTimeoutError:
@@ -685,27 +818,64 @@ class FBSClient:
                 raise AuthenticationRequired("Microsoft sign-in required")
         except Exception as error:
             if not self.interactive:
-                raise AuthenticationRequired(
-                    "FBS session expired; run an interactive login first"
-                ) from error
-            try:
-                await self._complete_interactive_authentication()
-            except Exception as auth_error:
-                if isinstance(auth_error, AuthenticationRequired):
-                    raise
-                if self.page.is_closed() is True:
+                renewed = False
+                if self.silent_renewal:
+                    try:
+                        renewed = await self._await_silent_renewal()
+                    except AuthenticationRequired as needed:
+                        if needed.reason != "sign_in_required_on_host":
+                            raise
+                        if self.sign_in_permit is None or not self.may_sign_in:
+                            if self.sign_in_permit is not None:
+                                # Saved, but this check must not use them.
+                                raise AuthenticationRequired(
+                                    "The SMU session has ended.",
+                                    reason="sign_in_needed",
+                                ) from None
+                            raise
+                        if self.sign_in_permit.used:
+                            raise
+                        await self._sign_in_with_saved_credentials(fresh=True)
+                        renewed = True
+                    if (
+                        not renewed
+                        and self.sign_in_permit is not None
+                        and self._trusted_login_url(self.page.url)
+                    ):
+                        # Still on Microsoft's sign-in when time ran out: with
+                        # its prompts blocked the page may never settle into a
+                        # step, but it is plainly asking for a sign-in.
+                        if not self.may_sign_in:
+                            raise AuthenticationRequired(
+                                "The SMU session has ended.", reason="sign_in_needed"
+                            ) from None
+                        if not self.sign_in_permit.used:
+                            event("auth.silent_renewal", outcome="sign_in_with_saved")
+                            await self._sign_in_with_saved_credentials(fresh=True)
+                            renewed = True
+                if not renewed:
                     raise AuthenticationRequired(
-                        "The sign-in browser closed before authentication completed.",
-                        reason="authentication_interrupted",
-                    ) from None
-                raise AuthenticationRequired(
-                    "Microsoft sign-in could not complete.",
-                    reason=(
-                        "authentication_timeout"
-                        if isinstance(auth_error, PlaywrightTimeoutError)
-                        else "authentication_failed"
-                    ),
-                ) from auth_error
+                        "FBS session expired; run an interactive login first"
+                    ) from error
+            else:
+                try:
+                    await self._complete_interactive_authentication()
+                except Exception as auth_error:
+                    if isinstance(auth_error, AuthenticationRequired):
+                        raise
+                    if self.page.is_closed() is True:
+                        raise AuthenticationRequired(
+                            "The sign-in browser closed before authentication completed.",
+                            reason="authentication_interrupted",
+                        ) from None
+                    raise AuthenticationRequired(
+                        "Microsoft sign-in could not complete.",
+                        reason=(
+                            "authentication_timeout"
+                            if isinstance(auth_error, PlaywrightTimeoutError)
+                            else "authentication_failed"
+                        ),
+                    ) from auth_error
 
         frame = await self._wait_for_frame("frameContent")
         await frame.wait_for_selector(
@@ -713,6 +883,64 @@ class FBSClient:
         )
         await self._save_session()
         return self.page, frame
+
+    async def _await_silent_renewal(self) -> bool:
+        """Let Microsoft's single sign-on redirect finish. Never types or clicks.
+
+        With a live Microsoft session the redirect returns to FBS unaided within
+        seconds. A page that asks a person for anything means the owner must
+        sign in on the host; a remote caller is told so and nothing is entered.
+        Returns False when the redirect simply did not finish in time.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + SILENT_RENEWAL_SECONDS
+        previous, repeats = None, 0
+        while loop.time() < deadline:
+            reading = None  # None: still redirecting or loading
+            try:
+                if await self.page.locator("iframe#frameBottom").count():
+                    event("auth.silent_renewal", outcome="renewed")
+                    return True
+                url = self.page.url
+                if self._trusted_login_url(url):
+                    state, _ = await self._classify_auth_state()
+                    if state in SIGN_IN_PROMPTS:
+                        reading = ("prompt", state)
+                    elif state in {"provider_error", "invalid_context"}:
+                        reading = ("stalled", state)
+                elif not url.startswith(("https://", "http://")):
+                    # The browser's own error page: FBS or the network failed.
+                    reading = ("stalled", "browser_error_page")
+                elif not url.startswith("https://fbs.intranet.smu.edu.sg/"):
+                    reading = ("prompt", "unsupported_origin")
+            except PlaywrightError:
+                # A redirect replaced the document while it was being read.
+                reading = None
+            repeats = repeats + 1 if reading and reading == previous else 1
+            previous = reading
+            # Consecutive identical readings, so a page in mid-redirect is not
+            # mistaken for one that has settled. A redirect chain may pass
+            # through an unfamiliar origin, so that must persist for longer.
+            if reading and repeats >= (8 if reading[1] == "unsupported_origin" else 2):
+                kind, state = reading
+                if kind == "prompt":
+                    event(
+                        "auth.silent_renewal", outcome="sign_in_required", state=state
+                    )
+                    raise AuthenticationRequired(
+                        "SMU sign-in is required on the host.",
+                        reason="sign_in_required_on_host",
+                    )
+                # An error page proves nothing about sign-in: report that the
+                # session did not renew, and do not pause other requests.
+                event("auth.silent_renewal", outcome="stalled", state=state)
+                return False
+            try:
+                await self.page.wait_for_timeout(750)
+            except PlaywrightError:
+                break
+        event("auth.silent_renewal", outcome="timeout")
+        return False
 
     @staticmethod
     def _trusted_login_url(url: str) -> bool:
@@ -745,8 +973,128 @@ class FBSClient:
 
     @observed_step("auth.login")
     async def _complete_interactive_authentication(self) -> None:
+        # A login started from the server's web sign-in page: the person there
+        # sees this page and taps and types into it (live_view.py).
+        view = LIVE_VIEW.get()
+        if view is None and self.sign_in_permit is not None:
+            # The person gave their email and password; nobody watches the
+            # browser, and they approve on their phone.
+            return await self._sign_in_with_saved_credentials(fresh=False)
+        if view is None or not self.page:
+            return await self._interactive_authentication(None)
+        await view.attach(self.page, self.context)
+        try:
+            return await self._interactive_authentication(view)
+        finally:
+            await view.detach()
+
+    @observed_step("auth.saved_sign_in")
+    async def _sign_in_with_saved_credentials(self, *, fresh: bool) -> None:
+        """Sign in with the person's own saved email and password.
+
+        Types only into Microsoft's own pages, reports the Authenticator
+        number through auth_notify, and never retries a refused password.
+        Every way this can end short of FBS raises AuthenticationRequired
+        with one of SAVED_SIGN_IN_REASONS.
+        """
+        permit = self.sign_in_permit
         if not self.page:
             raise FBSError("Browser page is unavailable")
+        if not permit.take():
+            # One sign-in per job: a second would be a second phone request.
+            raise AuthenticationRequired(
+                "This request already tried to sign in once.",
+                reason="sign_in_unfinished",
+            )
+        event("auth.saved_sign_in", outcome="started")
+        await self.progress(SIGNING_IN)
+        self._unattended = True
+        try:
+            if fresh:
+                # The renewal guard blocked Microsoft's own calls on the page
+                # that is open now; start a clean sign-in without it.
+                await self._release_microsoft()
+                await self.page.goto(
+                    FBS_URL, wait_until="domcontentloaded", timeout=60000
+                )
+            await self._interactive_authentication(
+                None,
+                credentials=permit.credentials,
+                unattended=True,
+                timeout_ms=SAVED_SIGN_IN_SECONDS * 1000,
+            )
+        except asyncio.CancelledError:
+            # Stopped part-way (a cancel, a restart) still counts as a sign-in
+            # that ended: recorded and held, so cancelling cannot be used to
+            # sign in again at once. Nothing suggests the password was wrong,
+            # so the person may ask their agent to try again.
+            permit.finish(
+                "sign_in_not_approved"
+                if permit.approval_requested
+                else "sign_in_unfinished"
+            )
+            raise
+        except Exception as failure:
+            # Every way this ends short of FBS is one of the saved-sign-in
+            # reasons: never "retry once", which would type the password again.
+            reason = getattr(failure, "reason", None)
+            if reason not in SAVED_SIGN_IN_REASONS:
+                reason = "sign_in_unfinished"
+            if reason == "sign_in_unfinished" and permit.password_typed:
+                # Typed, and Microsoft did not clearly accept it: only the
+                # person's own page may try it again (lockout budget).
+                reason = "sign_in_needs_page"
+            event(
+                "auth.saved_sign_in",
+                outcome=reason,
+                error_type=type(failure).__name__,
+                after_password=permit.password_typed,
+            )
+            permit.finish(reason)
+            raise AuthenticationRequired(
+                "SMU sign-in with the saved password did not finish.", reason=reason
+            ) from None
+        finally:
+            self._unattended = False
+        permit.finish("signed_in")
+        event("auth.saved_sign_in", outcome="signed_in")
+        # Back on FBS: keep Microsoft's prompts blocked for the rest of this
+        # remote request, as before.
+        await self._guard_microsoft()
+
+    async def _failure_reason(self) -> str:
+        """Why Microsoft refused a sign-in nobody was watching."""
+        try:
+            body = (await self.page.locator("body").inner_text(timeout=2000)).casefold()
+        except Exception:
+            return "sign_in_unfinished"
+        if any(text in body for text in STOPPING_FAILURES):
+            return "sign_in_blocked"
+        if any(text in body for text in PASSWORD_REJECTED):
+            return "saved_password_rejected"
+        if any(text in body for text in NOT_APPROVED):
+            return "sign_in_not_approved"
+        return "sign_in_unfinished"
+
+    async def _interactive_authentication(
+        self,
+        view,
+        *,
+        credentials=None,
+        unattended: bool = False,
+        timeout_ms: int | None = None,
+    ) -> None:
+        """Walk Microsoft's sign-in pages to FBS.
+
+        credentials: the email and password to type, instead of
+        SMU_LOGIN_EMAIL/SMU_LOGIN_PASSWORD. unattended: nobody watches this
+        browser, so any step other than typing them and waiting for the phone
+        approval ends the sign-in at once.
+        """
+        if not self.page:
+            raise FBSError("Browser page is unavailable")
+        # Nobody to complete a step in the browser itself.
+        no_person = unattended or self.headless
         started = asyncio.get_running_loop().time()
         previous_state = None
         email_submitted = password_submitted = method_selected = False
@@ -754,8 +1102,15 @@ class FBSClient:
         cancelled_passkey = False
         resumed_passkeys = set()
         notifications = set()
+        last_notified = None
         context_restarts = 0
-        timeout_ms = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", str(AUTH_TIMEOUT_MS)))
+        if unattended and self.auth_notify is None:
+            raise AuthenticationRequired(
+                "A sign-in nobody watches needs a way to show the person the number.",
+                reason="sign_in_unfinished",
+            )
+        if timeout_ms is None:
+            timeout_ms = int(os.getenv("SAGASU_AUTH_TIMEOUT_MS", str(AUTH_TIMEOUT_MS)))
         while (asyncio.get_running_loop().time() - started) * 1000 < timeout_ms:
             if await self.page.locator("iframe#frameBottom").count():
                 await self.progress(
@@ -772,17 +1127,24 @@ class FBSClient:
                 await self.page.wait_for_timeout(750)
                 continue
             state, prompt = await self._classify_auth_state()
+            if view is not None:
+                view.state = state
             state_changed = state != previous_state
             if state_changed:
                 event("auth.state", state=state)
             if state_changed:
                 await self._capture_auth_state(state)
-                # Number matching goes only to the private agent authentication prompt.
-                await self.progress(
-                    "Open Microsoft Authenticator to approve sign-in"
-                    if state == "authenticator"
-                    else prompt
-                )
+                if not unattended:
+                    # Number matching goes only to the private agent authentication prompt.
+                    await self.progress(
+                        "Open Microsoft Authenticator to approve sign-in"
+                        if state == "authenticator"
+                        else prompt
+                    )
+                elif state == "stay_signed_in":
+                    # Approved. Until here the number stays on show, whatever
+                    # a page in mid-change reads as.
+                    await self.progress(FINISHING)
                 previous_state = state
             if state == "invalid_context":
                 # This restarts the read/login transaction only, before any
@@ -817,19 +1179,48 @@ class FBSClient:
                     reason="authentication_failed",
                 )
             if (
+                state == "failed"
+                and view is not None
+                and not await self._sign_in_stopped()
+            ):
+                # A person is on the web sign-in page. Microsoft lets them type
+                # the password again, or ask for another approval, right there.
+                await self.page.wait_for_timeout(750)
+                continue
+            if unattended and state in {"failed", "manual"}:
+                # Only the approval on the phone is the person's to do. Say
+                # why it ended; never retype a refused password.
+                reason = (
+                    await self._failure_reason()
+                    if state == "failed"
+                    else "sign_in_needs_page"
+                )
+                raise AuthenticationRequired(prompt, reason=reason)
+            if unattended:
+                if state == "authenticator" and prompt != last_notified:
+                    if self.sign_in_permit is not None:
+                        self.sign_in_permit.approval_requested = True
+                    # Again whenever it changes: the number may come later,
+                    # or Microsoft may send a new one.
+                    await self.auth_notify(prompt)
+                    last_notified = prompt
+                    # Recorded too, so a lost context never restarts the
+                    # sign-in and sends a second phone request.
+                    notifications.add((state, prompt))
+            elif (
                 state in {"authenticator", "failed", "manual"}
                 and (state, prompt) not in notifications
             ):
                 if self.auth_notify:
                     await self.auth_notify(prompt)
-                elif self.headless:
+                elif no_person:
                     raise AuthenticationRequired(
                         "Headless sign-in needs an agent authentication prompt callback. Use sagasu mcp or sagasu login."
                     )
                 else:
                     await self.progress(prompt)
                 notifications.add((state, prompt))
-            if state == "failed" or (state == "manual" and self.headless):
+            if state == "failed" or (state == "manual" and no_person):
                 raise AuthenticationRequired(
                     prompt,
                     reason=(
@@ -841,7 +1232,11 @@ class FBSClient:
 
             trusted = self._trusted_login_url(self.page.url)
             if state == "email" and trusted:
-                login_email = os.getenv("SMU_LOGIN_EMAIL", "").strip()
+                login_email = (
+                    credentials.email
+                    if credentials is not None
+                    else os.getenv("SMU_LOGIN_EMAIL", "").strip()
+                )
                 field = self.page.locator(LOGIN_EMAIL_SELECTOR).first
                 if login_email and (
                     not email_submitted or not (await field.input_value()).strip()
@@ -859,7 +1254,7 @@ class FBSClient:
                     )
                     email_submitted = True
                     email_submissions += 1
-                elif not login_email and self.headless:
+                elif not login_email and no_person:
                     raise AuthenticationRequired(
                         "Set SMU_LOGIN_EMAIL for headless sign-in.",
                         reason="missing_email",
@@ -867,17 +1262,38 @@ class FBSClient:
             elif state == "password" and trusted:
                 if password_submitted and state_changed:
                     await self._stop_reset_login()
-                password = os.getenv("SMU_LOGIN_PASSWORD", "")
+                password = (
+                    credentials.password
+                    if credentials is not None
+                    else os.getenv("SMU_LOGIN_PASSWORD", "")
+                )
                 if password and not password_submitted:
+                    if unattended and self.sign_in_permit is not None:
+                        # Counted before it is typed (lockout budget).
+                        self.sign_in_permit.typing_password()
                     await self._submit_login_field(
                         LOGIN_PASSWORD_SELECTOR, password, "password"
                     )
                     password_submitted = True
-                elif not password and self.headless:
+                elif not password and no_person:
                     raise AuthenticationRequired(
                         "Set SMU_LOGIN_PASSWORD for headless password sign-in.",
                         reason="missing_password",
                     )
+            elif state == "stay_signed_in" and trusted and unattended:
+                # Nobody else can answer it, so always do. Its own setting:
+                # SAGASU_STAY_SIGNED_IN stays the person's choice on the live
+                # picture. Yes means fewer requests to their phone.
+                stay = os.getenv("SAGASU_SAVED_SIGN_IN_STAY", "true").lower() not in {
+                    "0",
+                    "false",
+                    "no",
+                }
+                button = self.page.locator(
+                    "#idSIButton9:visible" if stay else "#idBtn_Back:visible"
+                ).first
+                if await button.count():
+                    await button.click()
             elif (
                 state == "stay_signed_in"
                 and trusted
@@ -895,7 +1311,11 @@ class FBSClient:
                     if not method_selected:
                         await self._stop_reset_login()
             elif state == "account" and trusted and not email_submitted:
-                email = os.getenv("SMU_LOGIN_EMAIL", "").strip()
+                email = (
+                    credentials.email
+                    if credentials is not None
+                    else os.getenv("SMU_LOGIN_EMAIL", "").strip()
+                )
                 if email:
                     account = self.page.get_by_text(email, exact=True)
                     if await account.count():
@@ -938,7 +1358,7 @@ class FBSClient:
                         else:
                             raise
                 elif (
-                    not self.headless
+                    not no_person
                     and cancel
                     and self._trusted_login_continuation_url(cancel)
                     and not cancelled_passkey
@@ -954,18 +1374,38 @@ class FBSClient:
                         await alternate.first.click()
             elif state == "method_picker" and trusted and not method_selected:
                 method_selected = await self._select_authenticator()
-                if not method_selected and self.headless:
+                if not method_selected and no_person:
                     message = "Microsoft did not offer Authenticator push approval. This sign-in needs an interactive browser or an SMU-supported authentication method."
-                    if self.auth_notify:
+                    if self.auth_notify and not unattended:
                         await self.auth_notify(message)
-                    raise AuthenticationRequired(message)
+                    raise AuthenticationRequired(
+                        message, reason="sign_in_unfinished" if unattended else None
+                    )
             await self.page.wait_for_timeout(750)
         message = (
             "Microsoft sign-in timed out. Start a new search when ready to approve MFA."
         )
+        if unattended:
+            # Waiting on the phone is the only thing that takes this long.
+            raise AuthenticationRequired(
+                "The sign-in was not approved in time.",
+                reason=(
+                    "sign_in_not_approved"
+                    if previous_state == "authenticator"
+                    else "sign_in_unfinished"
+                ),
+            )
         if self.auth_notify:
             await self.auth_notify(message)
         raise AuthenticationRequired(message, reason="authentication_timeout")
+
+    async def _sign_in_stopped(self) -> bool:
+        """A refusal that trying again on the same page cannot fix."""
+        try:
+            body = (await self.page.locator("body").inner_text(timeout=2000)).casefold()
+        except Exception:
+            return True
+        return any(text in body for text in STOPPING_FAILURES)
 
     async def _passkey_resume_url(self) -> str | None:
         """Read Microsoft's supplied method-picker continuation without calling its APIs."""
@@ -1026,9 +1466,11 @@ class FBSClient:
             ):
                 await submit.click()
                 return
-            await self.progress(
-                f"Microsoft replaced the {kind} field before submission; checking it again"
-            )
+            if not self._unattended:
+                # Unattended, the agent sees only fixed words (SIGNING_IN).
+                await self.progress(
+                    f"Microsoft replaced the {kind} field before submission; checking it again"
+                )
         raise AuthenticationRequired(
             f"Microsoft cleared or changed the {kind} field before submission. "
             "No form was submitted; complete this step in the browser or retry the search."
@@ -1041,7 +1483,7 @@ class FBSClient:
             "Retry once with sagasu login in a visible browser; if this repeats, "
             "check that Microsoft offers Authenticator for your SMU account."
         )
-        if self.auth_notify:
+        if self.auth_notify and not self._unattended:
             await self.auth_notify(message)
         raise AuthenticationRequired(message)
 
@@ -1078,6 +1520,10 @@ class FBSClient:
                 "you denied",
                 "request was denied",
                 "we didn't hear from you",
+                # Microsoft writes it with a curly apostrophe. Only an unattended
+                # (saved) sign-in treats it as final: a person at a visible
+                # browser can press "Send another request" instead.
+                *(("we didn’t hear from you",) if self._unattended else ()),
                 "sign-in was blocked",
                 "sign in was blocked",
             )

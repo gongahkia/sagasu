@@ -15,11 +15,18 @@ def identity(kind, summary):
     return (kind, *(summary[key].strip().casefold() for key in keys))
 
 
-def evidence(state, *, verified=False, reference=None, status=None, complete=False):
+# A cancel that FBS took would show as cancelled (or pending cancellation) at
+# once. Unchanged this long after the attempt, it did not take effect.
+CANCEL_SETTLE_SECONDS = 15 * 60
+
+
+def evidence(
+    state, *, verified=False, reference=None, status=None, complete=False, retry=False
+):
     return {
         "state": state,
         "action_outcome_verified": verified,
-        "safe_to_retry": False,
+        "safe_to_retry": retry,
         "reference_number": reference,
         "fbs_status": status,
         "source_complete": complete,
@@ -27,6 +34,7 @@ def evidence(state, *, verified=False, reference=None, status=None, complete=Fal
             "confirmed": "The exact booking reference is confirmed in FBS.",
             "pending_confirmation": "The exact booking reference exists and still requires confirmation.",
             "cancelled": "The exact reference is marked cancelled in FBS.",
+            "not_cancelled": "FBS still shows the exact reference unchanged well after the attempt, so the cancellation did not take effect. A new cancellation may be prepared.",
             "approved": "The exact task is marked approved; booking confirmation is a separate status.",
             "amended": "The exact booking reference shows the requested amended fields; inspect its actual FBS status for confirmation.",
             "matching_booking_found": "A matching booking exists, but it cannot be attributed to the interrupted action without its reference. Do not submit another booking.",
@@ -160,6 +168,27 @@ async def reconcile(client, payload):
             reference=known_ref,
             status=status,
             complete=listing["complete"],
+        )
+    if (
+        kind == "cancel"
+        and payload.get("settled") is True
+        and listing["complete"] is True
+        and isinstance(summary.get("fbs_status"), str)
+        and normalized == summary["fbs_status"].strip().casefold()
+        and "cancel" not in normalized
+        and all(
+            isinstance(summary.get(k), str) and summary[k] and row.get(k) == summary[k]
+            for k in ("room", "date_time")
+        )
+    ):
+        # Same status, room and time as when the cancellation was reviewed.
+        return evidence(
+            "not_cancelled",
+            verified=True,
+            reference=known_ref,
+            status=status,
+            complete=True,
+            retry=True,
         )
     return evidence(
         "unresolved", reference=known_ref, status=status, complete=listing["complete"]

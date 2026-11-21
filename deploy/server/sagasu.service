@@ -1,0 +1,37 @@
+[Unit]
+Description=Sagasu MCP host (SMU FBS assistant) with its remote listener
+Documentation=file:/opt/sagasu/app/deploy/server/README.md
+After=network-online.target sagasu-xvfb.service
+Wants=network-online.target
+Requires=sagasu-xvfb.service
+PartOf=sagasu-xvfb.service
+
+[Service]
+User=sagasu
+Group=sagasu
+UMask=0077
+# The web proxy reaches the remote listener through a socket file in this
+# folder: owned by this service, group caddy, setgid so the socket joins it.
+ExecStartPre=+/usr/bin/install -d -o sagasu -g caddy -m 2750 /run/sagasu
+ExecStart=/opt/sagasu/bin/sagasu-launch host-run
+Restart=always
+RestartSec=5
+# 78: the launcher refused an unsafe configuration; restarting cannot fix that.
+RestartPreventExitStatus=78
+# SIGTERM goes to Sagasu only. It finishes a running FBS write (up to 90 s) and
+# closes its own browser; whatever is left is killed after the timeout.
+KillMode=mixed
+TimeoutStopSec=150
+LimitNOFILE=16384
+# No PrivateTmp: commands reach the host through its private socket in /tmp.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

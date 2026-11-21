@@ -1,0 +1,20 @@
+# One teammate's copy of Sagasu, written by sagasu-ctl instance-add.
+@HOST@ {
+	@mcp path /mcp /sign-in /sign-in/* /authorize /token /register /revoke /oauth/sign-in /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server
+	handle @mcp {
+		request_body {
+			max_size 4MB
+		}
+		reverse_proxy unix/@SOCKET@ {
+			flush_interval -1
+		}
+	}
+	handle {
+		respond "Not found" 404
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
+}

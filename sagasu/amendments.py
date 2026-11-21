@@ -36,6 +36,7 @@ from .fbs_client import (
     minutes_to_time,
 )
 from .fbs_http import fbs_document_url
+from .fbs_prompts import Answer, PromptDeclined, click_and_accept, expected_prompt
 from .repeat import normalize_date
 from .room_plans import _free_intervals, _covers
 
@@ -46,6 +47,12 @@ CONFIRM_TIMEOUT_MS = 45000
 
 class AmendmentUnavailable(BookingUnavailable):
     default_reason = "amendment_unavailable"
+
+
+class AmendmentPenalty(AmendmentUnavailable):
+    """FBS would charge a penalty to amend. Nothing was submitted."""
+
+    default_reason = "amendment_penalty"
 
 
 class AmendmentOutcomeUnknown(BookingOutcomeUnknown):
@@ -638,14 +645,38 @@ async def execute_amendment(
                 raise AmendmentUnavailable(
                     "The native amendment CONFIRM action is unavailable"
                 )
-            attempted = True
+            # FBS asks its penalty prompt before posting; an unanswered prompt
+            # is dismissed and nothing is posted (see fbs_prompts).
+            try:
+                message = expected_prompt(await confirm.get_attribute("onclick"))
+            except PromptDeclined as declined:
+                kind = AmendmentPenalty if declined.penalty else AmendmentUnavailable
+                raise kind(str(declined)) from None
+            if message is None:
+                # FBS's CONFIRM asked the penalty prompt on 20 Nov. Without it
+                # the penalty cannot be checked, so do not submit.
+                raise AmendmentUnavailable(
+                    "FBS's amendment form no longer asks to confirm"
+                )
+            answer = Answer(message)
             async with client.page.expect_response(
                 lambda response: response.request.method == "POST"
                 and response.frame is frame
                 and urlsplit(response.url).path.casefold() == EDIT_PATH,
                 timeout=CONFIRM_TIMEOUT_MS,
             ) as pending:
-                await confirm.click()
+                try:
+                    await click_and_accept(client.page, confirm, answer)
+                except BaseException:
+                    # Only a dialog Sagasu dismissed proves nothing was posted.
+                    attempted = not answer.declined
+                    raise
+                if answer.declined and not answer.accepted:
+                    raise AmendmentUnavailable(
+                        "FBS asked something unexpected before amending"
+                    )
+                # Answered OK, or no dialog at all: a post cannot be ruled out.
+                attempted = True
             await (await pending.value).finished()
             current_frame = client.page.frame(name="frameContent")
             if current_frame:

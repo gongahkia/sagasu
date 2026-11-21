@@ -151,13 +151,24 @@ class Progress:
             )
 
 
+# Secrets learnt while running (a saved SMU password, once read): every Redact
+# filter removes them too, as a last line of defence for stray messages.
+_RUNTIME_SECRETS = set()
+
+
+def add_secret(value):
+    if isinstance(value, str) and len(value) >= 4:
+        _RUNTIME_SECRETS.add(value)
+
+
 class Redact(logging.Filter):
     def __init__(self, secrets=()):
         super().__init__()
         self.secrets = tuple(value for value in secrets if value)
 
     def clean(self, message):
-        for secret in self.secrets:
+        # Longest first, so a secret containing another is removed whole.
+        for secret in sorted({*self.secrets, *_RUNTIME_SECRETS}, key=len, reverse=True):
             message = message.replace(secret, "<redacted>")
         message = re.sub(r"(https?://[^\s?]+)\?[^\s]+", r"\1?<redacted>", message)
         message = re.sub(r"(?i)(enter number\s+)\d{2,3}\b", r"\1<redacted>", message)

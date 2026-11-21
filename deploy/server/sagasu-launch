@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# One fixed environment for a Sagasu copy's service and for every command, so a
+# command always matches the running host: same paths, display, interpreter and
+# settings.
+#   sagasu-launch COMMAND...                    the owner's copy
+#   sagasu-launch --instance NAME COMMAND...    a teammate's copy
+set -euo pipefail
+
+INSTANCE=""
+if [[ ${1:-} == --instance ]]; then
+    INSTANCE=${2:-}
+    shift 2 || true
+    if [[ ! $INSTANCE =~ ^[a-z][a-z0-9]{1,15}$ || ! -f /etc/sagasu/instances/$INSTANCE ]]; then
+        printf '%s\n' 'Unknown Sagasu copy.' >&2
+        exit 2
+    fi
+fi
+
+if [[ -n $INSTANCE ]]; then
+    ACCOUNT=sagasu-$INSTANCE
+    STATE=/var/lib/sagasu-$INSTANCE
+    ENV_FILE=/etc/sagasu/$INSTANCE.env
+    DISPLAY_NUM=$(sed -n 's/^DISPLAY_NUM=\([0-9][0-9]*\)$/\1/p' "/etc/sagasu/instances/$INSTANCE")
+    [[ -n $DISPLAY_NUM ]] || { printf '%s\n' 'The copy has no display number.' >&2; exit 2; }
+else
+    ACCOUNT=sagasu
+    STATE=/var/lib/sagasu
+    ENV_FILE=/etc/sagasu/sagasu.env
+    DISPLAY_NUM=99
+fi
+
+if [[ $EUID -eq 0 ]]; then
+    exec runuser -u "$ACCOUNT" -- /opt/sagasu/bin/sagasu-launch ${INSTANCE:+--instance "$INSTANCE"} "$@"
+fi
+if [[ $(id -un) != "$ACCOUNT" ]]; then
+    printf '%s\n' 'Run this command with sudo: sudo /opt/sagasu/bin/sagasu-launch COMMAND' >&2
+    exit 2
+fi
+
+# Ask the same parser the service uses whether a password is stored in plain
+# text, and whether the key for saved sign-ins is one this account cannot change.
+stored=0
+/opt/sagasu/venv/bin/python -I -c '
+import os, stat, sys
+from dotenv import dotenv_values
+values = dotenv_values(sys.argv[1], interpolate=False)
+if values.get("SMU_LOGIN_PASSWORD"):
+    sys.exit(3)
+key = (values.get("SAGASU_HTTP_SIGN_IN_KEY_FILE") or "").strip()
+if key:
+    try:
+        info = os.stat(key)
+    except OSError:
+        sys.exit(0)  # missing: saved sign-ins are simply off
+    real = os.path.realpath(key)
+    if (
+        not real.startswith("/etc/sagasu/")
+        or real.startswith(os.path.realpath(sys.argv[2]) + "/")
+        or info.st_uid != 0
+        or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+        or not stat.S_ISREG(info.st_mode)
+    ):
+        sys.exit(4)
+' "$ENV_FILE" "$STATE" || stored=$?
+if [[ -n ${SMU_LOGIN_PASSWORD:-} || $stored -eq 3 ]]; then
+    printf '%s\n' \
+        'Refusing to start: SMU_LOGIN_PASSWORD would keep a password in plain text.' \
+        'Remove it from the settings file. A person saves their sign-in on the' \
+        "copy's own sign-in page instead, where it is kept encrypted." >&2
+    exit 78
+fi
+if [[ $stored -eq 4 ]]; then
+    printf '%s\n' \
+        'Refusing to start: SAGASU_HTTP_SIGN_IN_KEY_FILE must be a root-owned file in' \
+        '/etc/sagasu that only root can change (install.sh makes it).' >&2
+    exit 78
+fi
+
+cd "$STATE"
+# env -i: nothing from the caller's shell can change what the host sees.
+# TZ: FBS pages compute dates in the browser, so it keeps Singapore time.
+# PYTHONSAFEPATH: the working directory is writable by the service, so it
+# must never be searched for code ahead of the root-owned installation.
+exec env -i \
+    HOME="$STATE" \
+    PATH=/opt/sagasu/venv/bin:/usr/local/bin:/usr/bin:/bin \
+    LANG=C.UTF-8 \
+    TZ=Asia/Singapore \
+    PYTHONUNBUFFERED=1 \
+    PYTHONSAFEPATH=1 \
+    DISPLAY=":$DISPLAY_NUM" \
+    XAUTHORITY="$STATE/.Xauthority" \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/sagasu/browsers \
+    /opt/sagasu/venv/bin/python -m sagasu "$@" --env-file "$ENV_FILE"

@@ -1,0 +1,63 @@
+# Publishes only Sagasu's MCP endpoint, with an automatic TLS certificate.
+{
+	servers {
+		# Slow or stalled clients are cut off instead of holding connections.
+		timeouts {
+			read_header 10s
+			read_body 30s
+			write 2m
+			idle 2m
+		}
+	}
+}
+
+@PUBLIC_HOST@ {
+	# The shared address: the MCP endpoint and the OAuth sign-in paths go to
+	# the gateway, which sends each request to the copy of the person whose key
+	# it carries (sagasu/gateway.py).
+	@mcp path /mcp
+	handle @mcp {
+		request_body {
+			max_size 4MB
+		}
+		# If the gateway is not running, the owner's own copy answers, so the
+		# owner's keys keep working (teammates' keys then get 401).
+		reverse_proxy unix//run/sagasu-gateway/http.sock unix//run/sagasu/http.sock {
+			lb_policy first
+			lb_try_duration 2s
+			fail_duration 10s
+			flush_interval -1
+		}
+	}
+	@oauth path /authorize /token /register /revoke /oauth/sign-in /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/mcp /.well-known/oauth-authorization-server
+	handle @oauth {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy unix//run/sagasu-gateway/http.sock {
+			flush_interval -1
+		}
+	}
+	# The owner's own SMU sign-in page. Each teammate's is on their copy's
+	# own address, where the links their agent gives them lead.
+	@signin path /sign-in /sign-in/*
+	handle @signin {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy unix//run/sagasu/http.sock {
+			flush_interval -1
+		}
+	}
+	handle {
+		respond "Not found" 404
+	}
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
+}
+
+# Teammates' copies, one file each (sagasu-ctl instance-add).
+import /etc/caddy/sites/*.caddy

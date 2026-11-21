@@ -4,6 +4,11 @@ Sagasu is a local MCP server for SMU FBS. Install it once on the computer where
 your MCP client runs, then register its stdio launch command with that client.
 The same server can serve different local agents.
 
+Sagasu also has a hosted path: one person runs it on a server for a group, and
+everyone else connects their agent app over HTTPS without installing anything.
+See [Hosting for a group](#hosting-for-a-group). The rest of this guide is the
+local path.
+
 ## Give this to your agent
 
 ```text
@@ -282,3 +287,101 @@ launch arguments, checks actually performed, and any remaining user action.
 Do not report setup complete while local installation, registration, login/MFA
 or an operational MCP connection remains unverified. No product code changes
 or real FBS writes are needed to complete onboarding.
+
+## Hosting for a group
+
+Sagasu runs two ways. On the **local** path (everything above) each person
+installs it on their own computer for their own agent. On the **hosted** path
+one person runs it on a server for a group of friends. Each person gets their
+own isolated copy, with its own Linux account, browser, saved SMU sign-in and
+API key, behind one shared address. Their agent connects over HTTPS, and only
+the person hosting installs anything.
+
+Each copy signs in as exactly one SMU account. Never share a key: everything
+done with it happens as that copy's owner.
+
+### For the person hosting
+
+The full operator guide is [deploy/server/README.md](deploy/server/README.md).
+In short:
+
+1. Get an Ubuntu server with a public address and a host name that resolves to
+   it. Without a domain, `A-B-C-D.sslip.io` resolves to the address `A.B.C.D`.
+   Each friend's SMU sign-in page is on their own `NAME.HOST` (the links their
+   agent gives them lead there). With your own domain, add a wildcard DNS
+   record (`*.HOST`) or one per friend; sslip.io needs none. See
+   [DNS for each copy's sign-in address](deploy/server/README.md#dns-for-each-copys-sign-in-address).
+2. Create your API key on your own computer, copy the source tree to the
+   server, and run `deploy/server/install.sh --host HOST --key owner:<digest>`.
+   Then allow inbound TCP 443 in the cloud provider's firewall.
+3. Give each friend their own copy:
+   `sudo sagasu-ctl instance-add NAME [THEIR_SMU_EMAIL]`. It prints a key once.
+   Send them the shared address `https://HOST/mcp` and that key privately.
+4. Updating restarts every copy and ends everyone's SMU session. Each person
+   then approves one Microsoft Authenticator number on their next request.
+
+Earlier writes without a recorded origin stay private to the host after an
+update. Inspect or reconcile those through the local MCP on the server.
+
+Saved SMU passwords are encrypted on disk, but whoever administers the server
+can read them. Only host copies for people who trust you.
+
+### Connect your agent app
+
+You need the address (`https://HOST/mcp`) and your key from the person
+hosting.
+
+- **Apps that can send a header** (Claude Code and most MCP clients): add a
+  streamable HTTP server at `https://HOST/mcp` with the header
+  `Authorization: Bearer <key>`, or `X-API-Key: <key>` if the app reserves
+  `Authorization`. For Claude Code, read the key from a file so it stays out of
+  your shell history:
+
+  ```bash
+  claude mcp add --transport http sagasu https://HOST/mcp --header "Authorization: Bearer $(cat ~/sagasu-key)"
+  ```
+
+- **Apps that only support OAuth** (ChatGPT, Claude.ai connectors): add the
+  URL `https://HOST/mcp`, choose OAuth (dynamic or automatic registration if
+  asked), and paste your key on the sign-in page the app opens. Only do this
+  for a connection you started yourself.
+
+If tools are missing or the app reports an error, remove the connector and add
+it again. Some apps keep the tool list from when the connector was first added.
+
+### Sign in to SMU
+
+1. On your first request, Sagasu answers with a one-time sign-in link. Open it
+   in your browser and save your SMU email and password on your copy's own
+   page. Then approve the sign-in in Microsoft Authenticator.
+2. After that, when SMU asks again, your agent signs in for you and shows a
+   number in the chat. Enter it in Authenticator within about three minutes
+   and reply "done".
+3. If you missed the number, ask your agent to sign you in again (the `login`
+   tool) for a fresh one. Sagasu sends nothing else to your phone until you ask.
+
+Never give your SMU password to an agent or type it into a chat.
+
+### Give this to your agent (hosted)
+
+```text
+Sagasu is already connected as a hosted MCP server; do not install anything.
+Verify it without booking or changing any saved data: call server_status with
+{}, then session_status with {} and poll that operation with wait_operation
+until it is terminal. If the result has a sign_in field, give me its number
+and words, end your turn, and continue after I reply "done". If it reports
+sign_in_setup_needed, give me the sign_in_url to open myself; never open it
+yourself and never ask for my password. Report the server's readiness and
+whether my SMU session is valid.
+```
+
+### If a hosted setup is blocked
+
+| Symptom | Next step |
+| --- | --- |
+| `401` from the server | Check the URL ends in `/mcp` and the app sends exactly one key header, or reconnect through OAuth. |
+| The agent cannot send a fresh sign-in number | The app kept an old tool list without `login`. Remove and re-add the connector. |
+| `sign_in_setup_needed` or a `sign_in_url` | Open the link yourself and save or update your SMU sign-in there. Links last 15 minutes. |
+| `sign_in_not_approved` | The number expired or was denied. Ask your agent to sign you in again. |
+| `saved_password_rejected` | Your SMU password changed. Save the new one on your sign-in page. |
+| A certificate warning on the sign-in page | Do not type your password. Some managed networks intercept HTTPS; use another network. |

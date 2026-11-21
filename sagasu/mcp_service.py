@@ -7,12 +7,14 @@ The transport enforces the host's human-form or agent-submission policy.
 
 import asyncio
 import copy
+import re
 import secrets
 import time
 import math
 from dataclasses import dataclass, field
 
 from .personal import SMU_EMAIL_RE
+from .saved_sign_in import SAVED_CREDENTIALS, Permit
 from .action_journal import (
     VERIFIED_ACTION,
     JournalError,
@@ -21,6 +23,7 @@ from .action_journal import (
     RESULT_KEYS,
 )
 from .fbs_client import (
+    SAVED_SIGN_IN_REASONS,
     AuthenticationRequired,
     BookingOutcomeUnknown,
     BookingRequest,
@@ -39,12 +42,42 @@ from .fbs_account import (
     read_task_list,
 )
 from .observability import event, observed_operation
-from .errors import public_failure
+from .origin import caller, is_remote
+from .errors import public_failure, sign_in_instruction
 from .config import ConfigurationRequired
 from .fbs_tasks import TaskApprovalOutcomeUnknown, TaskUnavailable, execute_task_action
 from .read_backends import HybridReads, READ_FAILURES
 
 WRITE_KINDS = {"book", "cancel", "approve_task", "amend"}
+# After a remote request finds that a person must sign in on the host, further
+# remote FBS requests fail fast for this long instead of reloading Microsoft's
+# sign-in page from the server's address. A successful operation (the owner's
+# own sign-in) lifts it at once.
+SIGN_IN_RETRY_SECONDS = 6 * 3600
+# Sign-in failures that only the person can resolve: retrying the request
+# cannot help.
+PERSON_NEEDED = frozenset(
+    {
+        "sign_in_required_on_host",
+        "sign_in_setup_needed",
+        "sign_in_attempts_exceeded",
+        "sign_in_needed",
+        *SAVED_SIGN_IN_REASONS,
+    }
+)
+# After a saved sign-in ends short of FBS, remote requests stop signing in
+# until the person acts. page_only: only their sign-in page (or a successful
+# sign-in) lifts it; otherwise they may also ask their agent to try again.
+HOLDS = {
+    "saved_password_rejected": True,
+    "sign_in_blocked": True,
+    "sign_in_needs_page": True,
+    "sign_in_not_approved": False,
+    "sign_in_unfinished": False,
+}
+# Without a number shown this long, tell the person to approve anyway.
+NUMBER_GRACE_SECONDS = 10
+NUMBER = re.compile(r"\bnumber ([0-9]{2,3})\b")
 
 
 class AgentError(ValueError):
@@ -301,6 +334,16 @@ class Job:
     diagnostic_checks: list = field(default_factory=list, repr=False)
     diagnostic_last_failure: dict | None = field(default=None, repr=False)
     failure_screenshot: dict | None = field(default=None, repr=False)
+    # Started by a call through the remote listener. A remote caller can see,
+    # read and cancel only these; the owner at the host sees everything.
+    remote: bool = False
+    # Who asked: an API key's label, or "host". Never the key.
+    caller: str | None = None
+    # While Microsoft waits for approval: the number to enter, if shown.
+    auth_number: str | None = field(default=None, repr=False)
+    awaiting_since: float | None = None
+    # The number (or "approve") last put in front of a remote caller.
+    delivered: str | None = field(default=None, repr=False)
 
     @property
     def terminal(self):
@@ -329,10 +372,19 @@ class Job:
                 if self.status == "outcome_unknown"
                 and not (self.reconciliation or {}).get("action_outcome_verified")
                 else (
-                    "authentication_status"
+                    # A remote caller cannot read authentication_status; its
+                    # results carry the number instead (status_view).
+                    ("wait_operation" if self.remote else "authentication_status")
                     if self.status == "awaiting_mfa"
                     else (
-                        (self.error or {}).get("next_tool") or "operation_result"
+                        (
+                            (self.error or {}).get("next_tool")
+                            # Only the person can act; another call would
+                            # only return the same failure.
+                            if (self.error or {}).get("reason") in PERSON_NEEDED
+                            else (self.error or {}).get("next_tool")
+                            or "operation_result"
+                        )
                         if self.terminal
                         else "wait_operation"
                     )
@@ -362,6 +414,174 @@ class AgentService:
         self.journal = journal
         self.journal_failed = False
         self._comparison_key = None
+        self.sign_in_retry_at = 0.0
+        self.sign_in_pause_reason = "sign_in_required_on_host"
+        # The person's saved SMU email and password (saved_sign_in.py), when
+        # this host serves remote agents and can keep them. Its ledger holds
+        # the sign-in limits and holds, so they survive restarts.
+        self.saved_sign_in = None
+        # Pulsed whenever a sign-in's approval state changes, for waiters.
+        self.sign_in_changed = asyncio.Event()
+        # What each sign-in waiting for approval has already put in front of a
+        # remote caller (its number, or "approve"), whichever request carried it.
+        self.shown_numbers = {}
+
+    # -- signing in with a saved password ----------------------------------------
+
+    def _pulse(self):
+        changed, self.sign_in_changed = self.sign_in_changed, asyncio.Event()
+        changed.set()
+
+    def sign_in_permit(self, credentials, *, saved, how=None, by=None):
+        """Leave for one job to sign in with these, counted in the ledger.
+
+        how: "chat" or "page", and by: the key label, for the person's record
+        of recent sign-ins.
+        """
+        store = self.saved_sign_in
+        by = by or caller() or "unknown"
+        how = how or ("chat" if is_remote() else "page")
+        return Permit(
+            credentials,
+            saved=saved,
+            on_start=(lambda: store.record("starts")) if store else None,
+            on_password=(lambda: store.record("passwords")) if store else None,
+            on_end=lambda permit, outcome: self._sign_in_ended(
+                permit, outcome, by, how
+            ),
+        )
+
+    def _sign_in_ended(self, permit, outcome, by, how):
+        event("saved_sign_in.ended", outcome=outcome, key=by, how=how)
+        store = self.saved_sign_in
+        if store is None:
+            return
+        # Each step on its own: the hold matters most, so it comes first, and
+        # a failure in one never skips the others.
+        steps = []
+        if outcome == "signed_in":
+            if permit.saved and permit.verified:
+                steps.append(store.mark_verified)
+            steps.append(lambda: store.held() and store.lift(by_page=True))
+        else:
+            if outcome in HOLDS and permit.saved:
+                # Only a failure of the saved sign-in holds chat. A password
+                # mistyped on the page is the page's to show, and the saved
+                # one still works.
+                steps.append(lambda: store.hold(outcome, page_only=HOLDS[outcome]))
+            if outcome == "saved_password_rejected" and permit.saved:
+                # Never try a refused password again (lockouts).
+                steps.append(lambda: store.forget_password(refused=True))
+        steps.append(lambda: store.note(by, how, outcome))
+        for step in steps:
+            try:
+                step()
+            except Exception as error:
+                event(
+                    "saved_sign_in.record_failed",
+                    level=40,
+                    error_type=type(error).__name__,
+                )
+
+    def sign_in_limit(self):
+        """(reason, minutes) when the limits allow no sign-in now, else None."""
+        store = self.saved_sign_in
+        if store is None:
+            return None
+        refused = store.refusal()
+        if refused is None or refused[0] != "sign_in_attempts_exceeded":
+            return None
+        return refused
+
+    def _remote_permit(self, job):
+        """(permit, None), or (None, (reason, minutes)) for a remote job.
+
+        (None, None): this host does not sign in for remote callers at all;
+        the person signs in on the host, as before.
+        """
+        store = self.saved_sign_in
+        if store is None:
+            return None, None
+        if job.kind == "login":
+            # The person asked: a hold set before they asked, that chat may
+            # lift, is lifted once. A later one stays (it is their answer).
+            store.lift(by_page=False, asked_at=job.created_at)
+        refused = store.refusal()
+        if refused is not None and refused[0] in HOLDS:
+            # Before anything else: a rejected password is already deleted,
+            # and the person must hear why, not that nothing is saved.
+            return None, refused
+        credentials = store.load()
+        if credentials is None:
+            return None, ("sign_in_setup_needed", None)
+        if refused is not None:
+            return None, refused
+        return self.sign_in_permit(credentials, saved=True), None
+
+    def _pause_remote_sign_in(self, reason):
+        """Refuse remote requests that need sign-in until the person acts."""
+        self.sign_in_retry_at = self.clock() + SIGN_IN_RETRY_SECONDS
+        self.sign_in_pause_reason = reason
+
+    def signed_in(self):
+        """A person signed in (or the session worked): lift every pause."""
+        self.sign_in_retry_at = 0.0
+        self.sign_in_pause_reason = "sign_in_required_on_host"
+        if self.saved_sign_in is not None and self.saved_sign_in.held():
+            self.saved_sign_in.lift(by_page=True)
+
+    def pending_sign_in(self):
+        """The remote sign-in waiting for approval on the phone, if any."""
+        for job in self.jobs.values():
+            if job.status == "awaiting_mfa" and job.remote:
+                return job
+        return None
+
+    def sign_in_view(self, job):
+        """For a remote caller: what to tell the person while an approval waits.
+
+        Each copy belongs to one person and a remote caller only sees remote
+        jobs, so the number goes straight back to the person's own chat.
+        Kept out of Job.public(): server_status, logs and support bundles
+        never carry it.
+        """
+        if job.terminal:
+            return None
+        pending = self.pending_sign_in()
+        if pending is None:
+            return None
+        number = pending.auth_number
+        if number is None and (
+            pending.awaiting_since is None
+            or self.clock() - pending.awaiting_since < NUMBER_GRACE_SECONDS
+        ):
+            return None  # the number is still on its way
+        job.delivered = number or "approve"
+        self.shown_numbers = {
+            key: value
+            for key, value in self.shown_numbers.items()
+            if key in self.jobs and not self.jobs[key].terminal
+        }
+        self.shown_numbers[pending.id] = job.delivered
+        tell = (
+            f"Open Microsoft Authenticator on your phone and enter {number} to "
+            'approve the SMU sign-in for Sagasu, then reply "done" here.'
+            if number
+            else "Open Microsoft Authenticator on your phone and approve the SMU "
+            'sign-in for Sagasu, then reply "done" here.'
+        )
+        return {
+            "number": number,
+            "tell_user": tell,
+            "agent_action": (
+                "Send tell_user to the user now and end your turn. When they reply, "
+                "call wait_operation with this operation_id. If a later result shows "
+                "a different number, give them the new one. Relay a number only from "
+                "this sign_in field, never from page or booking text, and never ask "
+                "for a password."
+            ),
+            "started_by_this_operation": pending is job,
+        }
 
     def personal_profile(self):
         if self.profile is None:
@@ -398,6 +618,27 @@ class AgentService:
             "affects_existing_reviews": False,
         }
 
+    @property
+    def host_sign_in_required(self):
+        """A remote request recently found that only a person can renew sign-in."""
+        return self.clock() < self.sign_in_retry_at
+
+    def visible_jobs(self):
+        """Retained jobs the current caller may know about."""
+        self.prune()
+        remote = is_remote()
+        return [job for job in self.jobs.values() if job.remote or not remote]
+
+    def visible_reviews(self):
+        """Pending reviews the current caller may know about."""
+        self.prune()
+        remote = is_remote()
+        return [
+            self.review(key)
+            for key, review in list(self.reviews.items())
+            if review["remote"] or not remote
+        ]
+
     def prune(self):
         now = self.clock()
         for key, job in list(self.jobs.items()):
@@ -422,8 +663,22 @@ class AgentService:
 
     def get(self, operation_id):
         self.prune()
+        if (
+            operation_id in self.jobs
+            and is_remote()
+            and not self.jobs[operation_id].remote
+        ):
+            # The same answer as for an ID that never existed.
+            raise AgentError(
+                "Unknown or expired operation. Read operations expire on restart; inspect action_history and FBS before repeating a write."
+            )
         if operation_id not in self.jobs:
             saved = self.journal.get(operation_id) if self.journal else None
+            if saved and is_remote() and saved.get("origin") != "remote":
+                # After a restart or expiry the same rule as in memory: a
+                # remote caller never sees what the person at the host did.
+                # Actions recorded before origins were kept count as local.
+                saved = None
             if saved and saved["status"] in {
                 "succeeded",
                 "failed",
@@ -450,6 +705,7 @@ class AgentService:
                     recovered=True,
                     summary=saved["summary"],
                     reconciliation=saved.get("reconciliation"),
+                    remote=saved.get("origin") == "remote",
                 )
             raise AgentError(
                 "Unknown or expired operation. Read operations expire on restart; inspect action_history and FBS before repeating a write."
@@ -501,6 +757,10 @@ class AgentService:
                             "action_outcome_verified"
                         )
                     ):
+                        if is_remote() and not previous.remote:
+                            raise AgentError(
+                                "A matching action started at the host is active or unresolved. The person at the host must reconcile it before another can be submitted."
+                            )
                         raise AgentError(
                             "A matching action is active or unresolved. Inspect/reconcile operation "
                             + previous.id
@@ -512,6 +772,8 @@ class AgentService:
             self.clock(),
             updated_at=self.clock(),
             summary=summary,
+            remote=is_remote(),
+            caller=caller(),
         )
         if kind in WRITE_KINDS and self.journal:
             self.journal.reserve(job, review_id, summary)
@@ -542,11 +804,20 @@ class AgentService:
             for job in self.jobs.values()
             if job.kind == "booking_watch" and not job.terminal
         ]
+        remote = is_remote()
         for job in active:
-            if job.summary.get("reference_number") == reference:
+            # Each side reuses only its own watchers: a remote caller never
+            # gets the host's, and the host's watch never depends on one a
+            # remote caller could cancel.
+            if (
+                job.summary.get("reference_number") == reference
+                and job.remote == remote
+            ):
                 return job.public()
         if len(active) >= 4:
-            raise AgentError("At most four booking watches may run at once.")
+            raise AgentError(
+                "At most four booking watches may run at once on this server."
+            )
         started = self.start(
             "booking_watch",
             {
@@ -565,7 +836,9 @@ class AgentService:
                     "Action history is unavailable in diagnostic mode. Preserve existing data; read configuration_status and reconnect after correcting setup."
                 )
             raise AgentError("Durable action history is not configured.")
-        return self.journal.history(offset, limit)
+        return self.journal.history(
+            offset, limit, origin="remote" if is_remote() else None
+        )
 
     def reconcile_operation(self, operation_id):
         original = self.get(operation_id)
@@ -577,6 +850,12 @@ class AgentService:
             raise AgentError(
                 "This action has no verifiable history metadata; inspect FBS manually."
             )
+        if is_remote() and (original.reconciliation or {}).get(
+            "action_outcome_verified"
+        ):
+            raise AgentError(
+                "This action's outcome is already verified. A remote connection cannot replace verified evidence."
+            )
         reference = (original.result or {}).get(
             "reference_number"
         ) or original.summary.get("reference_number")
@@ -585,6 +864,12 @@ class AgentService:
             if original.kind == "amend"
             else {}
         )
+        if original.kind == "cancel":
+            from .reconciliation import CANCEL_SETTLE_SECONDS
+
+            extra["settled"] = (
+                self.clock() - original.updated_at >= CANCEL_SETTLE_SECONDS
+            )
         return self.start(
             "reconcile",
             {
@@ -635,21 +920,36 @@ class AgentService:
 
         async def progress(stage):
             # Never put an MFA challenge, account identity, or credential into status.
+            was_waiting = job.status == "awaiting_mfa"
             job.status, job.stage = "running", stage
-            job.auth_prompt = None
+            job.auth_prompt = job.auth_number = job.awaiting_since = None
             job.auth_event.clear()
             job.updated_at = self.clock()
+            if was_waiting:
+                self._pulse()
 
         async def notify(message):
             job.status, job.stage = (
                 "awaiting_mfa",
-                "Read authentication_status and approve Microsoft sign-in in Authenticator",
+                (
+                    "Waiting for the user to approve the SMU sign-in in Microsoft Authenticator"
+                    if remote
+                    else "Read authentication_status and approve Microsoft sign-in in Authenticator"
+                ),
             )
             job.updated_at = self.clock()
+            if job.awaiting_since is None:
+                job.awaiting_since = self.clock()
             job.auth_prompt = message
+            found = NUMBER.search(message or "")
+            job.auth_number = found.group(1) if found else None
             job.auth_event.set()
+            self._pulse()
 
         backend_started = False
+        remote = is_remote()
+        permit = refusal = None
+        permit_token = None
         from .operation_diagnostics import diagnostic_scope
 
         scope = diagnostic_scope()
@@ -665,8 +965,29 @@ class AgentService:
                 job.updated_at = self.clock()
                 if self.journal and job.kind in WRITE_KINDS:
                     self.journal.update(job)
+                if remote and job.kind == "login" and self.saved_sign_in is not None:
+                    # The person asked to sign in: the plain pause is lifted.
+                    self.sign_in_retry_at = 0.0
+                if remote and self.host_sign_in_required:
+                    raise AuthenticationRequired(
+                        "SMU sign-in is needed.", reason=self.sign_in_pause_reason
+                    )
+                if remote:
+                    # Sign in with the person's saved email and password only
+                    # in this job, and only once (see Permit). Decided here,
+                    # holding the queue, so jobs queued together cannot each
+                    # send a request to the phone.
+                    permit, refusal = self._remote_permit(job)
+                    if refusal is not None and refusal[0] in HOLDS:
+                        # A sign-in already failed; the session is known to
+                        # have ended. Say so without opening the browser.
+                        raise AuthenticationRequired(
+                            "SMU sign-in is needed.", reason=refusal[0]
+                        )
+                    permit_token = SAVED_CREDENTIALS.set(permit)
                 backend_started = True
                 result = await self.backend.run(job.kind, payload, progress, notify)
+                self.signed_in()
                 result = copy.deepcopy(result)
                 if job.kind == "reconcile":
                     observed = (
@@ -690,9 +1011,12 @@ class AgentService:
                         )
                 job.result, job.status, job.stage = result, "succeeded", "Complete"
         except asyncio.CancelledError:
+            # Stopped while still signing in: no FBS form was reached, so a
+            # write is known not to have been submitted.
+            signing_in = permit is not None and permit.used and not permit.signed_in
             job.status = (
                 "outcome_unknown"
-                if job.kind in WRITE_KINDS and job.status != "queued"
+                if job.kind in WRITE_KINDS and job.status != "queued" and not signing_in
                 else "cancelled"
             )
             job.stage = (
@@ -701,6 +1025,61 @@ class AgentService:
                 else "Stopped"
             )
         except Exception as error:
+            if remote and isinstance(error, AuthenticationRequired):
+                # Say who must act, and stop further remote requests from
+                # reloading the sign-in page or sending more phone requests.
+                if not backend_started:
+                    # Refused by a pause or hold itself: report it, never extend it.
+                    pass
+                elif permit is not None and permit.used and not permit.signed_in:
+                    # This job signed in with the saved password, and it ended
+                    # short of FBS (recorded and held by the permit). Never
+                    # "retry once": that would type the password again.
+                    error = AuthenticationRequired(
+                        "SMU sign-in did not finish.",
+                        reason=(
+                            permit.outcome
+                            if permit.outcome in SAVED_SIGN_IN_REASONS
+                            else "sign_in_unfinished"
+                        ),
+                    )
+                elif error.reason == "sign_in_needed":
+                    # A check that must not sign in found the session ended.
+                    pass
+                elif error.reason == "sign_in_required_on_host":
+                    # A person is needed and this job could not sign in:
+                    # nothing saved, or the limits stopped it.
+                    if refusal is not None:
+                        error = AuthenticationRequired(
+                            "SMU sign-in is needed.",
+                            reason=refusal[0],
+                            details=(
+                                {"retry_after_minutes": refusal[1]}
+                                if refusal[1]
+                                else None
+                            ),
+                        )
+                    if error.reason in {
+                        "sign_in_required_on_host",
+                        "sign_in_setup_needed",
+                    }:
+                        self._pause_remote_sign_in(error.reason)
+                elif refusal is not None:
+                    # Sign-in is on for this copy but this job could not use
+                    # it (nothing saved, or the limits), and the session did
+                    # not renew: say what the person can do, not "retry".
+                    error = AuthenticationRequired(
+                        "SMU sign-in is needed.",
+                        reason=refusal[0],
+                        details=(
+                            {"retry_after_minutes": refusal[1]} if refusal[1] else None
+                        ),
+                    )
+                else:
+                    error = AuthenticationRequired(
+                        "The saved FBS session did not renew itself.",
+                        reason="session_renewal_pending",
+                    )
             unknown = isinstance(
                 error,
                 (
@@ -733,7 +1112,11 @@ class AgentService:
                     reconcile + "; do not repeat the action automatically."
                     if unknown
                     else (
-                        "Run login, complete SMU sign-in/MFA, then retry the read."
+                        (
+                            "SMU sign-in may be needed; " + sign_in_instruction() + "."
+                            if remote
+                            else "Run login, complete SMU sign-in/MFA, then retry the read."
+                        )
                         if isinstance(error, AuthenticationRequired)
                         else "Read support_bundle for this operation and inspect an available automatic failure image. Check configuration_status if setup is unclear; an unreadable search is not empty availability."
                     )
@@ -741,6 +1124,9 @@ class AgentService:
             }
             if not unknown:
                 job.error.update(public_failure(error))
+                if job.error.get("reason") in PERSON_NEEDED:
+                    # Only the person can change this outcome.
+                    job.error["retry_safe"] = False
             event(
                 "agent.operation_failed",
                 level=40,
@@ -749,6 +1135,8 @@ class AgentService:
                 outcome=job.status,
             )
         finally:
+            if permit_token is not None:
+                SAVED_CREDENTIALS.reset(permit_token)
             job.diagnostic_events = diagnostic.events
             job.diagnostic_dropped = diagnostic.dropped
             job.diagnostic_capture_status = diagnostic.screenshot_status
@@ -776,11 +1164,30 @@ class AgentService:
                 outcome=job.status,
             )
 
-    def result(self, operation_id, offset=0, limit=20):
+    def status_view(self, job, *, peek=False):
+        """job.public(), plus for a remote caller the sign-in to approve."""
+        output = job.public()
+        if not is_remote() or peek:
+            return output
+        sign_in = self.sign_in_view(job)
+        if sign_in is not None:
+            output["sign_in"] = sign_in
+            output["poll_after_ms"] = None
+            output["next_tool"] = "wait_operation"
+            output["stage"] = (
+                "Waiting for the user to approve the SMU sign-in in Microsoft "
+                "Authenticator"
+            )
+        elif job.status == "awaiting_mfa":
+            # The number is on its way: wait for it, rather than poll.
+            output["next_tool"] = "wait_operation"
+        return output
+
+    def result(self, operation_id, offset=0, limit=20, *, peek=False):
         if offset < 0 or not 1 <= limit <= 50:
             raise AgentError("Use offset >= 0 and limit between 1 and 50.")
         job = self.get(operation_id)
-        output = job.public()
+        output = self.status_view(job, peek=peek)
         if job.batch_members:
             from .batches import batch_result
 
@@ -830,9 +1237,11 @@ class AgentService:
         ):
             raise AgentError("Wait timeout must be between 0 and 30 seconds.")
         # Validate pagination before waiting, and keep the job reference if pruned later.
-        self.result(operation_id, offset, limit)
+        self.result(operation_id, offset, limit, peek=True)
         job = self.get(operation_id)
-        if not job.terminal and job.status != "awaiting_mfa":
+        if is_remote():
+            await self._wait_remote(job, timeout)
+        elif not job.terminal and job.status != "awaiting_mfa":
             prompt_ready = asyncio.create_task(job.auth_event.wait())
             try:
                 await asyncio.wait(
@@ -844,6 +1253,41 @@ class AgentService:
                 prompt_ready.cancel()
                 await asyncio.gather(prompt_ready, return_exceptions=True)
         return self.result(operation_id, offset, limit)
+
+    async def _wait_remote(self, job, timeout):
+        """Wait for the result, or for a sign-in number the person has not seen.
+
+        A remote agent shows the person the number and ends its turn; when
+        they reply "done", the next wait blocks through the approval and the
+        rest of the job, returning early only for a new number.
+        """
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while not job.terminal and not (job.task is not None and job.task.done()):
+            pending = self.pending_sign_in()
+            if pending is not None:
+                shown = pending.auth_number
+                if shown is None and pending.awaiting_since is not None:
+                    waited = self.clock() - pending.awaiting_since
+                    shown = "approve" if waited >= NUMBER_GRACE_SECONDS else None
+                if shown is not None and shown != self.shown_numbers.get(pending.id):
+                    # A number (or an approval) not yet shown through any
+                    # request: the person must see it.
+                    return
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return
+            changed = asyncio.ensure_future(self.sign_in_changed.wait())
+            waits = [changed] + ([job.task] if job.task is not None else [])
+            try:
+                await asyncio.wait(
+                    waits,
+                    timeout=min(remaining, NUMBER_GRACE_SECONDS),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                changed.cancel()
+                await asyncio.gather(changed, return_exceptions=True)
 
     def authentication_status(self, operation_id):
         """Expose the current MFA prompt only on an explicit private agent call."""
@@ -1660,13 +2104,18 @@ class AgentService:
             "summary": summary,
             "expires_at": self.clock() + 600,
             "payload": payload,
+            "remote": is_remote(),
         }
         self.reviews[review["review_id"]] = review
         return self.review(review["review_id"])
 
     def review(self, review_id):
         self.prune()
-        if review_id not in self.reviews:
+        if review_id not in self.reviews or (
+            # A remote caller acts only on reviews a remote call prepared.
+            is_remote()
+            and not self.reviews[review_id]["remote"]
+        ):
             raise AgentError(
                 "Review expired, consumed, or unknown. Prepare a new review."
             )
@@ -1674,7 +2123,7 @@ class AgentService:
             {
                 key: value
                 for key, value in self.reviews[review_id].items()
-                if key != "payload"
+                if key not in {"payload", "remote"}
             }
         )
 
@@ -1788,6 +2237,9 @@ class AgentService:
     def confirm(self, review_id):
         self.review(review_id)
         review = self.reviews[review_id]
+        if is_remote() and review["kind"] == "batch":
+            # Single task approvals are allowed remotely; batches are not.
+            raise AgentError("Batches cannot be submitted over a remote connection.")
         if review["kind"] == "amend":
             from .amendments import require_target
 

@@ -1,6 +1,8 @@
 """Private host configuration for Sagasu's agent runtime and browser."""
 
+import ipaddress
 import os
+import re
 import stat
 import sys
 from dataclasses import dataclass, field
@@ -47,6 +49,15 @@ SAGASU_READ_BACKEND=auto
 # MFA approval remains yours; agents read the prompt with authentication_status.
 """
 
+# Apps whose OAuth redirect may receive a sign-in code. Loopback serves desktop
+# and command-line clients on the same computer as the person signing in.
+DEFAULT_OAUTH_REDIRECT_HOSTS = "chatgpt.com,claude.ai,claude.com,localhost,127.0.0.1"
+KEY_LABEL = re.compile(r"[a-z0-9][a-z0-9_-]{0,31}")
+KEY_DIGEST = re.compile(r"[0-9a-f]{64}")
+HOST_NAME = re.compile(
+    r"(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*"
+)
+
 
 class ConfigError(ValueError):
     pass
@@ -67,6 +78,163 @@ class ConfigurationIssue:
 
 
 @dataclass(frozen=True)
+class RemoteListener:
+    """A loopback HTTP listener published by a TLS reverse proxy on the same host."""
+
+    bind: str
+    port: int
+    allowed_hosts: tuple[str, ...]
+    keys: dict = field(repr=False)  # SHA-256 hex digest -> label; never the key
+    writes: bool = False
+    # OAuth sign-in for apps that cannot send a key header: the person enters
+    # an API key once on this server's page. Redirects go only to these hosts.
+    oauth: bool = False
+    oauth_redirect_hosts: tuple[str, ...] = ()
+    # Listen on this socket file instead of the loopback port.
+    socket: str | None = None
+    # The key that encrypts the person's saved SMU sign-in (saved_sign_in.py).
+    # Without it, nothing can be saved and the person signs in on the page.
+    sign_in_key_file: str | None = None
+    # The one SMU account this copy belongs to, when the administrator set it.
+    smu_account: str | None = None
+
+
+def parse_remote_listener(values):
+    """Return (listener or None, problems). Nothing is returned for a partial setup."""
+    port_text = (values.get("SAGASU_HTTP_PORT") or "").strip()
+    socket_text = (values.get("SAGASU_HTTP_SOCKET") or "").strip()
+    if not port_text and not socket_text:
+        return None, []
+    problems = []
+    port = socket_path = None
+    if port_text and socket_text:
+        problems.append("Set SAGASU_HTTP_PORT or SAGASU_HTTP_SOCKET, not both.")
+    elif socket_text:
+        # A private socket file: on a machine with several users, a loopback
+        # port could be taken by another user while this host is stopped.
+        if (
+            not socket_text.startswith("/")
+            or "\0" in socket_text
+            or len(socket_text) > 100
+        ):
+            problems.append(
+                "SAGASU_HTTP_SOCKET must be an absolute path of at most 100 characters."
+            )
+        else:
+            socket_path = socket_text
+    else:
+        try:
+            port = int(port_text)
+            if not 1024 <= port <= 65535:
+                raise ValueError()
+        except ValueError:
+            problems.append("SAGASU_HTTP_PORT must be an integer from 1024 to 65535.")
+    bind = (values.get("SAGASU_HTTP_BIND") or "127.0.0.1").strip()
+    try:
+        if not ipaddress.ip_address(bind).is_loopback:
+            raise ValueError()
+    except ValueError:
+        problems.append(
+            "SAGASU_HTTP_BIND must be a loopback address (127.0.0.1 or ::1); publish it through a TLS reverse proxy on the same host."
+        )
+    hosts = tuple(
+        dict.fromkeys(
+            item.strip().lower()
+            for item in (values.get("SAGASU_HTTP_ALLOWED_HOSTS") or "").split(",")
+            if item.strip()
+        )
+    )
+    if not hosts or not all(HOST_NAME.fullmatch(host) for host in hosts):
+        problems.append(
+            "SAGASU_HTTP_ALLOWED_HOSTS must list the public host name(s) clients use, without scheme, port or path."
+        )
+    keys, labels = {}, set()
+    entries = [
+        item.strip()
+        for item in (values.get("SAGASU_HTTP_KEYS") or "").split(",")
+        if item.strip()
+    ]
+    valid_keys = bool(entries) and len(entries) <= 16
+    for entry in entries:
+        label, _, digest = entry.partition(":")
+        digest = digest.strip().lower()
+        if (
+            not KEY_LABEL.fullmatch(label)
+            or not KEY_DIGEST.fullmatch(digest)
+            or label in labels
+            or digest in keys
+        ):
+            valid_keys = False
+            break
+        labels.add(label)
+        keys[digest] = label
+    if not valid_keys:
+        problems.append(
+            "SAGASU_HTTP_KEYS must hold 1 to 16 unique label:sha256-hex entries. Store only the SHA-256 digest of each API key, never the key."
+        )
+    writes = (values.get("SAGASU_HTTP_WRITES") or "off").strip().lower()
+    if writes not in {"on", "off"}:
+        problems.append("SAGASU_HTTP_WRITES must be on or off.")
+    elif writes == "on" and values.get("SAGASU_MCP_CONFIRMATION", "agent") != "agent":
+        problems.append(
+            "SAGASU_HTTP_WRITES=on needs SAGASU_MCP_CONFIRMATION=agent; a remote API key cannot show a human confirmation form."
+        )
+    if values.get("SMU_LOGIN_PASSWORD"):
+        problems.append(
+            "SMU_LOGIN_PASSWORD must not be configured together with the remote listener; sign in on the host instead."
+        )
+    oauth = (values.get("SAGASU_HTTP_OAUTH") or "off").strip().lower()
+    if oauth not in {"on", "off"}:
+        problems.append("SAGASU_HTTP_OAUTH must be on or off.")
+    redirect_hosts = tuple(
+        dict.fromkeys(
+            item.strip().lower()
+            for item in (
+                values.get("SAGASU_OAUTH_REDIRECT_HOSTS")
+                or DEFAULT_OAUTH_REDIRECT_HOSTS
+            ).split(",")
+            if item.strip()
+        )
+    )
+    if not redirect_hosts or not all(
+        HOST_NAME.fullmatch(host) for host in redirect_hosts
+    ):
+        problems.append(
+            "SAGASU_OAUTH_REDIRECT_HOSTS must list host names, without scheme, port or path."
+        )
+    key_file = (values.get("SAGASU_HTTP_SIGN_IN_KEY_FILE") or "").strip() or None
+    if key_file is not None and (
+        not key_file.startswith("/") or "\0" in key_file or len(key_file) > 200
+    ):
+        problems.append(
+            "SAGASU_HTTP_SIGN_IN_KEY_FILE must be an absolute path of at most 200 characters."
+        )
+    account = (values.get("SAGASU_SMU_ACCOUNT") or "").strip() or None
+    if account is not None:
+        from .personal import SMU_EMAIL_RE
+
+        if not SMU_EMAIL_RE.fullmatch(account):
+            problems.append("SAGASU_SMU_ACCOUNT must be an SMU email address.")
+    if problems:
+        return None, problems
+    return (
+        RemoteListener(
+            bind,
+            port,
+            hosts,
+            keys,
+            writes == "on",
+            oauth == "on",
+            redirect_hosts,
+            socket_path,
+            key_file,
+            account,
+        ),
+        [],
+    )
+
+
+@dataclass(frozen=True)
 class Settings:
     env_file: Path
     browser: str
@@ -83,6 +251,19 @@ class Settings:
             return stat.S_ISREG(self.env_file.stat().st_mode)
         except OSError:
             return False
+
+    @property
+    def remote_listener_requested(self):
+        """True when this host is meant to run as a long-lived remote service."""
+        return bool(
+            (self.values.get("SAGASU_HTTP_PORT") or "").strip()
+            or (self.values.get("SAGASU_HTTP_SOCKET") or "").strip()
+        )
+
+    @property
+    def http(self):
+        """The validated remote listener, or None when it is off or misconfigured."""
+        return parse_remote_listener(self.values)[0]
 
     @property
     def journal(self):
@@ -256,6 +437,25 @@ class Settings:
                     "Set SAGASU_MCP_CONFIRMATION=human or agent, then reconnect Sagasu.",
                 )
             )
+        if self.values.get("SAGASU_SESSION_COOKIES", "all").lower() not in {
+            "all",
+            "fbs",
+        }:
+            issues.append(
+                ConfigurationIssue(
+                    "config.session_cookies",
+                    "SAGASU_SESSION_COOKIES must be all or fbs.",
+                    "Set SAGASU_SESSION_COOKIES=all, or fbs to keep only FBS cookies in the saved session file, then reconnect Sagasu.",
+                )
+            )
+        issues.extend(
+            ConfigurationIssue(
+                "config.remote_listener",
+                problem,
+                "Correct the SAGASU_HTTP_* settings privately on the host, then restart the Sagasu service. The remote listener stays off until they are valid.",
+            )
+            for problem in parse_remote_listener(self.values)[1]
+        )
         if (
             self.values.get("SMU_LOGIN_PASSWORD")
             and not self.values.get("SMU_LOGIN_EMAIL", "").strip()
@@ -309,4 +509,29 @@ class Settings:
             "personal_preferences": str(self.preferences),
             "action_history": str(self.journal),
             "auth_timeout_seconds": self.auth_timeout_ms // 1000,
+            "session_cookies": (
+                value
+                if (value := self.values.get("SAGASU_SESSION_COOKIES", "all").lower())
+                in {"all", "fbs"}
+                else "invalid"
+            ),
+            "remote_listener": (
+                {
+                    "enabled": True,
+                    "bind": http.bind,
+                    "port": http.port,
+                    "socket": http.socket,
+                    "allowed_hosts": list(http.allowed_hosts),
+                    "key_labels": sorted(http.keys.values()),
+                    "writes": http.writes,
+                    "oauth": http.oauth,
+                    "oauth_redirect_hosts": list(http.oauth_redirect_hosts),
+                    "saved_sign_in": http.sign_in_key_file is not None,
+                }
+                if (http := self.http) is not None
+                else {
+                    "enabled": False,
+                    "requested": self.remote_listener_requested,
+                }
+            ),
         }

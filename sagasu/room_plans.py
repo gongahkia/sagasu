@@ -16,6 +16,7 @@ from .fbs_client import (
     minutes_to_time,
     time_to_minutes,
     require_future_booking,
+    stops_remote_job,
     _noop_progress,
 )
 from .repeat import normalize_date
@@ -397,6 +398,8 @@ async def find_room_plans(payload, search, progress=_noop_progress):
             KeyError,
             TypeError,
         ) as error:
+            if stops_remote_job(error):
+                raise
             probes.append(
                 {
                     "date": date,

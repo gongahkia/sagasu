@@ -14,6 +14,7 @@ from .fbs_client import (
     minutes_to_time,
     FBSError,
     BookingUnavailable,
+    stops_remote_job,
 )
 
 
@@ -120,6 +121,8 @@ async def find_alternatives(client, payload, *, search=None):
                 }
             )
         except (FBSError, PlaywrightError, TimeoutError) as error:
+            if stops_remote_job(error):
+                raise
             probes.append(
                 {
                     "config": asdict(config),

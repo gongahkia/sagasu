@@ -145,6 +145,13 @@ class ActionJournal:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS reconciliations (operation_id TEXT PRIMARY KEY, observed_at REAL NOT NULL, evidence TEXT NOT NULL)"
             )
+            # Who started each action: the person at the host ("local") or a
+            # remote caller ("remote"). A separate table, so older code that
+            # inserts into actions without naming columns keeps working.
+            # Actions recorded before it have no row and count as local.
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS action_origins (operation_id TEXT PRIMARY KEY, origin TEXT NOT NULL CHECK (origin IN ('local','remote')))"
+            )
             with connection:
                 yield connection
         except JournalError:
@@ -158,6 +165,7 @@ class ActionJournal:
                 connection.close()
 
     def reserve(self, job, review_id, summary):
+        origin = "remote" if getattr(job, "remote", False) is True else "local"
         with self._db() as db:
             db.execute("BEGIN IMMEDIATE")
             from .reconciliation import identity
@@ -176,6 +184,10 @@ class ActionJournal:
                     if previous["status"] != "outcome_unknown" or not (
                         previous.get("reconciliation") or {}
                     ).get("action_outcome_verified"):
+                        if origin == "remote" and previous["origin"] != "remote":
+                            raise JournalError(
+                                "A matching action started at the host is active or unresolved. The person at the host must reconcile it before another can be submitted."
+                            )
                         raise JournalError(
                             "A matching action is active or unresolved. Reconcile operation "
                             + previous["operation_id"]
@@ -195,6 +207,7 @@ class ActionJournal:
                     None,
                 ),
             )
+            db.execute("INSERT INTO action_origins VALUES(?,?)", (job.id, origin))
 
     def update(self, job, *, status=None, result=None):
         with self._db() as db:
@@ -249,6 +262,11 @@ class ActionJournal:
     def _with_reconciliation(db, record):
         if record is None:
             return None
+        origin = db.execute(
+            "SELECT origin FROM action_origins WHERE operation_id=?",
+            (record["operation_id"],),
+        ).fetchone()
+        record["origin"] = origin[0] if origin else None
         row = db.execute(
             "SELECT observed_at,evidence FROM reconciliations WHERE operation_id=?",
             (record["operation_id"],),
@@ -268,6 +286,7 @@ class ActionJournal:
             "confirmed",
             "pending_confirmation",
             "cancelled",
+            "not_cancelled",
             "approved",
             "amended",
             "matching_booking_found",
@@ -294,15 +313,31 @@ class ActionJournal:
         # A caller cannot assert verification for an absence or ambiguous match.
         data["action_outcome_verified"] = (
             state
-            in {"confirmed", "pending_confirmation", "cancelled", "approved", "amended"}
+            in {
+                "confirmed",
+                "pending_confirmation",
+                "cancelled",
+                "not_cancelled",
+                "approved",
+                "amended",
+            }
             and result.get("action_outcome_verified") is True
         )
-        data["safe_to_retry"] = False
+        # Only a verified "did not take effect" makes a retry safe.
+        data["safe_to_retry"] = (
+            state == "not_cancelled"
+            and data["action_outcome_verified"]
+            and result.get("safe_to_retry") is True
+        )
         with self._db() as db:
-            if not db.execute(
-                "SELECT 1 FROM actions WHERE operation_id=?", (operation_id,)
-            ).fetchone():
+            original = db.execute(
+                "SELECT kind FROM actions WHERE operation_id=?", (operation_id,)
+            ).fetchone()
+            if not original:
                 raise JournalError("The original action history entry is unavailable.")
+            if state == "not_cancelled" and original[0] != "cancel":
+                # Only a cancel can be shown not to have taken effect.
+                data["action_outcome_verified"] = data["safe_to_retry"] = False
             db.execute(
                 "INSERT INTO reconciliations VALUES(?,?,?) ON CONFLICT(operation_id) DO UPDATE SET observed_at=excluded.observed_at,evidence=excluded.evidence",
                 (operation_id, now, json.dumps(data)),
@@ -328,7 +363,24 @@ class ActionJournal:
                     "Action-history evidence could not be read safely."
                 ) from None
 
-    def history(self, offset=0, limit=20):
+    def mark_unrecorded(self, origin):
+        """Give every action recorded without an origin this one; returns how many.
+
+        Missing origins count as local. The hosted installer records that
+        conservative classification; remote classification requires independent
+        evidence of the earlier writes' origin.
+        """
+        if origin not in {"local", "remote"}:
+            raise JournalError("Unknown action origin.")
+        with self._db() as db:
+            cursor = db.execute(
+                "INSERT OR IGNORE INTO action_origins SELECT operation_id, ? FROM actions "
+                "WHERE operation_id NOT IN (SELECT operation_id FROM action_origins)",
+                (origin,),
+            )
+            return cursor.rowcount
+
+    def history(self, offset=0, limit=20, *, origin=None):
         if (
             isinstance(offset, bool)
             or isinstance(limit, bool)
@@ -338,11 +390,29 @@ class ActionJournal:
             or not 1 <= limit <= 50
         ):
             raise JournalError("Use offset >= 0 and limit between 1 and 50.")
+        if origin not in {None, "local", "remote"}:
+            raise JournalError("Unknown action origin.")
+        # Rows without an origin (recorded by older versions) count as local.
+        where, params = {
+            None: ("", ()),
+            "remote": (
+                " WHERE operation_id IN (SELECT operation_id FROM action_origins WHERE origin='remote')",
+                (),
+            ),
+            "local": (
+                " WHERE operation_id NOT IN (SELECT operation_id FROM action_origins WHERE origin='remote')",
+                (),
+            ),
+        }[origin]
         with self._db() as db:
-            total = db.execute("SELECT COUNT(*) FROM actions").fetchone()[0]
+            total = db.execute(
+                "SELECT COUNT(*) FROM actions" + where, params
+            ).fetchone()[0]
             rows = db.execute(
-                "SELECT * FROM actions ORDER BY created_at DESC, operation_id DESC LIMIT ? OFFSET ?",
-                (limit, offset),
+                "SELECT * FROM actions"
+                + where
+                + " ORDER BY created_at DESC, operation_id DESC LIMIT ? OFFSET ?",
+                (*params, limit, offset),
             ).fetchall()
             return {
                 "actions": [

@@ -1,4 +1,9 @@
-"""Native-shaped EDIT fixture: references exist only in the source booking grid."""
+"""Native-shaped EDIT fixture: references exist only in the source booking grid.
+
+Like FBS (20 Nov 2026), the amend form's CONFIRM button (a#panel_UIButton2)
+asks a browser confirm() about the cancellation penalty before posting, and a
+dismissed prompt posts nothing. Only the stand-in's routes are reached.
+"""
 
 import copy
 import html
@@ -12,6 +17,11 @@ from sagasu.fbs_client import FBSClient, FBS_URL
 EDIT_URL = (
     "https://fbs.intranet.smu.edu.sg/modules/BigSpace/BookingManagement/edit.aspx"
 )
+PROMPT = (
+    "A Cancellation Penalty of [{penalty}] will be imposed. "
+    "Please click Ok if you wish to proceed"
+)
+ZERO_PENALTY_PROMPT = PROMPT.format(penalty="0.00")
 
 SOURCE = {
     "reference_number": "BK-TEST",
@@ -30,6 +40,22 @@ SOURCE = {
 
 
 class AmendmentFixture:
+    """CONFIRM knobs:
+
+    prompt: the confirm() text guarding CONFIRM, as FBS writes it
+        (``if(!confirm('<prompt>'))return false;...``); None for a button with
+        no prompt. Defaults to FBS's zero-penalty prompt.
+    onclick: the CONFIRM onclick verbatim, overriding prompt.
+    shown_prompt: what confirm() actually displays, when it differs from the
+        text in the onclick.
+    alert_first: an alert() FBS shows just before its confirm().
+    silent_confirm: confirm() returns true without any dialog, as a page that
+        replaced window.confirm would.
+
+    actions records "CONFIRM_CLICK" when CONFIRM is clicked and "CONFIRM" when
+    the form posts.
+    """
+
     async def setup(self, case):
         self.saved = copy.deepcopy(SOURCE)
         self.complete, self.offered, self.drop_response, self.lose_participant = (
@@ -38,10 +64,19 @@ class AmendmentFixture:
             False,
             False,
         )
+        self.prompt = ZERO_PENALTY_PROMPT
+        self.onclick = None
+        self.shown_prompt = None
+        self.alert_first = None
+        self.silent_confirm = False
         self.extra, self.form_overrides, self.actions, self.posts = [], {}, [], 0
         driver = await async_playwright().start()
         case.addAsyncCleanup(driver.stop)
-        self.browser = await driver.chromium.launch(headless=True)
+        # A dead proxy: a request the routes below do not answer fails here
+        # instead of reaching FBS or Microsoft.
+        self.browser = await driver.chromium.launch(
+            headless=True, proxy={"server": "http://127.0.0.1:9"}
+        )
         case.addAsyncCleanup(self.browser.close)
         self.page = await self.browser.new_page()
         await self.page.expose_function(
@@ -164,8 +199,10 @@ class AmendmentFixture:
         <div id="bookingFormControl1_GridCoBookers"></div>
         <input id="bookingFormControl1_TermsAndConditionsCheckbox_c1" type="checkbox" disabled checked>
         <div id="__panelCalendar__" hidden><div id="__calendar_title"></div><div id="__calendar_prevArrow" onclick="moveMonth(-1)">Previous</div><div id="__calendar_nextArrow" onclick="moveMonth(1)">Next</div><table id="__calendar_daysTable"></table></div>
-        <a id="panel_UIButton2" href="#" onclick="submitEdit();return false">CONFIRM</a>
+        <a id="panel_UIButton2" href="#" onclick="__ONCLICK__">CONFIRM</a>
         <script>
+        document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('#panel_UIButton2'))record('CONFIRM_CLICK');},true);
+        __CONFIRM_WRAPPER__
         const original=__SOURCE__;
         const short=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const full=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -196,7 +233,40 @@ class AmendmentFixture:
         renderTimes();participants(original.participants);
         </script>""".replace(
                 "__SOURCE__", serialized
-            ).replace(
-                "__LOSE__", str(self.lose_participant).lower()
             )
+            .replace("__LOSE__", str(self.lose_participant).lower())
+            .replace("__ONCLICK__", html.escape(self.confirm_onclick()))
+            .replace("__CONFIRM_WRAPPER__", self.confirm_wrapper())
+        )
+
+    def confirm_onclick(self):
+        """CONFIRM's onclick, guarded like FBS's own button."""
+        if self.onclick is not None:
+            return self.onclick
+        if self.prompt is None:
+            return "submitEdit();return false"
+        return f"if(!confirm('{self.prompt}'))return false;submitEdit();return false"
+
+    def confirm_wrapper(self):
+        """Replace window.confirm only when a test asks for a different dialog."""
+        if (
+            self.shown_prompt is None
+            and self.alert_first is None
+            and not self.silent_confirm
+        ):
+            return ""
+        script = (
+            "const nativeConfirm=window.confirm.bind(window),nativeAlert=window.alert.bind(window);"
+            "window.confirm=function(message){"
+            "const first=__FIRST__,shown=__SHOWN__;"
+            "if(first!==null)nativeAlert(first);"
+            "if(__SILENT__)return true;"
+            "return nativeConfirm(shown!==null?shown:message);};"
+        )
+        return (
+            script.replace(
+                "__FIRST__", json.dumps(self.alert_first).replace("</", "<\\/")
+            )
+            .replace("__SHOWN__", json.dumps(self.shown_prompt).replace("</", "<\\/"))
+            .replace("__SILENT__", str(bool(self.silent_confirm)).lower())
         )

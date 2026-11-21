@@ -121,6 +121,19 @@ class AuthBrowserFormTest(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIsNone(await self.client._passkey_resume_url())
 
+    async def test_unanswered_request_page_is_final_only_for_unattended_sign_in(
+        self,
+    ):
+        # Microsoft writes "didn’t" with a curly apostrophe. At a visible local
+        # browser the person can press "Send another request", so it must not
+        # end the login; an unattended (saved) sign-in has nobody to press it.
+        await self.client.page.set_content(
+            "<h1>We didn’t hear from you</h1><a>Send another request</a>"
+        )
+        self.assertNotEqual((await self.client._classify_auth_state())[0], "failed")
+        self.client._unattended = True
+        self.assertEqual((await self.client._classify_auth_state())[0], "failed")
+
     async def test_invalid_context_page_is_not_classified_as_pending_sign_in(self):
         await self.client.page.set_content(
             "<h1>Sign in</h1><p>Sorry, but we’re having trouble signing you in.</p><div>AADSTS90100: ctx parameter is empty or not valid.</div>"
@@ -339,6 +352,37 @@ class AuthTest(unittest.IsolatedAsyncioTestCase):
             await client._complete_interactive_authentication()
         client.fields[LOGIN_PASSWORD_SELECTOR].fill.assert_awaited_once()
         client.auth_notify.assert_awaited_once_with("Microsoft rejected sign-in")
+
+    async def watched(self, client, body):
+        """Run the loop as the web sign-in page does, with a person watching."""
+        from sagasu.live_view import LIVE_VIEW, LiveView
+
+        client.page.locator("body").inner_text = AsyncMock(return_value=body)
+        token = LIVE_VIEW.set(LiveView())
+        try:
+            await client._complete_interactive_authentication()
+        finally:
+            LIVE_VIEW.reset(token)
+
+    async def test_a_watched_sign_in_lets_the_person_retype_a_wrong_password(self):
+        os.environ.pop("SMU_LOGIN_PASSWORD")
+        client = self.flow(
+            [
+                ("failed", "Microsoft rejected sign-in"),
+                ("failed", "Microsoft rejected sign-in"),
+                ("authenticator", "Enter number 42."),
+            ],
+            headless=False,
+        )
+        await self.watched(client, "your account or password is incorrect.")
+        client.auth_notify.assert_awaited_once_with("Enter number 42.")
+
+    async def test_a_watched_sign_in_still_stops_on_a_lockout(self):
+        client = self.flow([("failed", "Microsoft rejected sign-in")], headless=False)
+        with self.assertRaisesRegex(AuthenticationRequired, "rejected"):
+            await self.watched(
+                client, "you've tried to sign in too many times with an incorrect"
+            )
 
     async def test_credentials_never_submitted_to_untrusted_origin(self):
         client = self.flow(
