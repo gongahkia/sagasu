@@ -17,7 +17,9 @@ from sagasu.fbs_client import FBSClient, FBS_URL
 
 BASE = "https://fbs.intranet.smu.edu.sg"
 LIST_URL = BASE + "/modules/homenavigation/mybookingstab.aspx"
-EDIT_URL = BASE + "/modules/BigSpace/BookingManagement/edit.aspx?ID=%23test&TYPE=%23test"
+EDIT_URL = (
+    BASE + "/modules/BigSpace/BookingManagement/edit.aspx?ID=%23test&TYPE=%23test"
+)
 PROMPT = (
     "A Cancellation Penalty of [{penalty}] will be imposed. "
     "Please click Ok if you wish to proceed"
@@ -173,9 +175,14 @@ class CancellationFixture:
                 if not self.open_form:
                     await route.fulfill(body=self.listing(), content_type="text/html")
                     return
-                await route.fulfill(body=self.redirect(EDIT_URL), content_type="text/html")
+                await route.fulfill(
+                    body=self.redirect(EDIT_URL), content_type="text/html"
+                )
                 return
-            if url.startswith(EDIT_URL.split("?")[0]) and target == "panel$UIButton2$UIButton2_bt":
+            if (
+                url.startswith(EDIT_URL.split("?")[0])
+                and target == "panel$UIButton2$UIButton2_bt"
+            ):
                 reason = (fields.get("bookingFormControl1$Remarks_c1") or [""])[0]
                 self.posts.append(target)
                 self.reasons.append(reason)
@@ -184,7 +191,9 @@ class CancellationFixture:
                     return
                 if reason.strip():
                     self.status = self.status_after
-                await route.fulfill(body=self.redirect(LIST_URL), content_type="text/html")
+                await route.fulfill(
+                    body=self.redirect(LIST_URL), content_type="text/html"
+                )
                 return
             await route.fulfill(status=400, body="unexpected post")
             return

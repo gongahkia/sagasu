@@ -1,5 +1,8 @@
 """A person signing in to SMU from the server's own web sign-in page.
 
+Hosted path only (see SETUP.md, "Hosting for a group"): used by the web
+sign-in page. Inert on the local path.
+
 The sign-in page (signin_desk.py) starts an ordinary interactive login job with
 a LiveView in LIVE_VIEW. While that job waits on Microsoft's pages, the browser
 code attaches its page here, so the person can see the page and tap and type

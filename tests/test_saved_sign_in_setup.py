@@ -35,12 +35,25 @@ from tests.test_remote import VALID
 KIT = Path(__file__).resolve().parents[1] / "deploy" / "server"
 KEY_FILE, ACCOUNT = "SAGASU_HTTP_SIGN_IN_KEY_FILE", "SAGASU_SMU_ACCOUNT"
 EXCEEDED = "sign_in_attempts_exceeded"
-LISTENER = "SAGASU_BROWSER_PROFILE=browser\n" + "".join(f"{k}={v}\n" for k, v in VALID.items())
+LISTENER = "SAGASU_BROWSER_PROFILE=browser\n" + "".join(
+    f"{k}={v}\n" for k, v in VALID.items()
+)
 EMAIL, OTHER = "fixture.owner@smu.edu.sg", "fixture.other@smu.edu.sg"
 PASSWORD, NEW_PASSWORD = "Fixture owner pass #1", "Fixture owner pass #2"
-GOOD_EMAILS = ("alice.tan@smu.edu.sg", "Alice.Tan.2024@SCIS.smu.edu.sg", "a_b-c@law.smu.edu.sg")
-BAD_EMAILS = ("alice@gmail.com", "alice@smu.edu.sg.example.com", "alice@evil.smu.edu.sg",
-              "@smu.edu.sg", "alice tan@smu.edu.sg", "alice@@smu.edu.sg", "alice@smu.edu")
+GOOD_EMAILS = (
+    "alice.tan@smu.edu.sg",
+    "Alice.Tan.2024@SCIS.smu.edu.sg",
+    "a_b-c@law.smu.edu.sg",
+)
+BAD_EMAILS = (
+    "alice@gmail.com",
+    "alice@smu.edu.sg.example.com",
+    "alice@evil.smu.edu.sg",
+    "@smu.edu.sg",
+    "alice tan@smu.edu.sg",
+    "alice@@smu.edu.sg",
+    "alice@smu.edu",
+)
 
 
 def load_settings(directory, text):
@@ -53,7 +66,9 @@ def load_settings(directory, text):
 def load_kit(name):
     """A deploy-kit script (no .py suffix) as a module, without running main."""
     loader = SourceFileLoader("kit_" + name.replace("-", "_"), str(KIT / name))
-    module = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    module = importlib.util.module_from_spec(
+        importlib.util.spec_from_loader(loader.name, loader)
+    )
     loader.exec_module(module)
     return module
 
@@ -86,23 +101,41 @@ class TempCase(unittest.TestCase):
 class SettingsTests(unittest.TestCase):
     def test_key_file_and_account_are_read_with_the_listener(self):
         listener, problems = parse_remote_listener(
-            {**VALID, KEY_FILE: " /etc/sagasu/sagasu.signin-key ", ACCOUNT: " Fixture.Owner@SMU.edu.sg "}
+            {
+                **VALID,
+                KEY_FILE: " /etc/sagasu/sagasu.signin-key ",
+                ACCOUNT: " Fixture.Owner@SMU.edu.sg ",
+            }
         )
         self.assertEqual(problems, [])
         self.assertEqual(listener.sign_in_key_file, "/etc/sagasu/sagasu.signin-key")
         self.assertEqual(listener.smu_account, "Fixture.Owner@SMU.edu.sg")
         for values in (VALID, {**VALID, KEY_FILE: "  ", ACCOUNT: ""}):
             listener, problems = parse_remote_listener(values)
-            self.assertEqual((listener.sign_in_key_file, listener.smu_account, problems), (None, None, []))
+            self.assertEqual(
+                (listener.sign_in_key_file, listener.smu_account, problems),
+                (None, None, []),
+            )
         longest = "/" + "k" * 199
-        self.assertEqual(parse_remote_listener({**VALID, KEY_FILE: longest})[0].sign_in_key_file, longest)
+        self.assertEqual(
+            parse_remote_listener({**VALID, KEY_FILE: longest})[0].sign_in_key_file,
+            longest,
+        )
         for email in GOOD_EMAILS:
             listener, problems = parse_remote_listener({**VALID, ACCOUNT: email})
             self.assertEqual((listener.smu_account, problems), (email, []))
 
     def test_a_bad_key_file_or_account_keeps_the_listener_off(self):
-        keys = ("sagasu.signin-key", "~/sign-in.key", "./sign-in.key", "/etc/sagasu/\0key", "/" + "k" * 200)
-        changes = [{KEY_FILE: key} for key in keys] + [{ACCOUNT: e} for e in ("not-an-email", *BAD_EMAILS)]
+        keys = (
+            "sagasu.signin-key",
+            "~/sign-in.key",
+            "./sign-in.key",
+            "/etc/sagasu/\0key",
+            "/" + "k" * 200,
+        )
+        changes = [{KEY_FILE: key} for key in keys] + [
+            {ACCOUNT: e} for e in ("not-an-email", *BAD_EMAILS)
+        ]
         for change in changes:
             with self.subTest(change=change):
                 listener, problems = parse_remote_listener({**VALID, **change})
@@ -115,26 +148,43 @@ class SettingsTests(unittest.TestCase):
     def test_settings_report_whether_saved_sign_in_is_set_up(self):
         key = f"{KEY_FILE}=/etc/sagasu/sagasu.signin-key\n"
         with tempfile.TemporaryDirectory() as directory:
-            for extra, expected in (("", False), (key, True), (key + f"{ACCOUNT}={EMAIL}\n", True)):
+            for extra, expected in (
+                ("", False),
+                (key, True),
+                (key + f"{ACCOUNT}={EMAIL}\n", True),
+            ):
                 settings = load_settings(directory, LISTENER + extra)
                 self.assertEqual(settings.issues(), [])
                 remote = settings.public()["remote_listener"]
                 self.assertTrue(remote["enabled"])
                 self.assertIs(remote["saved_sign_in"], expected)
-            broken = load_settings(directory, LISTENER + f"{ACCOUNT}=someone@gmail.com\n")
+            broken = load_settings(
+                directory, LISTENER + f"{ACCOUNT}=someone@gmail.com\n"
+            )
             self.assertFalse(broken.public()["remote_listener"]["enabled"])
             [issue] = broken.issues()
-            self.assertEqual((issue.name, issue.blocks_startup), ("config.remote_listener", True))
+            self.assertEqual(
+                (issue.name, issue.blocks_startup), ("config.remote_listener", True)
+            )
             self.assertIn(ACCOUNT, issue.message)
             self.assertNotIn("someone@gmail.com", json.dumps(broken.public()))
 
     def test_each_saved_sign_in_setting_changes_the_host_digest(self):
         # As tests.test_remote's test_every_new_setting_changes_the_digest_when_used.
         key_a, key_b = (f"{KEY_FILE}=/etc/sagasu/{n}.signin-key\n" for n in "ab")
-        extras = ("", key_a, key_b, key_a + f"{ACCOUNT}={EMAIL}\n", key_a + f"{ACCOUNT}={OTHER}\n")
+        extras = (
+            "",
+            key_a,
+            key_b,
+            key_a + f"{ACCOUNT}={EMAIL}\n",
+            key_a + f"{ACCOUNT}={OTHER}\n",
+        )
         texts = [LISTENER + extra for extra in extras]
         with tempfile.TemporaryDirectory() as directory:
-            digests = {identity_parts(load_settings(directory, t))["configuration"] for t in texts}
+            digests = {
+                identity_parts(load_settings(directory, t))["configuration"]
+                for t in texts
+            }
         self.assertEqual(len(digests), len(texts))
 
 
@@ -144,7 +194,9 @@ class StartUpTests(TempCase):
         self.settings = SimpleNamespace(preferences=self.state / "personal.sqlite3")
 
     def listener(self, key, account=None):
-        return SimpleNamespace(sign_in_key_file=None if key is None else str(key), smu_account=account)
+        return SimpleNamespace(
+            sign_in_key_file=None if key is None else str(key), smu_account=account
+        )
 
     def test_off_without_the_setting_or_a_usable_key(self):
         for listener in (None, object(), self.listener(None), self.listener("")):
@@ -154,12 +206,17 @@ class StartUpTests(TempCase):
         garbage.write_bytes(b"not base64 at all!\n")
         short.write_bytes(b"c2hvcnQ=\n")
         for key in (self.root / "missing.key", garbage, short, self.root):
-            with self.subTest(key=key.name), patch("sagasu.observability.event") as event:
+            with (
+                self.subTest(key=key.name),
+                patch("sagasu.observability.event") as event,
+            ):
                 self.assertIsNone(saved_sign_in(self.settings, self.listener(key)))
                 self.assertEqual(event.call_args.args[0], "saved_sign_in.unavailable")
         # Without the cryptography package the copy also behaves as before.
         good = make_key_file(self.root / "good.key")
-        with patch.dict(sys.modules, {"cryptography.hazmat.primitives.ciphers.aead": None}):
+        with patch.dict(
+            sys.modules, {"cryptography.hazmat.primitives.ciphers.aead": None}
+        ):
             self.assertIsNone(saved_sign_in(self.settings, self.listener(good)))
         self.assertEqual(list(self.state.iterdir()), [])
 
@@ -167,7 +224,10 @@ class StartUpTests(TempCase):
         key = make_key_file(self.root / "sign-in.key")
         store = saved_sign_in(self.settings, self.listener(key, EMAIL))
         self.assertIsInstance(store, SavedSignIn)
-        self.assertEqual((store.path, store.ledger_path), (self.state / FILE_NAME, self.state / LEDGER_NAME))
+        self.assertEqual(
+            (store.path, store.ledger_path),
+            (self.state / FILE_NAME, self.state / LEDGER_NAME),
+        )
         self.assertEqual((store.key_file, store.account), (key, EMAIL))
         # From real settings: the listener's own key and account.
         settings = load_settings(
@@ -195,7 +255,9 @@ class RuntimeSecretTests(unittest.TestCase):
         for redact in (earlier, configured, Redact()):
             self.assertEqual(redact.clean(f"typed {secret} in"), "typed <redacted> in")
             self.assertEqual(redact.clean(inner), "<redacted>")
-        record = logging.LogRecord("sagasu.test", logging.INFO, __file__, 1, "saw %s", (secret,), None)
+        record = logging.LogRecord(
+            "sagasu.test", logging.INFO, __file__, 1, "saw %s", (secret,), None
+        )
         record.fields = {"detail": f"has {secret}", "nested": [secret]}
         earlier.filter(record)
         self.assertNotIn(secret, record.getMessage())
@@ -209,7 +271,9 @@ class RuntimeSecretTests(unittest.TestCase):
 
     def test_loading_the_saved_password_registers_it(self):
         with tempfile.TemporaryDirectory() as directory:
-            store = SavedSignIn(directory, make_key_file(Path(directory) / "sign-in.key"))
+            store = SavedSignIn(
+                directory, make_key_file(Path(directory) / "sign-in.key")
+            )
             password = f"Fixture load {uuid.uuid4().hex}"
             self.addCleanup(console._RUNTIME_SECRETS.discard, password)
             redact = Redact()
@@ -317,7 +381,11 @@ class LedgerTests(TempCase):
         for _ in range(SIGN_INS_PER_HOUR):
             self.store.record("starts")
         self.store.hold("saved_password_rejected", page_only=True)
-        expected = {"reason": "saved_password_rejected", "page_only": True, "at": self.clock.now}
+        expected = {
+            "reason": "saved_password_rejected",
+            "page_only": True,
+            "at": self.clock.now,
+        }
         self.assertEqual(self.store.held(), expected)
         # A hold is the reason given, ahead of the limits, with no wait.
         self.assertEqual(self.store.refusal(), ("saved_password_rejected", None))
@@ -353,7 +421,12 @@ class LedgerTests(TempCase):
         recent = self.open().recent()
         self.assertEqual(len(recent), 10)
         self.assertEqual(recent[0]["by"], "key2")
-        last = {"at": int(self.clock.now), "by": "key11", "how": "chat", "outcome": "signed_in"}
+        last = {
+            "at": int(self.clock.now),
+            "by": "key11",
+            "how": "chat",
+            "outcome": "signed_in",
+        }
         self.assertEqual(recent[-1], last)
         self.assertIsNone(self.store.refusal())  # notes are not attempts
 
@@ -424,7 +497,13 @@ class OwnershipTests(TempCase):
         self.assertIsNone(self.store.load())
         self.assertEqual(self.store.owner(), EMAIL)
         self.refuse(self.store, OTHER)
-        shown = {"available": True, "saved": False, "verified": True, "email": mask(EMAIL), "owner": EMAIL}
+        shown = {
+            "available": True,
+            "saved": False,
+            "verified": True,
+            "email": mask(EMAIL),
+            "owner": EMAIL,
+        }
         self.assertEqual(self.store.summary(), shown)
 
     def test_a_new_password_for_the_owner_keeps_the_copy_pinned(self):
@@ -446,7 +525,13 @@ class OwnershipTests(TempCase):
         self.store.erase()
         self.assertFalse(self.store.path.exists())
         self.assertIsNone(self.store.owner())
-        empty = {"available": True, "saved": False, "verified": False, "email": None, "owner": None}
+        empty = {
+            "available": True,
+            "saved": False,
+            "verified": False,
+            "email": None,
+            "owner": None,
+        }
         self.assertEqual(self.store.summary(), empty)
         self.store.save(OTHER, PASSWORD)
         self.assertEqual(self.store.load().email, OTHER)
@@ -458,7 +543,13 @@ class OwnershipTests(TempCase):
 
     def test_summary_never_contains_the_password(self):
         save = lambda: self.store.save(EMAIL, PASSWORD)  # noqa: E731
-        for step in (save, self.store.mark_verified, self.store.forget_password, save, self.store.erase):
+        for step in (
+            save,
+            self.store.mark_verified,
+            self.store.forget_password,
+            save,
+            self.store.erase,
+        ):
             step()
             self.assertNotIn(PASSWORD, json.dumps(self.store.summary()))
             if self.store.path.exists():
@@ -476,7 +567,9 @@ class SagasuCtlTests(TempCase):
         """A Copy whose state folder is this test's own."""
         copy = self.ctl.Copy(name)
         original, copy.state = copy.state, str(self.state)
-        copy.sign_in_state = [path.replace(original, copy.state, 1) for path in copy.sign_in_state]
+        copy.sign_in_state = [
+            path.replace(original, copy.state, 1) for path in copy.sign_in_state
+        ]
         return copy
 
     def fill(self):
@@ -487,7 +580,9 @@ class SagasuCtlTests(TempCase):
         for name in (FILE_NAME, LEDGER_NAME):
             for path in (name, f".{Path(name).stem}-abc123.tmp"):
                 (self.state / path).write_text("{}")
-        kept = sorted(["personal.sqlite3", "actions.sqlite3", "oauth.sqlite3", "host.log"])
+        kept = sorted(
+            ["personal.sqlite3", "actions.sqlite3", "oauth.sqlite3", "host.log"]
+        )
         for name in kept:
             (self.state / name).write_text("kept")
         return kept
@@ -497,7 +592,10 @@ class SagasuCtlTests(TempCase):
         self.assertEqual(owner.sign_in_key, "/etc/sagasu/sagasu.signin-key")
         self.assertEqual(alice.sign_in_key, "/etc/sagasu/alice.signin-key")
         self.assertIn("sagasu", self.ctl.RESERVED)  # no copy can take the owner's key
-        for copy, state in ((owner, "/var/lib/sagasu"), (alice, "/var/lib/sagasu-alice")):
+        for copy, state in (
+            (owner, "/var/lib/sagasu"),
+            (alice, "/var/lib/sagasu-alice"),
+        ):
             self.assertEqual(copy.state, state)
             parts = ("profile", "auth", FILE_NAME, LEDGER_NAME)
             self.assertEqual(copy.sign_in_state, [f"{state}/{part}" for part in parts])
@@ -507,7 +605,9 @@ class SagasuCtlTests(TempCase):
         # The owner's store sits next to its preferences, in the folder that
         # forget-sign-in clears.
         example = dotenv_values(KIT / "sagasu.env.example")
-        self.assertEqual(str(Path(example["SAGASU_PREFERENCES_PATH"]).parent), owner.state)
+        self.assertEqual(
+            str(Path(example["SAGASU_PREFERENCES_PATH"]).parent), owner.state
+        )
         self.assertEqual(example["SAGASU_BROWSER_PROFILE"], owner.sign_in_state[0])
         self.assertEqual(example["SAGASU_AUTH_ARTIFACT_DIR"], owner.sign_in_state[1])
 
@@ -517,7 +617,10 @@ class SagasuCtlTests(TempCase):
         for email in BAD_EMAILS + ("alice@smu.edu.sg\n",):
             self.assertFalse(self.ctl.SMU_EMAIL.fullmatch(email), email)
         for email in GOOD_EMAILS + BAD_EMAILS + ("a+b%c@socsc.smu.edu.sg",):
-            self.assertEqual(bool(self.ctl.SMU_EMAIL.fullmatch(email)), bool(SMU_EMAIL_RE.fullmatch(email)))
+            self.assertEqual(
+                bool(self.ctl.SMU_EMAIL.fullmatch(email)),
+                bool(SMU_EMAIL_RE.fullmatch(email)),
+            )
 
     # Regression (fixed): sagasu-ctl's SMU_EMAIL (like sagasu.personal) allows + and % in the
     # name, but value()'s PLAIN pattern does not, so after `smu-account` or
@@ -527,7 +630,9 @@ class SagasuCtlTests(TempCase):
         account = "alice+fbs@smu.edu.sg"
         self.assertTrue(self.ctl.SMU_EMAIL.fullmatch(account))
         try:
-            read = self.ctl.value([f"{ACCOUNT}={account}"], ACCOUNT, "", "/etc/sagasu/alice.env")
+            read = self.ctl.value(
+                [f"{ACCOUNT}={account}"], ACCOUNT, "", "/etc/sagasu/alice.env"
+            )
         except SystemExit as refused:
             self.fail(f"status refuses the line it wrote: {refused.code}")
         self.assertEqual(read, account)
@@ -539,25 +644,36 @@ class SagasuCtlTests(TempCase):
             patch.object(ctl.os, "geteuid", return_value=0),
             patch.dict(os.environ, {"SUDO_USER": sudo_user}),
             patch.object(ctl, "read", return_value=[]),
-            patch.object(ctl.subprocess, "run", side_effect=AssertionError("no commands")),
+            patch.object(
+                ctl.subprocess, "run", side_effect=AssertionError("no commands")
+            ),
         )
 
     def test_instance_add_arguments(self):
         email = "alice.tan@smu.edu.sg"
         for rest, writes, account in (
-            ([], "on", None), ([email], "on", email),
-            (["--read-only"], "off", None), ([email, "--read-only"], "off", email),
+            ([], "on", None),
+            ([email], "on", email),
+            (["--read-only"], "off", None),
+            ([email, "--read-only"], "off", email),
         ):
             with self.subTest(rest=rest), self.owner_main() as (add, *_):
                 self.ctl.main(["instance-add", "alice", *rest])
                 add.assert_called_once_with("alice", writes=writes, account=account)
-        for rest in ([], [email, "other.tan@smu.edu.sg"], ["--read-only", "--read-only"],
-                     [email, "--read-only", "extra"]):
+        for rest in (
+            [],
+            [email, "other.tan@smu.edu.sg"],
+            ["--read-only", "--read-only"],
+            [email, "--read-only", "extra"],
+        ):
             with self.subTest(rest=rest), self.owner_main() as (add, *_):
                 with self.assertRaises(SystemExit):
                     self.ctl.main(["instance-add", *(["alice", *rest] if rest else [])])
                 add.assert_not_called()
-        with self.owner_main(sudo_user="fbs-bob") as (add, *_), self.assertRaises(SystemExit):
+        with (
+            self.owner_main(sudo_user="fbs-bob") as (add, *_),
+            self.assertRaises(SystemExit),
+        ):
             self.ctl.main(["instance-add", "alice", email])
         add.assert_not_called()
 
@@ -574,7 +690,10 @@ class SagasuCtlTests(TempCase):
                     self.ctl.forget_sign_in(self.copy_in(name))
                 stop, start = ["systemctl", "stop", unit], ["systemctl", "start", unit]
                 # Stopped before anything is deleted, started after.
-                self.assertEqual(seen, [(stop, {"check": True}, True), (start, {"check": True}, False)])
+                self.assertEqual(
+                    seen,
+                    [(stop, {"check": True}, True), (start, {"check": True}, False)],
+                )
                 self.assertEqual(sorted(p.name for p in self.state.iterdir()), kept)
                 for left in kept:
                     (self.state / left).unlink()
@@ -586,7 +705,10 @@ class SagasuCtlTests(TempCase):
             with self.assertRaises(OSError):
                 self.ctl.forget_sign_in(self.copy_in("alice"))
         commands = [c.args[0] for c in run.call_args_list]
-        self.assertEqual(commands, [["systemctl", verb, "sagasu@alice"] for verb in ("stop", "start")])
+        self.assertEqual(
+            commands,
+            [["systemctl", verb, "sagasu@alice"] for verb in ("stop", "start")],
+        )
 
     def test_sagasu_self_hands_forget_sign_in_to_sagasu_ctl(self):
         kit = load_kit("sagasu-self")
@@ -596,24 +718,38 @@ class SagasuCtlTests(TempCase):
         instance, real_isfile = "/etc/sagasu/instances/alice", os.path.isfile
         # As root (through sudo): sagasu-ctl does the work, for this copy only.
         run = Mock(return_value=Mock(returncode=0))
-        with patched(
-            patch.object(kit.os.path, "isfile", side_effect=lambda p: p == instance or real_isfile(p)),
-            patch.object(sys, "argv", ["sagasu-self", "alice", "forget-sign-in"]),
-            patch.object(kit.os, "geteuid", return_value=0),
-            patch.dict(os.environ, {"SUDO_USER": "fbs-alice"}),
-            patch.object(kit.os, "execv", side_effect=AssertionError("no exec")),
-            patch.object(kit.subprocess, "run", run),
-        ), self.assertRaises(SystemExit) as caught:
+        with (
+            patched(
+                patch.object(
+                    kit.os.path,
+                    "isfile",
+                    side_effect=lambda p: p == instance or real_isfile(p),
+                ),
+                patch.object(sys, "argv", ["sagasu-self", "alice", "forget-sign-in"]),
+                patch.object(kit.os, "geteuid", return_value=0),
+                patch.dict(os.environ, {"SUDO_USER": "fbs-alice"}),
+                patch.object(kit.os, "execv", side_effect=AssertionError("no exec")),
+                patch.object(kit.subprocess, "run", run),
+            ),
+            self.assertRaises(SystemExit) as caught,
+        ):
             kit.main()
         self.assertEqual(caught.exception.code, 0)
-        run.assert_called_once_with(["/opt/sagasu/bin/sagasu-ctl", "--instance", "alice", "forget-sign-in"])
+        run.assert_called_once_with(
+            ["/opt/sagasu/bin/sagasu-ctl", "--instance", "alice", "forget-sign-in"]
+        )
 
     def test_the_shell_scripts_parse(self):
         bash = shutil.which("bash")
         if bash is None:
             self.skipTest("bash is not available")
         for name in ("install.sh", "sagasu-launch"):
-            result = subprocess.run([bash, "-n", str(KIT / name)], capture_output=True, text=True, timeout=60)
+            result = subprocess.run(
+                [bash, "-n", str(KIT / name)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
             self.assertEqual(result.returncode, 0, f"{name}: {result.stderr}")
 
 
@@ -626,16 +762,23 @@ class LaunchCheckTests(TempCase):
         start = text.index("-c '") + len("-c '")
         cls.snippet = text[start : text.index("'", start)]
         assert "dotenv_values" in cls.snippet and "sys.exit(4)" in cls.snippet
-        probe = subprocess.run([sys.executable, "-I", "-c", "import dotenv"], capture_output=True)
+        probe = subprocess.run(
+            [sys.executable, "-I", "-c", "import dotenv"], capture_output=True
+        )
         if probe.returncode:
-            raise unittest.SkipTest("python-dotenv is not available to this interpreter")
+            raise unittest.SkipTest(
+                "python-dotenv is not available to this interpreter"
+            )
 
     def check(self, text):
         env = self.root / "sagasu.env"
         env.write_text(text)
         result = subprocess.run(
             [sys.executable, "-I", "-c", self.snippet, str(env), str(self.state)],
-            capture_output=True, text=True, cwd=self.root, timeout=60,
+            capture_output=True,
+            text=True,
+            cwd=self.root,
+            timeout=60,
         )
         self.assertNotIn("Traceback", result.stderr)
         return result.returncode
@@ -643,7 +786,9 @@ class LaunchCheckTests(TempCase):
     def test_a_password_in_the_settings_refuses_start(self):
         self.assertEqual(self.check("SMU_LOGIN_PASSWORD=fixture-password\n"), 3)
         key = make_key_file(self.root / "sign-in.key")
-        self.assertEqual(self.check(f"SMU_LOGIN_PASSWORD=fixture-password\n{KEY_FILE}={key}\n"), 3)
+        self.assertEqual(
+            self.check(f"SMU_LOGIN_PASSWORD=fixture-password\n{KEY_FILE}={key}\n"), 3
+        )
         self.assertEqual(self.check("SMU_LOGIN_PASSWORD=\n"), 0)
 
     def test_a_key_outside_etc_sagasu_or_writable_by_others_refuses_start(self):

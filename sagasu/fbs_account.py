@@ -538,7 +538,9 @@ async def _cancel(client, expected, reason, state):
     if message is None:
         # Both FBS write buttons asked the penalty prompt on 20 Nov. Without
         # it the penalty cannot be checked, so do not submit.
-        raise CancellationUnavailable("FBS's cancellation form no longer asks to confirm")
+        raise CancellationUnavailable(
+            "FBS's cancellation form no longer asks to confirm"
+        )
     await field.fill(text)
     if await field.input_value() != text:
         raise CancellationUnavailable("FBS did not keep the cancellation reason")
@@ -593,9 +595,7 @@ async def cancel_booking(client, expected, reason):
             ) from None
         if isinstance(error, (CancellationUnavailable, AuthenticationRequired)):
             raise
-        event(
-            "cancellation.not_submitted", level=30, error_type=type(error).__name__
-        )
+        event("cancellation.not_submitted", level=30, error_type=type(error).__name__)
         raise CancellationUnavailable(
             "The cancellation could not be prepared; nothing was submitted"
         ) from error

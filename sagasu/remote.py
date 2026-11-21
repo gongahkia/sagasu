@@ -1,5 +1,8 @@
 """The host's optional remote listener: MCP over streamable HTTP, on loopback only.
 
+Hosted path only (see SETUP.md, "Hosting for a group"): it runs only when a
+remote listener is configured. The local stdio path never starts it.
+
 A TLS reverse proxy on the same machine publishes it. Every request must carry
 an API key; only SHA-256 digests of keys are configured, so the host's
 configuration never contains a usable key. With SAGASU_HTTP_OAUTH=on an app may
@@ -48,6 +51,8 @@ TOKEN_REASONS = frozenset({"unknown_token", "expired_token", "key_removed"})
 GATEWAY_LABEL = "gateway"
 CALLER_HEADER = b"x-sagasu-caller"
 CALLER = re.compile(r"[0-9a-f]{64}")
+
+
 # The gateway's key opens /mcp only: never the sign-in page or OAuth sign-in.
 def person_keys(keys):
     return {digest: label for digest, label in keys.items() if label != GATEWAY_LABEL}
@@ -408,9 +413,11 @@ class RemoteHTTP:
             # their sign-in; the page then accepts only their own account.
             set_sign_in_url(
                 self.desk.url,
-                self.desk.link
-                if getattr(self.service, "saved_sign_in", None) is not None
-                else None,
+                (
+                    self.desk.link
+                    if getattr(self.service, "saved_sign_in", None) is not None
+                    else None
+                ),
             )
         if self.listener.oauth:
             from .oauth import SagasuOAuth

@@ -151,8 +151,12 @@ class LinkTests(SavedDeskCase):
         first = linked("sign_in_setup_needed")
         self.assertTrue(first.startswith(f"https://{HOST}/sign-in?link="))
         # A later failure never replaces the link the person was just given.
-        for reason in ("saved_password_rejected", "sign_in_needs_page",
-                       "sign_in_required_on_host", "session_renewal_pending"):
+        for reason in (
+            "saved_password_rejected",
+            "sign_in_needs_page",
+            "sign_in_required_on_host",
+            "session_renewal_pending",
+        ):
             self.assertEqual(linked(reason), first, reason)
         # The page is also the way out where chat cannot retry.
         for reason in ("sign_in_not_approved", "sign_in_blocked", "sign_in_needed"):
@@ -174,7 +178,9 @@ class LinkTests(SavedDeskCase):
     async def test_opening_the_link_only_asks_to_continue(self):
         token = self.token()
         for _ in range(2):  # a link preview, then the person
-            status, headers, body = await call(self.app, "GET", f"/sign-in?link={token}")
+            status, headers, body = await call(
+                self.app, "GET", f"/sign-in?link={token}"
+            )
             self.assertEqual(status, 200)
             self.assertIn(b'name="link"', body)
             self.assertIn(f'value="{token}"'.encode(), body)
@@ -282,7 +288,9 @@ class SaveTests(SavedDeskCase):
         self.assertEqual(answer["error"], "form")
         answer = await self.start(cookie, 400, how="save", email=OWNER, password="")
         self.assertEqual(answer["error"], "bad_request")
-        answer = await self.start(cookie, 400, how="save", email="me@gmail.com", password=PASSWORD)
+        answer = await self.start(
+            cookie, 400, how="save", email="me@gmail.com", password=PASSWORD
+        )
         self.assertEqual(answer["error"], "account")
         self.assertIn("SMU email", answer["message"])
         self.assertEqual(self.service.jobs, {})
@@ -382,7 +390,9 @@ class SaveTests(SavedDeskCase):
         self.assertEqual((state["owner"], state["saved"]), (OWNER, True))
         self.assertFalse(state["form"])
         self.assertIn(MASKED, state["message"])
-        answer = await self.start(cookie, 400, how="save", email=OTHER, password="Other 1")
+        answer = await self.start(
+            cookie, 400, how="save", email=OTHER, password="Other 1"
+        )
         self.assertEqual(answer["error"], "account")
         self.assertIn(MASKED, answer["message"])
         self.assertEqual(self.service.jobs, {})
@@ -403,7 +413,9 @@ class OwnedSaveTests(SavedDeskCase):
     async def test_another_account_is_refused_before_anything_runs(self):
         cookie = await self.link_visit()
         self.assertEqual((await self.status(cookie))["owner"], OWNER)
-        answer = await self.start(cookie, 400, how="save", email=OTHER, password=PASSWORD)
+        answer = await self.start(
+            cookie, 400, how="save", email=OTHER, password=PASSWORD
+        )
         self.assertEqual(answer["error"], "account")
         self.assertIn(MASKED, answer["message"])
         self.assertNotIn(OTHER, answer["message"])
@@ -428,7 +440,9 @@ class ForgetTests(SavedDeskCase):
         self.assertTrue(state["form"])
         self.assertIsNone(self.store.load())
         self.assertNotIn(PASSWORD.encode(), self.store.path.read_bytes())
-        answer = await self.start(cookie, 400, how="save", email=OTHER, password=PASSWORD)
+        answer = await self.start(
+            cookie, 400, how="save", email=OTHER, password=PASSWORD
+        )
         self.assertEqual(answer["error"], "account")
         answer = await self.start(cookie, 400, how="saved")
         self.assertEqual(answer["error"], "form")
@@ -491,7 +505,12 @@ class LiveAndLimitTests(SavedDeskCase):
         self.key_file.unlink()  # the key is gone after start-up
         self.assertIsNone(self.desk.store)
         status, _, _ = await call(
-            self.app, "POST", "/sign-in/start", headers=ORIGIN, body={"how": "live"}, cookie=cookie
+            self.app,
+            "POST",
+            "/sign-in/start",
+            headers=ORIGIN,
+            body={"how": "live"},
+            cookie=cookie,
         )
         self.assertNotEqual(status, 200)
         self.assertEqual(self.service.jobs, {})
@@ -515,7 +534,11 @@ class LiveAndLimitTests(SavedDeskCase):
         for _ in range(SIGN_INS_PER_HOUR):
             self.store.record("starts")
         cookie = await self.link_visit()
-        for body in ({}, {"how": "saved"}, {"how": "save", "email": OWNER, "password": PASSWORD}):
+        for body in (
+            {},
+            {"how": "saved"},
+            {"how": "save", "email": OWNER, "password": PASSWORD},
+        ):
             with self.subTest(body=sorted(body)):
                 answer = await self.start(cookie, 429, **body)
                 self.assertEqual(answer["error"], "too_many")
@@ -623,7 +646,9 @@ class SavedPageScriptTests(SavedDeskCase):
                 self.assertTrue(await person.is_visible("#number"))
                 self.assertTrue(await person.is_hidden("#setup"))
                 self.assertEqual(await person.input_value("#password"), "")
-                self.assertIn("enter this number", await person.text_content("#message"))
+                self.assertIn(
+                    "enter this number", await person.text_content("#message")
+                )
                 self.backend.gate.set()
                 await settle(
                     person,

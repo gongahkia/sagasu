@@ -1378,7 +1378,9 @@ class FBSClient:
                     message = "Microsoft did not offer Authenticator push approval. This sign-in needs an interactive browser or an SMU-supported authentication method."
                     if self.auth_notify and not unattended:
                         await self.auth_notify(message)
-                    raise AuthenticationRequired(message, reason="sign_in_unfinished" if unattended else None)
+                    raise AuthenticationRequired(
+                        message, reason="sign_in_unfinished" if unattended else None
+                    )
             await self.page.wait_for_timeout(750)
         message = (
             "Microsoft sign-in timed out. Start a new search when ready to approve MFA."
@@ -1518,7 +1520,10 @@ class FBSClient:
                 "you denied",
                 "request was denied",
                 "we didn't hear from you",
-                "we didn’t hear from you",
+                # Microsoft writes it with a curly apostrophe. Only an unattended
+                # (saved) sign-in treats it as final: a person at a visible
+                # browser can press "Send another request" instead.
+                *(("we didn’t hear from you",) if self._unattended else ()),
                 "sign-in was blocked",
                 "sign in was blocked",
             )

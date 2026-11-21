@@ -1,5 +1,8 @@
 """The server's own SMU sign-in page, for whoever holds an access key.
 
+Hosted path only (see SETUP.md, "Hosting for a group"): served by the remote
+listener. Locally, a person signs in in the visible browser instead.
+
 A person reaches https://HOST/sign-in from a one-time link their agent gave
 them, from an app's OAuth sign-in, or by entering their access key. There they
 save their own SMU email and password once. This copy then signs in with them,
@@ -440,9 +443,7 @@ class SignInDesk:
             if not saved["can_save"]:
                 status["message"] = "Ready to sign in."
             elif (
-                saved["saved"]
-                and visit.label == "link"
-                and self._page_held(self.store)
+                saved["saved"] and visit.label == "link" and self._page_held(self.store)
             ):
                 status["form"] = True
                 status["message"] = (
@@ -450,9 +451,7 @@ class SignInDesk:
                     "Type your SMU password again to sign in."
                 )
             elif saved["saved"]:
-                status["message"] = (
-                    f"Your SMU sign-in is saved for {saved['email']}."
-                )
+                status["message"] = f"Your SMU sign-in is saved for {saved['email']}."
                 status["auto"] = visit.continuation is not None
             else:
                 status["form"] = True

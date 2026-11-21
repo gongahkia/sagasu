@@ -47,13 +47,6 @@ SAGASU_READ_BACKEND=auto
 # SMU_LOGIN_PASSWORD='your-private-password'
 # SAGASU_HEADLESS=true
 # MFA approval remains yours; agents read the prompt with authentication_status.
-# Optional remote listener for a private server (see deploy/server/README.md):
-# SAGASU_HTTP_PORT=8765   (or SAGASU_HTTP_SOCKET=/run/sagasu/http.sock)
-# SAGASU_HTTP_ALLOWED_HOSTS=booking.example.org
-# SAGASU_HTTP_KEYS=laptop:<sha256 of the API key, hex>
-# SAGASU_HTTP_WRITES=off
-# SAGASU_HTTP_OAUTH=off
-# SAGASU_HTTP_SIGN_IN_KEY_FILE=/etc/sagasu/sagasu.signin-key   (lets each person save their SMU sign-in)
 """
 
 # Apps whose OAuth redirect may receive a sign-in code. Loopback serves desktop

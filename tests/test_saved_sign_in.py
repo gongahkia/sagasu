@@ -96,7 +96,9 @@ class SavedSignInTests(StoreCase):
         self.store.forget_password()
         self.assertIsNone(self.store.load())
         summary = self.store.summary()
-        self.assertEqual((summary["saved"], summary["email"]), (False, "f…n@smu.edu.sg"))
+        self.assertEqual(
+            (summary["saved"], summary["email"]), (False, "f…n@smu.edu.sg")
+        )
         self.store.erase()
         self.assertFalse((self.state / FILE_NAME).exists())
         self.store.erase()  # nothing to erase is not an error
@@ -146,7 +148,9 @@ class SavedSignInTests(StoreCase):
             self.store.load()
             self.store.forget_password()
             self.store.erase()
-        logged = json.dumps([[c.args, c.kwargs] for c in event.call_args_list], default=str)
+        logged = json.dumps(
+            [[c.args, c.kwargs] for c in event.call_args_list], default=str
+        )
         self.assertNotIn(PASSWORD, logged)
         self.assertNotIn(EMAIL, logged)
 

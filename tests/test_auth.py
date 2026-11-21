@@ -121,6 +121,19 @@ class AuthBrowserFormTest(unittest.IsolatedAsyncioTestCase):
             )
             self.assertIsNone(await self.client._passkey_resume_url())
 
+    async def test_unanswered_request_page_is_final_only_for_unattended_sign_in(
+        self,
+    ):
+        # Microsoft writes "didn’t" with a curly apostrophe. At a visible local
+        # browser the person can press "Send another request", so it must not
+        # end the login; an unattended (saved) sign-in has nobody to press it.
+        await self.client.page.set_content(
+            "<h1>We didn’t hear from you</h1><a>Send another request</a>"
+        )
+        self.assertNotEqual((await self.client._classify_auth_state())[0], "failed")
+        self.client._unattended = True
+        self.assertEqual((await self.client._classify_auth_state())[0], "failed")
+
     async def test_invalid_context_page_is_not_classified_as_pending_sign_in(self):
         await self.client.page.set_content(
             "<h1>Sign in</h1><p>Sorry, but we’re having trouble signing you in.</p><div>AADSTS90100: ctx parameter is empty or not valid.</div>"

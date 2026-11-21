@@ -85,9 +85,7 @@ class AmendmentPromptTests(unittest.IsolatedAsyncioTestCase):
 
     async def payload(self, changes=None):
         native = await read_amendment_options(self.fixture.client, "BK-TEST")
-        return prepare_amendment(
-            native, changes or {"purpose": "Changed purpose"}, KEY
-        )
+        return prepare_amendment(native, changes or {"purpose": "Changed purpose"}, KEY)
 
     async def submit(self, payload):
         return await execute_amendment(
@@ -226,7 +224,8 @@ class AmendmentPromptTests(unittest.IsolatedAsyncioTestCase):
             guard + guard + "submitEdit();return false",
             f"confirm('{ZERO_PENALTY_PROMPT}');submitEdit();return false",
             f'if(!confirm("{ZERO_PENALTY_PROMPT}"))return false;submitEdit();return false',
-            guard + "if(confirm('Also email everyone?'))notify();submitEdit();return false",
+            guard
+            + "if(confirm('Also email everyone?'))notify();submitEdit();return false",
         ]:
             with self.subTest(onclick=onclick):
                 self.reset_confirm()
@@ -298,8 +297,11 @@ class AmendmentPromptTests(unittest.IsolatedAsyncioTestCase):
         payload = await self.payload()
         self.fixture.prompt = ZERO_PENALTY_PROMPT
         self.fixture.onclick = "return false"  # the click does nothing at all
-        with patch("sagasu.amendments.CONFIRM_TIMEOUT_MS", RESPONSE_WAIT_MS), patch(
-            "sagasu.amendments.expected_prompt", lambda onclick: ZERO_PENALTY_PROMPT
+        with (
+            patch("sagasu.amendments.CONFIRM_TIMEOUT_MS", RESPONSE_WAIT_MS),
+            patch(
+                "sagasu.amendments.expected_prompt", lambda onclick: ZERO_PENALTY_PROMPT
+            ),
         ):
             with self.assertRaises(AmendmentOutcomeUnknown):
                 await self.submit(payload)

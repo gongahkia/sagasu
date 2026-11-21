@@ -565,10 +565,10 @@ class AgentService:
         self.shown_numbers[pending.id] = job.delivered
         tell = (
             f"Open Microsoft Authenticator on your phone and enter {number} to "
-            "approve the SMU sign-in for Sagasu, then reply \"done\" here."
+            'approve the SMU sign-in for Sagasu, then reply "done" here.'
             if number
             else "Open Microsoft Authenticator on your phone and approve the SMU "
-            "sign-in for Sagasu, then reply \"done\" here."
+            'sign-in for Sagasu, then reply "done" here.'
         )
         return {
             "number": number,
@@ -995,9 +995,7 @@ class AgentService:
             signing_in = permit is not None and permit.used and not permit.signed_in
             job.status = (
                 "outcome_unknown"
-                if job.kind in WRITE_KINDS
-                and job.status != "queued"
-                and not signing_in
+                if job.kind in WRITE_KINDS and job.status != "queued" and not signing_in
                 else "cancelled"
             )
             job.stage = (
@@ -1018,9 +1016,11 @@ class AgentService:
                     # "retry once": that would type the password again.
                     error = AuthenticationRequired(
                         "SMU sign-in did not finish.",
-                        reason=permit.outcome
-                        if permit.outcome in SAVED_SIGN_IN_REASONS
-                        else "sign_in_unfinished",
+                        reason=(
+                            permit.outcome
+                            if permit.outcome in SAVED_SIGN_IN_REASONS
+                            else "sign_in_unfinished"
+                        ),
                     )
                 elif error.reason == "sign_in_needed":
                     # A check that must not sign in found the session ended.

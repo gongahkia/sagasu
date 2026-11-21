@@ -1,5 +1,8 @@
 """One address for every copy on this server.
 
+Hosted path only (see SETUP.md, "Hosting for a group"): it runs as its own
+service (python -m sagasu.gateway) in front of the copies.
+
 Each person has their own copy of Sagasu (own account, browser, saved sign-in),
 each listening on its own private socket. The gateway publishes all of them at
 one address, https://HOST/mcp, and sends each request to the copy of the person
@@ -101,7 +104,11 @@ class Routes:
 
     def reload(self, force=False):
         now = self.clock()
-        if not force and self.checked is not None and now - self.checked < RELOAD_INTERVAL:
+        if (
+            not force
+            and self.checked is not None
+            and now - self.checked < RELOAD_INTERVAL
+        ):
             return
         self.checked = now
         try:
@@ -324,7 +331,10 @@ class Gateway:
             # Per copy too: one person's stalled requests never hold up
             # everyone else's.
             await reply(
-                send, 503, "busy", "Too many requests are in progress. Retry shortly.",
+                send,
+                503,
+                "busy",
+                "Too many requests are in progress. Retry shortly.",
                 (b"retry-after", b"1"),
             )
             return
@@ -336,12 +346,37 @@ class Gateway:
         self.active += 1
         self.active_by_copy[name] = self.active_by_copy.get(name, 0) + 1
         try:
-            await self._forward(scope, receive, send, headers, path, address, label, by_token, name, copy, caller)
+            await self._forward(
+                scope,
+                receive,
+                send,
+                headers,
+                path,
+                address,
+                label,
+                by_token,
+                name,
+                copy,
+                caller,
+            )
         finally:
             self.active -= 1
             self.active_by_copy[name] -= 1
 
-    async def _forward(self, scope, receive, send, headers, path, address, label, by_token, name, copy, caller):
+    async def _forward(
+        self,
+        scope,
+        receive,
+        send,
+        headers,
+        path,
+        address,
+        label,
+        by_token,
+        name,
+        copy,
+        caller,
+    ):
         body = await _read_body(receive)
         if body is DISCONNECTED:
             return  # the client went away mid-request: send nothing on
@@ -388,14 +423,18 @@ class Gateway:
             # may still be carrying the request out: never "retry".
             event("gateway.copy_timeout", level=logging.WARNING, copy=name)
             await reply(
-                send, 504, "copy_timeout",
+                send,
+                504,
+                "copy_timeout",
                 "The copy did not answer in time. Check the result before repeating anything.",
             )
             return
         except OSError:
             event("gateway.copy_unavailable", level=logging.WARNING, copy=name)
             await reply(
-                send, 503, "copy_unavailable",
+                send,
+                503,
+                "copy_unavailable",
                 "This person's Sagasu copy is not running. Retry in a minute.",
                 (b"retry-after", b"30"),
             )
@@ -407,7 +446,9 @@ class Gateway:
                 copy=name,
                 error_type=type(error).__name__,
             )
-            await reply(send, 502, "copy_failed", "The copy's answer could not be read.")
+            await reply(
+                send, 502, "copy_failed", "The copy's answer could not be read."
+            )
             return
         details = {}
         if status >= 400 and status != 401:
@@ -415,10 +456,16 @@ class Gateway:
             # header names (never values) and its JSON-RPC method.
             details = {
                 "copy_error": _error_text(content),
-                "header_names": sorted({name_.decode("latin-1") for name_, _ in headers}),
+                "header_names": sorted(
+                    {name_.decode("latin-1") for name_, _ in headers}
+                ),
                 "rpc": _rpc_method(body),
                 "content_type": next(
-                    (value.decode("latin-1")[:60] for name_, value in headers if name_ == b"content-type"),
+                    (
+                        value.decode("latin-1")[:60]
+                        for name_, value in headers
+                        if name_ == b"content-type"
+                    ),
                     None,
                 ),
             }
@@ -483,7 +530,9 @@ def _error_text(content):
         data = json.loads(content)
         if isinstance(data, dict):
             error = data.get("error")
-            text = error.get("message") if isinstance(error, dict) else data.get("message")
+            text = (
+                error.get("message") if isinstance(error, dict) else data.get("message")
+            )
             return str(text or "")[:200]
     except ValueError:
         pass
@@ -558,11 +607,15 @@ def build(settings):
     host = (settings.get("SAGASU_GATEWAY_HOST") or "").strip().lower()
     if not re.fullmatch(r"[a-z0-9.-]{1,253}", host):
         raise SystemExit("SAGASU_GATEWAY_HOST must be the public host name.")
-    routes = Routes(settings.get("SAGASU_GATEWAY_ROUTES") or "/etc/sagasu/gateway-routes.json")
+    routes = Routes(
+        settings.get("SAGASU_GATEWAY_ROUTES") or "/etc/sagasu/gateway-routes.json"
+    )
     if not routes.copies:
         # Never start on an empty or unreadable table: the OAuth server would
         # take it as every key removed. systemd tries again shortly.
-        raise SystemExit("The routing table is missing or unreadable: run sagasu-ctl gateway-sync.")
+        raise SystemExit(
+            "The routing table is missing or unreadable: run sagasu-ctl gateway-sync."
+        )
     oauth = oauth_app = None
     if (settings.get("SAGASU_GATEWAY_OAUTH") or "on").strip().lower() == "on":
         from starlette.applications import Starlette
@@ -574,7 +627,8 @@ def build(settings):
         redirect_hosts = [
             item.strip().lower()
             for item in (
-                settings.get("SAGASU_OAUTH_REDIRECT_HOSTS") or DEFAULT_OAUTH_REDIRECT_HOSTS
+                settings.get("SAGASU_OAUTH_REDIRECT_HOSTS")
+                or DEFAULT_OAUTH_REDIRECT_HOSTS
             ).split(",")
             if item.strip()
         ]
@@ -610,7 +664,9 @@ def main(argv=None):
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
     app, oauth = build(settings)
-    socket_path = settings.get("SAGASU_GATEWAY_SOCKET") or "/run/sagasu-gateway/http.sock"
+    socket_path = (
+        settings.get("SAGASU_GATEWAY_SOCKET") or "/run/sagasu-gateway/http.sock"
+    )
 
     import uvicorn
 

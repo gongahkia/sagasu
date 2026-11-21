@@ -1,5 +1,8 @@
 """OAuth sign-in for the remote listener, for agent apps that cannot send a key header.
 
+Hosted path only (see SETUP.md, "Hosting for a group"): used by the remote
+listener and the gateway. The local stdio path never uses it.
+
 Some apps (ChatGPT, for one) only connect to a remote MCP server through
 OAuth. This is a small authorization server for them. The person types an API
 key once, on this server's own page; the app then holds short-lived tokens

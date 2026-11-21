@@ -58,21 +58,35 @@ Show my bookings and cancel the one I no longer need.
 
 ```mermaid
 flowchart TD
-    User[User] <--> Client[Any MCP client]
-    Client <-->|MCP over stdio| Bridge[Sagasu stdio bridge]
-    Bridge <-->|Private Unix socket| Server[Sagasu MCP server in shared host]
+    subgraph Local["Local path: one person, their own computer"]
+        User[User] <--> Client[Any MCP client]
+        Client <-->|MCP over stdio| Bridge[Sagasu stdio bridge]
+        Bridge <-->|Private Unix socket| Server[Sagasu MCP server in shared host]
+        Config[Private .env] -.-> Server
+    end
+    subgraph Hosted["Hosted path: one server, a copy per person"]
+        Member[Group member] <--> App[Agent app, e.g. Claude or ChatGPT]
+        App <-->|HTTPS with API key or OAuth| Proxy[Caddy TLS proxy]
+        Proxy <--> Gateway[Gateway: one address, routes by key]
+        Gateway <-->|Copy's private socket| Listener[Remote listener and key check]
+        Listener <--> Copy[Sagasu MCP server, one copy per person]
+        Member -->|One-time link| Desk[Copy's web sign-in page]
+        Desk --> Saved[(Encrypted saved SMU sign-in)]
+    end
     Server <--> Operations[Operations, reviews and recovery]
+    Copy <--> Operations
     Operations <--> Preferences[(SQLite contacts and preferences)]
     Operations <--> History[(SQLite action history)]
     Operations <-->|Search and account reads| HTTP[Playwright HTTP client]
     Operations <-->|Browser workflows and read fallback| Browser[Playwright and Chromium]
-    Config[Private .env] -.-> Server
+    Saved -.->|Signs in when SMU asks| Browser
     Profile[Private browser profile] <--> Browser
     Profile -->|Saved session cookies| HTTP
     HTTP <--> FBS[SMU FBS]
     Browser <--> FBS
     Browser <--> Microsoft[Microsoft sign-in]
     User -->|Approve MFA| Authenticator[Microsoft Authenticator]
+    Member -->|Approve the number shown in chat| Authenticator
     Authenticator --> Microsoft
 ```
 

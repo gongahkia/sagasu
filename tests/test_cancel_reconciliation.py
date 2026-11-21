@@ -288,14 +288,17 @@ class JournalNotCancelledTests(unittest.TestCase):
         self.assertEqual(self.journal.get(retry.id)["status"], "queued")
 
     def test_not_cancelled_counts_only_for_a_cancel(self):
-        book = {"room": "Room A", "date": "01-Jan-2099", "start_time": "15:00", "end_time": "17:00"}
+        book = {
+            "room": "Room A",
+            "date": "01-Jan-2099",
+            "start_time": "15:00",
+            "end_time": "17:00",
+        }
         job = Job("op-book", "book", 1.0, updated_at=1.0)
         self.journal.reserve(job, "review-book", book)
         job.status = "outcome_unknown"
         self.journal.update(job)
-        stored = self.journal.record_reconciliation(
-            job.id, self.not_cancelled(), 2.0
-        )
+        stored = self.journal.record_reconciliation(job.id, self.not_cancelled(), 2.0)
         self.assertIs(stored["action_outcome_verified"], False)
         self.assertIs(stored["safe_to_retry"], False)
         with self.assertRaises(JournalError):
@@ -596,7 +599,9 @@ class ReconcileOperationSettleTests(ServiceCase):
         self.assertEqual(late.result["state"], "not_cancelled")
         self.assertIs(late.result["safe_to_retry"], True)
         self.assertEqual(late.result["original_operation_id"], original.id)
-        self.assertFalse(self.service.get(original.id).public()["reconciliation_required"])
+        self.assertFalse(
+            self.service.get(original.id).public()["reconciliation_required"]
+        )
         review = await self.cancel_review()
         retry = await self.finish(self.service.submit(review["review_id"]))
         self.assertEqual(retry.status, "succeeded")
@@ -610,7 +615,9 @@ class ReconcileOperationSettleTests(ServiceCase):
             original.id, original.updated_at + CANCEL_SETTLE_SECONDS
         )
         self.assertEqual(job.result["state"], "unresolved")
-        self.assertTrue(self.service.journal.get(original.id)["reconciliation_required"])
+        self.assertTrue(
+            self.service.journal.get(original.id)["reconciliation_required"]
+        )
         self.listing = [copy.deepcopy(ROW)]
         review = await self.cancel_review()
         with self.assertRaises((AgentError, JournalError)):

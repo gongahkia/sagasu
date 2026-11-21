@@ -168,9 +168,7 @@ class Redact(logging.Filter):
 
     def clean(self, message):
         # Longest first, so a secret containing another is removed whole.
-        for secret in sorted(
-            {*self.secrets, *_RUNTIME_SECRETS}, key=len, reverse=True
-        ):
+        for secret in sorted({*self.secrets, *_RUNTIME_SECRETS}, key=len, reverse=True):
             message = message.replace(secret, "<redacted>")
         message = re.sub(r"(https?://[^\s?]+)\?[^\s]+", r"\1?<redacted>", message)
         message = re.sub(r"(?i)(enter number\s+)\d{2,3}\b", r"\1<redacted>", message)

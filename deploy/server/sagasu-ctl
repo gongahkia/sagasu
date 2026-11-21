@@ -180,9 +180,12 @@ GATEWAY_SETTINGS = "/etc/sagasu/gateway.env"
 
 def gateway_serving():
     """The gateway is running and lets apps sign in at the shared address."""
-    active = subprocess.run(
-        ["systemctl", "is-active", "--quiet", "sagasu-gateway"], check=False
-    ).returncode == 0
+    active = (
+        subprocess.run(
+            ["systemctl", "is-active", "--quiet", "sagasu-gateway"], check=False
+        ).returncode
+        == 0
+    )
     try:
         with open(GATEWAY_SETTINGS, encoding="utf-8") as stream:
             oauth = "SAGASU_GATEWAY_OAUTH=on" in stream.read().split()
@@ -248,7 +251,11 @@ def make_sign_in_key(copy):
 def forget_sign_in(copy):
     subprocess.run(["systemctl", "stop", copy.units[1]], check=True)
     try:
-        for path in copy.sign_in_state + glob.glob(f"{copy.state}/.saved-sign-in-*.tmp") + glob.glob(f"{copy.state}/.sign-in-ledger-*.tmp"):
+        for path in (
+            copy.sign_in_state
+            + glob.glob(f"{copy.state}/.saved-sign-in-*.tmp")
+            + glob.glob(f"{copy.state}/.sign-in-ledger-*.tmp")
+        ):
             if os.path.isdir(path) and not os.path.islink(path):
                 shutil.rmtree(path, ignore_errors=True)
             elif os.path.lexists(path):
@@ -300,7 +307,9 @@ def copy_command(copy, arguments):
             for label in sorted(keys(copy, lines))
             if label != GATEWAY and not (copy.name and label == PLACEHOLDER)
         ]
-        print(f"{'api keys':20} {', '.join(shown) or 'none yet (create one with key-add)'}")
+        print(
+            f"{'api keys':20} {', '.join(shown) or 'none yet (create one with key-add)'}"
+        )
         print(f"{'saved sign-in':20} {saved_sign_in_line(copy, lines)}")
         sys.stdout.flush()
         subprocess.run([*copy.launch, "host", "status"])
@@ -405,7 +414,14 @@ def check_name(name, exists):
 
 def reload_caddy():
     check = subprocess.run(
-        ["caddy", "validate", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"],
+        [
+            "caddy",
+            "validate",
+            "--config",
+            "/etc/caddy/Caddyfile",
+            "--adapter",
+            "caddyfile",
+        ],
         capture_output=True,
         text=True,
     )
@@ -511,7 +527,11 @@ def instance_add(name, writes="on", account=None):
         "their own SMU email and password once and approve one sign-in in Microsoft\n"
         "Authenticator. After that, when SMU asks again, their agent shows them a\n"
         "number to enter in Authenticator; nothing else."
-        + ("" if account else f"\n\nTo lock the copy to their SMU account: sudo sagasu-ctl --instance {name} smu-account EMAIL")
+        + (
+            ""
+            if account
+            else f"\n\nTo lock the copy to their SMU account: sudo sagasu-ctl --instance {name} smu-account EMAIL"
+        )
     )
 
 
@@ -519,7 +539,9 @@ def access_add(name, key_text):
     check_name(name, exists=True)
     match = PUBLIC_KEY.fullmatch(key_text.strip())
     if not match:
-        sys.exit("That is not an SSH public key (it should start with ssh-ed25519 or ssh-rsa).")
+        sys.exit(
+            "That is not an SSH public key (it should start with ssh-ed25519 or ssh-rsa)."
+        )
     settings = instance_settings(name)
     login = f"fbs-{name}"
     try:
@@ -602,7 +624,11 @@ def instance_remove(name):
         uid = pwd.getpwnam(copy.account).pw_uid
     except KeyError:
         uid = None
-    for path in (copy.state, f"/run/sagasu-{name}", f"/tmp/sagasu-{uid}" if uid else ""):
+    for path in (
+        copy.state,
+        f"/run/sagasu-{name}",
+        f"/tmp/sagasu-{uid}" if uid else "",
+    ):
         if path and os.path.exists(path):
             shutil.rmtree(path, ignore_errors=True)
     # The sign-in key goes before the account, so it is never left owned by a
@@ -656,13 +682,20 @@ def gateway_sync(restart_changed=True, rotate=False, strict=False, quiet=False):
             if copy.name:
                 pwd.getpwnam(copy.account)
         except (SystemExit, OSError, KeyError) as error:
-            warnings.append(f"{name}: settings unreadable ({error}); left off the shared address.")
+            warnings.append(
+                f"{name}: settings unreadable ({error}); left off the shared address."
+            )
             continue
         if not socket_path or not host:
-            warnings.append(f"{name}: no socket or host name; left off the shared address.")
+            warnings.append(
+                f"{name}: no socket or host name; left off the shared address."
+            )
             continue
         known = (previous.get(name) or {}).get("key") or ""
-        matches = bool(known) and current.get(GATEWAY) == hashlib.sha256(known.encode()).hexdigest()
+        matches = (
+            bool(known)
+            and current.get(GATEWAY) == hashlib.sha256(known.encode()).hexdigest()
+        )
         if rotate or not matches:
             if GATEWAY in current and not (rotate or matches):
                 # A "gateway" key the table does not know: maybe a person's key
@@ -713,7 +746,9 @@ def gateway_sync(restart_changed=True, rotate=False, strict=False, quiet=False):
             "The owner's copy could not be put on the shared address; the table "
             "was not written. Fix the warning above, then run install.sh again."
         )
-    write_file(GATEWAY_ROUTES, json.dumps(table, indent=1) + "\n", GATEWAY_ACCOUNT, 0o640)
+    write_file(
+        GATEWAY_ROUTES, json.dumps(table, indent=1) + "\n", GATEWAY_ACCOUNT, 0o640
+    )
     if restart_changed:
         for copy in changed:
             restart(copy)
@@ -790,7 +825,11 @@ def main(arguments):
             sys.exit(str(error))
         print(
             "The shared address's routing table is up to date"
-            + (f"; gave {len(changed)} copy(ies) a new gateway key." if changed else ".")
+            + (
+                f"; gave {len(changed)} copy(ies) a new gateway key."
+                if changed
+                else "."
+            )
         )
     elif command == "instance-add" and 2 <= len(arguments) <= 4:
         rest = arguments[2:]

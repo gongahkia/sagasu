@@ -337,7 +337,7 @@ def create_server(
             + (
                 "SMU SIGN-IN HAPPENS IN THIS CHAT. Sagasu signs in to SMU for the user with the email and password they saved on their own Sagasu sign-in page; you never see them. "
                 "Never ask for, accept or repeat a password or code in chat. "
-                "When a result has a sign_in field, send the user sign_in.tell_user (it carries the number to enter in Microsoft Authenticator) and end your turn. When they reply (for example \"done\"), call wait_operation with the same operation_id. "
+                'When a result has a sign_in field, send the user sign_in.tell_user (it carries the number to enter in Microsoft Authenticator) and end your turn. When they reply (for example "done"), call wait_operation with the same operation_id. '
                 "When an error has sign_in_url, give the user the link, do not open it yourself, and when they say they have finished, run their request again. "
                 "When an error's next_tool is login, ask the user first: each login may send a request to their phone. On session_renewal_pending retry once. "
                 if remote.saved_sign_in
@@ -1164,7 +1164,7 @@ def create_server(
     async def cancellation_review(
         bookings_operation_id: str, reference_number: str, reason: str
     ) -> dict[str, Any]:
-        """Prepare cancellation of one exact cancellable reference in a successful My Bookings result. Does not cancel it. The reason (1–200 characters) is entered as FBS's required "Reason for Cancelling". On submission Sagasu accepts FBS's cancellation-penalty prompt only when the penalty is 0.00; any other penalty stops before anything is submitted (reason cancellation_penalty)."""
+        """Prepare cancellation of one exact cancellable reference in a successful My Bookings result. Does not cancel it."""
         return safe(
             service.review_cancellation, bookings_operation_id, reference_number, reason
         )

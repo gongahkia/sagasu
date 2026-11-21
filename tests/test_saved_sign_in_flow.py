@@ -93,7 +93,9 @@ class SavedSignInCase(unittest.IsolatedAsyncioTestCase):
         try:
             return FBSClient(
                 headless=True,
-                progress=AsyncMock(side_effect=lambda m: self.log.append(("progress", m))),
+                progress=AsyncMock(
+                    side_effect=lambda m: self.log.append(("progress", m))
+                ),
                 auth_notify=(
                     AsyncMock(side_effect=lambda m: self.log.append(("notify", m)))
                     if notify
@@ -129,10 +131,14 @@ class SavedSignInCase(unittest.IsolatedAsyncioTestCase):
                 item = Mock()
                 item.first = item
                 item.fill = AsyncMock(
-                    side_effect=lambda value, s=selector: self.log.append(("fill", s, value))
+                    side_effect=lambda value, s=selector: self.log.append(
+                        ("fill", s, value)
+                    )
                 )
                 item.click = AsyncMock(
-                    side_effect=lambda *a, s=selector, **k: self.log.append(("click", s))
+                    side_effect=lambda *a, s=selector, **k: self.log.append(
+                        ("click", s)
+                    )
                 )
                 item.press = AsyncMock()
                 item.press_sequentially = AsyncMock()
@@ -174,7 +180,11 @@ class SavedSignInCase(unittest.IsolatedAsyncioTestCase):
         return caught.exception.reason
 
     def entries(self, kind):
-        return [entry[1:] for entry in self.log if isinstance(entry, tuple) and entry[0] == kind]
+        return [
+            entry[1:]
+            for entry in self.log
+            if isinstance(entry, tuple) and entry[0] == kind
+        ]
 
     def typed(self, selector):
         return [value for s, value in self.entries("fill") if s == selector]
@@ -230,7 +240,11 @@ class UnattendedSignInTests(SavedSignInCase):
         self.assert_progress_is_safe()
 
     async def test_stay_signed_in_answers_no_when_set_to_false(self):
-        for value, button, other in (("false", NO, YES), ("no", NO, YES), ("true", YES, NO)):
+        for value, button, other in (
+            ("false", NO, YES),
+            ("no", NO, YES),
+            ("true", YES, NO),
+        ):
             with self.subTest(value=value):
                 self.log.clear()
                 self.permit = Permit(Credentials(EMAIL, PASSWORD))
@@ -353,7 +367,9 @@ class UnattendedSignInTests(SavedSignInCase):
         self.assertEqual(self.permit.outcome, "sign_in_unfinished")
 
     async def test_a_permit_signs_in_once_per_job(self):
-        client = self.flow([EMAIL_PAGE, PASSWORD_PAGE, ("authenticator", NUMBER), STAY, FBS])
+        client = self.flow(
+            [EMAIL_PAGE, PASSWORD_PAGE, ("authenticator", NUMBER), STAY, FBS]
+        )
         await client._complete_interactive_authentication()
         before = list(self.log)
         self.index = 0  # Microsoft asks again in the same job
@@ -362,9 +378,13 @@ class UnattendedSignInTests(SavedSignInCase):
         self.assertEqual(self.permit.outcome, "signed_in")
 
         self.log.clear()
-        self.permit = Permit(Credentials(EMAIL, PASSWORD), on_start=lambda: self.log.append("start"))
+        self.permit = Permit(
+            Credentials(EMAIL, PASSWORD), on_start=lambda: self.log.append("start")
+        )
         self.body = "You denied the sign-in request."
-        client = self.flow([EMAIL_PAGE, PASSWORD_PAGE, ("authenticator", NUMBER), FAILED])
+        client = self.flow(
+            [EMAIL_PAGE, PASSWORD_PAGE, ("authenticator", NUMBER), FAILED]
+        )
         self.assertEqual(await self.refused(client), "sign_in_not_approved")
         self.index = 0
         self.assertEqual(await self.refused(client), "sign_in_unfinished")
@@ -381,7 +401,12 @@ class UnattendedSignInTests(SavedSignInCase):
     # request in the same job, which the permit is meant to prevent.
     async def test_lost_context_after_the_number_does_not_restart(self):
         client = self.flow(
-            [EMAIL_PAGE, ("authenticator", NUMBER), ("invalid_context", "lost"), EMAIL_PAGE]
+            [
+                EMAIL_PAGE,
+                ("authenticator", NUMBER),
+                ("invalid_context", "lost"),
+                EMAIL_PAGE,
+            ]
         )
         with patch.object(fbs_client, "SAVED_SIGN_IN_SECONDS", 0.5):
             await self.refused(client)
@@ -408,7 +433,9 @@ class ReviewRegressionTests(SavedSignInCase):
     async def remote_client(self, interactive=True):
         with remote_origin():
             client = self.make_client(interactive=interactive)
-        client.page = Mock(url=LOGIN_URL, goto=AsyncMock(), wait_for_function=AsyncMock())
+        client.page = Mock(
+            url=LOGIN_URL, goto=AsyncMock(), wait_for_function=AsyncMock()
+        )
         client.page.locator.return_value.count = AsyncMock(return_value=0)
         client.context = None
         client._await_silent_renewal = AsyncMock(return_value=False)  # timed out
@@ -569,7 +596,9 @@ class RemoteSavedSignInTests(SavedSignInCase):
             with self.subTest(interactive=interactive):
                 client = self.remote_client(interactive=interactive, permit=False)
                 self.assertIsNone(client.sign_in_permit)
-                client._classify_auth_state = AsyncMock(return_value=("email", "prompt"))
+                client._classify_auth_state = AsyncMock(
+                    return_value=("email", "prompt")
+                )
                 with self.assertRaises(AuthenticationRequired) as caught:
                     await client.ensure_authenticated()
                 self.assertEqual(caught.exception.reason, "sign_in_required_on_host")
@@ -615,8 +644,9 @@ class StaySignedInBrowserTests(SavedSignInCase):
                 self.assertEqual(
                     (await client._classify_auth_state())[0], "stay_signed_in"
                 )
-                with patch.dict(os.environ, {"SAGASU_SAVED_SIGN_IN_STAY": value}), patch.object(
-                    client, "_trusted_login_url", return_value=True
+                with (
+                    patch.dict(os.environ, {"SAGASU_SAVED_SIGN_IN_STAY": value}),
+                    patch.object(client, "_trusted_login_url", return_value=True),
                 ):
                     await client._complete_interactive_authentication()
                 self.assertEqual(await client.page.evaluate("window.choice"), choice)

@@ -354,7 +354,9 @@ class ClickAndAcceptBrowserTests(unittest.IsolatedAsyncioTestCase):
         button = await self.button("return false;")
         await click_and_accept(self.page, button, Answer(ZERO), seconds=0.5)
         # Past its moment, even the exact prompt must not be answered OK.
-        await self.page.evaluate("setTimeout(function(){ confirm('" + ZERO + "'); }, 0)")
+        await self.page.evaluate(
+            "setTimeout(function(){ confirm('" + ZERO + "'); }, 0)"
+        )
         self.assertEqual(await self.answers(1), ["false"])
 
 

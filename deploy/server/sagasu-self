@@ -37,7 +37,11 @@ def parse(words):
     simple = {"signin", "status", "connections", "restart", "forget-sign-in", "help"}
     if command in simple and not rest:
         return [command]
-    if command in {"key-add", "key-remove"} and len(rest) == 1 and LABEL.fullmatch(rest[0]):
+    if (
+        command in {"key-add", "key-remove"}
+        and len(rest) == 1
+        and LABEL.fullmatch(rest[0])
+    ):
         return [command, rest[0]]
     if command in {"writes", "oauth"} and rest in (["on"], ["off"]):
         return [command, rest[0]]
@@ -62,7 +66,8 @@ def main():
             print(HELP)
             return
         os.execv(
-            "/usr/bin/sudo", ["sudo", "-n", "/opt/sagasu/bin/sagasu-self", name, *action]
+            "/usr/bin/sudo",
+            ["sudo", "-n", "/opt/sagasu/bin/sagasu-self", name, *action],
         )
     # As root, through sudo: check everything again.
     sudo_user = os.environ.get("SUDO_USER")
@@ -76,9 +81,7 @@ def main():
         os.execv("/opt/sagasu/bin/sagasu-signin", ["sagasu-signin", name])
     # Every action, forget-sign-in included, runs through sagasu-ctl, so the
     # two can never disagree about what a copy holds.
-    result = subprocess.run(
-        ["/opt/sagasu/bin/sagasu-ctl", "--instance", name, *action]
-    )
+    result = subprocess.run(["/opt/sagasu/bin/sagasu-ctl", "--instance", name, *action])
     sys.exit(result.returncode)
 
 

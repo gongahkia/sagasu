@@ -495,7 +495,9 @@ class CancellationDialogTests(BrowserCase):
             "</script>"
         )
         with patch("sagasu.fbs_account.checkpoint_verified") as checkpoint:
-            with self.assertRaises((CancellationUnavailable, CancellationOutcomeUnknown)):
+            with self.assertRaises(
+                (CancellationUnavailable, CancellationOutcomeUnknown)
+            ):
                 await self.cancel()
         checkpoint.assert_not_called()
         await self.assert_no_confirm_accepted()
@@ -536,12 +538,18 @@ class CancellationAfterSubmitTests(BrowserCase):
         for name, knobs in (
             ("still Confirmed", dict(status_after="Confirmed")),
             ("Cancellation Rejected", dict(status_after="Cancellation Rejected")),
-            ("cancelled in another room", dict(rows_after_post=[{**cancelled, "room": "Room B"}])),
+            (
+                "cancelled in another room",
+                dict(rows_after_post=[{**cancelled, "room": "Room B"}]),
+            ),
             (
                 "cancelled at another time",
                 dict(
                     rows_after_post=[
-                        {**cancelled, "date_time": "01-Jan-2099 (Thu) 16:00 - 18:00 (2hrs)"}
+                        {
+                            **cancelled,
+                            "date_time": "01-Jan-2099 (Thu) 16:00 - 18:00 (2hrs)",
+                        }
                     ]
                 ),
             ),
@@ -610,7 +618,11 @@ class ExpectedPromptTests(unittest.TestCase):
                 self.assertEqual(expected_prompt(self.guard(text)), text)
 
     def test_no_prompt(self):
-        for onclick in (None, "", "btn.cl(this);setTimeout('__doPostBack()',0);return false;"):
+        for onclick in (
+            None,
+            "",
+            "btn.cl(this);setTimeout('__doPostBack()',0);return false;",
+        ):
             with self.subTest(onclick=onclick):
                 self.assertIsNone(expected_prompt(onclick))
 
@@ -631,7 +643,10 @@ class ExpectedPromptTests(unittest.TestCase):
             ("guard plus bare confirm", self.guard(ZERO) + f"confirm('{ZERO}');"),
             ("double quotes", f'if(!confirm("{ZERO}"))return false;'),
             ("window.confirm", f"if(!window.confirm('{ZERO}'))return false;"),
-            ("escaped quote", self.guard("A Cancellation Penalty of [0.00] won\\'t apply")),
+            (
+                "escaped quote",
+                self.guard("A Cancellation Penalty of [0.00] won\\'t apply"),
+            ),
         ):
             with self.subTest(name):
                 with self.assertRaises(PromptDeclined) as raised:
@@ -726,7 +741,9 @@ class ClickAndAcceptTests(unittest.IsolatedAsyncioTestCase):
                 answer, events = await self.run_click(*shown)
                 self.assertFalse(answer.accepted)
                 self.assertTrue(answer.declined)
-                self.assertEqual([event[0] for event in events], ["dismiss"] * len(shown))
+                self.assertEqual(
+                    [event[0] for event in events], ["dismiss"] * len(shown)
+                )
 
     async def test_second_prompt_after_ok_is_dismissed(self):
         answer, events = await self.run_click(("confirm", ZERO), ("confirm", ZERO))
@@ -751,9 +768,7 @@ class ClickAndAcceptTests(unittest.IsolatedAsyncioTestCase):
         button = Mock(click=AsyncMock())
         with patch("sagasu.fbs_prompts.PROMPT_SECONDS", 0.5):
             try:
-                await asyncio.wait_for(
-                    click_and_accept(page, button, Answer(ZERO)), 3
-                )
+                await asyncio.wait_for(click_and_accept(page, button, Answer(ZERO)), 3)
             except TimeoutError:
                 self.fail("click_and_accept ignored the patched PROMPT_SECONDS")
 

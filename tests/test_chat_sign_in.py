@@ -153,8 +153,7 @@ class ChatSignInCase(unittest.IsolatedAsyncioTestCase):
     async def until_asked(self):
         """Until a sign-in shows its number and waits for the phone."""
         await self.until(
-            lambda: self.backend.answer is not None
-            and not self.backend.answer.done()
+            lambda: self.backend.answer is not None and not self.backend.answer.done()
         )
 
     async def sign_in(self, outcome, kind="tasks"):
@@ -236,7 +235,10 @@ class NumberInChatTests(ChatSignInCase):
         self.assertEqual(view["next_tool"], "wait_operation")
         job = self.service.get(operation_id)
         with remote_origin():
-            for output in (self.service.status_view(job), self.service.result(operation_id)):
+            for output in (
+                self.service.status_view(job),
+                self.service.result(operation_id),
+            ):
                 self.assertEqual(output["sign_in"]["number"], NUMBER)
         # Not in the job's own record, nor for the owner at the host.
         for output in (job.public(), self.service.result(operation_id)):
@@ -283,7 +285,9 @@ class NumberInChatTests(ChatSignInCase):
         self.assertFalse(view["sign_in"]["started_by_this_operation"])
         self.assertIsNone(view["poll_after_ms"])
         self.assertEqual(view["next_tool"], "wait_operation")
-        self.assertTrue((await self.wait(first, 5))["sign_in"]["started_by_this_operation"])
+        self.assertTrue(
+            (await self.wait(first, 5))["sign_in"]["started_by_this_operation"]
+        )
         self.backend.answer.set_result("signed_in")
         self.assertEqual((await self.finish(first)).status, "succeeded")
         self.assertEqual((await self.finish(second)).status, "succeeded")
@@ -448,9 +452,9 @@ class ReviewRegressionTests(ChatSignInCase):
 
     async def test_a_write_stopped_while_signing_in_is_known_not_submitted(self):
         with remote_origin():
-            operation = self.service.start("cancel", ({"reference_number": "BK-1"}, "x"))[
-                "operation_id"
-            ]
+            operation = self.service.start(
+                "cancel", ({"reference_number": "BK-1"}, "x")
+            )["operation_id"]
         await self.until_asked()
         job = self.service.get(operation)
         job.task.cancel()
@@ -520,11 +524,15 @@ class SetupAndReasonTests(ChatSignInCase):
         self.store.erase()
         failed = await self.finish(self.remote())
         self.assert_final(failed, "sign_in_setup_needed")
-        self.assertEqual(failed.error["sign_in_url"], "https://sagasu.test/sign-in?once=1")
+        self.assertEqual(
+            failed.error["sign_in_url"], "https://sagasu.test/sign-in?once=1"
+        )
         calls = len(self.backend.calls)
         refused = await self.finish(self.remote())
         self.assert_final(refused, "sign_in_setup_needed")
-        self.assertEqual(refused.error["sign_in_url"], "https://sagasu.test/sign-in?once=2")
+        self.assertEqual(
+            refused.error["sign_in_url"], "https://sagasu.test/sign-in?once=2"
+        )
         self.assertEqual(len(self.backend.calls), calls)
         self.assertEqual(links, [1, 2])
         # Saved on the page, then asked for from chat: the pause is lifted.
@@ -636,7 +644,9 @@ class ChatSignInToolTests(ChatSignInCase):
             self.assertIsNone(view["poll_after_ms"])
             self.assertEqual(view["next_tool"], "wait_operation")
             operation_id = view["operation_id"]
-            polled = await client.call_tool("operation_status", {"operation_id": operation_id})
+            polled = await client.call_tool(
+                "operation_status", {"operation_id": operation_id}
+            )
             self.assertEqual(polled.structured_content["sign_in"]["number"], NUMBER)
             status = await self.status(client)
             self.assertEqual(
@@ -660,7 +670,9 @@ class ChatSignInToolTests(ChatSignInCase):
         operation_id = self.remote()
         await self.until_asked()
         async with self.server(remote=RemoteAccess(saved_sign_in=True)) as client:
-            hidden = set((await self.status(client))["remote_access"]["unavailable_tools"])
+            hidden = set(
+                (await self.status(client))["remote_access"]["unavailable_tools"]
+            )
             [operation] = (await self.status(client))["operations"]
         self.assertEqual(operation["operation_id"], operation_id)
         self.assertEqual(operation["status"], "awaiting_mfa")
@@ -686,9 +698,13 @@ class ChatSignInToolTests(ChatSignInCase):
             self.assertNotIn("login", tools)
             self.assertNotIn("authentication_status", tools)
             self.assertNotIn("SMU SIGN-IN HAPPENS IN THIS CHAT", client.instructions)
-            self.assertIn("You cannot sign in or approve MFA from here", client.instructions)
+            self.assertIn(
+                "You cannot sign in or approve MFA from here", client.instructions
+            )
             status = await self.status(client)
-            self.assertEqual(status["remote_access"]["sign_in"], "not_known_to_be_required")
+            self.assertEqual(
+                status["remote_access"]["sign_in"], "not_known_to_be_required"
+            )
             self.assertIn("login", status["remote_access"]["unavailable_tools"])
             try:
                 rejected = (await client.call_tool("login", {})).is_error

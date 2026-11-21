@@ -42,9 +42,6 @@ class WireProtocolTests(unittest.IsolatedAsyncioTestCase):
             str(env_file),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            # One JSON-RPC message per line: tools/list is past asyncio's
-            # default 64 KiB line limit since the watcher and longer docs.
-            limit=1 << 20,
             stderr=asyncio.subprocess.PIPE,
             env=environment,
         )

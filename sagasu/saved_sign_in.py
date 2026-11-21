@@ -1,5 +1,8 @@
 """A person's SMU email and password, saved on their own copy of Sagasu.
 
+Hosted path only (see SETUP.md, "Hosting for a group"): active only when the
+remote listener has a sign-in key file. The local path never saves a password.
+
 With them saved, the copy signs in to SMU by itself when the session lapses and
 asks the person, through their agent, only to approve the sign-in in Microsoft
 Authenticator. The person types them once, on this copy's sign-in page; they
@@ -351,7 +354,9 @@ class SavedSignIn:
                 },
             )
         except OSError:
-            raise SavedSignInError("The sign-in could not be saved on the server.") from None
+            raise SavedSignInError(
+                "The sign-in could not be saved on the server."
+            ) from None
 
     def check_account(self, email):
         """Refuse an email that is not this copy's own SMU account."""
@@ -441,7 +446,10 @@ class SavedSignIn:
             event("saved_sign_in.ledger_unreadable", level=logging.WARNING)
             # Unreadable: assume the limits are used up rather than unused.
             now = self.clock()
-            data = {"starts": [now] * SIGN_INS_PER_HOUR, "passwords": [now] * PASSWORDS_PER_DAY}
+            data = {
+                "starts": [now] * SIGN_INS_PER_HOUR,
+                "passwords": [now] * PASSWORDS_PER_DAY,
+            }
         now = self.clock()
 
         def recent(name, window):
@@ -530,8 +538,7 @@ class SavedSignIn:
             and self.clock() - float(hold.get("at", 0)) >= BLOCK_SECONDS
         )
         if not by_page and (
-            page_only
-            or (asked_at is not None and float(hold.get("at", 0)) >= asked_at)
+            page_only or (asked_at is not None and float(hold.get("at", 0)) >= asked_at)
         ):
             return False
         self._memory_hold = None

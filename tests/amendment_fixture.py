@@ -264,7 +264,9 @@ class AmendmentFixture:
             "return nativeConfirm(shown!==null?shown:message);};"
         )
         return (
-            script.replace("__FIRST__", json.dumps(self.alert_first).replace("</", "<\\/"))
+            script.replace(
+                "__FIRST__", json.dumps(self.alert_first).replace("</", "<\\/")
+            )
             .replace("__SHOWN__", json.dumps(self.shown_prompt).replace("</", "<\\/"))
             .replace("__SILENT__", str(bool(self.silent_confirm)).lower())
         )
