@@ -23,8 +23,8 @@ from urllib.parse import parse_qs, urlparse
 
 from .observability import event, observed_operation, observed_step, step
 from .origin import is_remote
-from .live_view import LIVE_VIEW
-from .saved_sign_in import SAVED_CREDENTIALS
+from .auth_context import LIVE_VIEW
+from .auth_context import SAVED_CREDENTIALS
 from .action_journal import checkpoint_verified
 from .personal_options import SCRAPE_PARAM_CHOICES
 from .personal import SMU_EMAIL_RE

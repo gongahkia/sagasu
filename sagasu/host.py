@@ -116,7 +116,7 @@ def saved_sign_in(settings, listener):
     if not getattr(listener, "sign_in_key_file", None):
         return None
     from .observability import event
-    from .saved_sign_in import SavedSignIn
+    from .hosted.saved_sign_in import SavedSignIn
 
     store = SavedSignIn(
         settings.preferences.parent,
@@ -655,7 +655,7 @@ async def serve_host(settings, *, service=None, idle_seconds=60):
                 listener = settings.http
                 if listener is not None and runtime.status()["operational"]:
                     from .mcp_server import RemoteAccess
-                    from .remote import LABEL_HEADER, RemoteHTTP
+                    from .hosted.remote import LABEL_HEADER, RemoteHTTP
 
                     service.saved_sign_in = saved_sign_in(settings, listener)
                     remote_http = RemoteHTTP(

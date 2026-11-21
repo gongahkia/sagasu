@@ -14,7 +14,7 @@ import math
 from dataclasses import dataclass, field
 
 from .personal import SMU_EMAIL_RE
-from .saved_sign_in import SAVED_CREDENTIALS, Permit
+from .auth_context import SAVED_CREDENTIALS, Permit
 from .action_journal import (
     VERIFIED_ACTION,
     JournalError,
