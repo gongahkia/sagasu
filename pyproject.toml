@@ -9,6 +9,7 @@ description = "Agent-first MCP assistant for SMU room searches and bookings"
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
+hosted = ["cryptography>=42,<51"]
 dev = ["pre-commit>=4,<5"]
 
 [project.scripts]

@@ -300,6 +300,18 @@ the person hosting installs anything.
 Each copy signs in as exactly one SMU account. Never share a key: everything
 done with it happens as that copy's owner.
 
+The local and hosted paths use the same booking implementation. Local installs
+use `pip install .`; manual hosted installs use `pip install '.[hosted]'` (or
+`pip install 'sagasu[hosted]'` for a published package). The server installer
+selects this extra automatically. Explicit `SAGASU_HTTP_*` configuration still
+activates hosting; installing the extra alone does not enable a listener.
+
+Hosted HTTP, OAuth, gateway and saved sign-in implementations live under
+`sagasu.hosted`. Existing module commands, including `python -m sagasu.gateway`,
+remain supported. The local browser and shared service do not load those
+implementations. MCP currently brings cryptography as a transitive dependency,
+so a local environment may still contain it even without the hosted extra.
+
 ### For the person hosting
 
 The full operator guide is [deploy/server/README.md](deploy/server/README.md).

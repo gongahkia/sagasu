@@ -449,3 +449,33 @@ class RecoveryEvidenceTests(unittest.TestCase):
         self.assertFalse(state["journal_healthy"])
         self.assertFalse(state["can_recover"])
         self.assertNotIn("PRIVATE_DIAGNOSTIC", json.dumps(state))
+
+
+class HostCodeIdentityTests(unittest.TestCase):
+    def test_nested_hosted_edits_and_moves_change_only_the_code_identity(self):
+        from sagasu.host import identity_parts
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = root / ".env"
+            env.write_text("SAGASU_BROWSER_PROFILE=browser\n")
+            with patch.dict(os.environ, {}, clear=True):
+                settings = Settings.load(env)
+            package = root / "package"
+            nested = package / "hosted"
+            nested.mkdir(parents=True)
+            (package / "host.py").write_text("# host\n")
+            source = nested / "runtime.py"
+            source.write_text("# first hosted version\n")
+            with patch("sagasu.host.__file__", str(package / "host.py")):
+                before = identity_parts(settings)
+                source.write_text("# updated hosted version\n")
+                after = identity_parts(settings)
+                self.assertNotEqual(before["code"], after["code"])
+                self.assertEqual(before["configuration"], after["configuration"])
+                self.assertEqual(before["python"], after["python"])
+                source.rename(package / "runtime.py")
+                moved = identity_parts(settings)
+                self.assertNotEqual(after["code"], moved["code"])
+                (nested / "runtime.pyc").write_bytes(b"ignored cache")
+                self.assertEqual(identity_parts(settings), moved)

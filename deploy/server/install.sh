@@ -160,8 +160,8 @@ restore_service() {
 trap restore_service EXIT
 systemctl stop sagasu.service "${COPIES[@]}" 2>/dev/null || true
 
-/opt/sagasu/venv/bin/python -m pip install --quiet --upgrade /opt/sagasu/app
-/opt/sagasu/venv/bin/python -m pip install --quiet --force-reinstall --no-deps /opt/sagasu/app
+/opt/sagasu/venv/bin/python -m pip install --quiet --upgrade "/opt/sagasu/app[hosted]"
+/opt/sagasu/venv/bin/python -m pip install --quiet --force-reinstall --no-deps "/opt/sagasu/app[hosted]"
 /opt/sagasu/venv/bin/python -m playwright install-deps chromium
 PLAYWRIGHT_BROWSERS_PATH=/opt/sagasu/browsers \
     /opt/sagasu/venv/bin/python -m playwright install chromium

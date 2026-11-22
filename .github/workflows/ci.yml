@@ -8,8 +8,24 @@ permissions:
   contents: read
 
 jobs:
+  local:
+    name: Validate clean local installation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install base package without the hosted extra
+        run: python -m pip install .
+      - name: Check installed packages
+        run: python -m pip check
+      - name: Verify local isolation and MCP compatibility
+        run: python -m unittest tests.test_installation_modes tests.test_mcp -v
+
   validate:
-    name: Validate agent runtime
+    name: Validate hosted runtime
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install ".[hosted,dev]"
 
       - name: Check installed packages
         run: python -m pip check
